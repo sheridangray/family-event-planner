@@ -1,6 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 const { v4: uuidv4 } = require('crypto').randomUUID || (() => uuidv4());
 
 class BaseScraper {
@@ -13,10 +13,26 @@ class BaseScraper {
 
   async initBrowser() {
     if (!this.browser) {
-      this.browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
+      try {
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        this.browser = await puppeteer.launch({
+          headless: true,
+          executablePath: isProduction ? '/usr/bin/google-chrome' : undefined,
+          args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+          ]
+        });
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          this.logger.warn('Browser automation unavailable in production - using HTTP fallback');
+          return null;
+        }
+        throw error;
+      }
     }
     return this.browser;
   }
@@ -45,6 +61,12 @@ class BaseScraper {
 
   async fetchWithPuppeteer(url, waitFor = null) {
     const browser = await this.initBrowser();
+    
+    if (!browser) {
+      this.logger.warn('Browser unavailable, falling back to HTTP request');
+      return await this.fetchHTML(url);
+    }
+    
     const page = await browser.newPage();
     
     try {
