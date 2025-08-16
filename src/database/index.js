@@ -4,11 +4,23 @@ const fs = require('fs');
 
 class Database {
   constructor() {
-    this.dbPath = path.join(__dirname, '../../data/events.db');
+    // Use /tmp directory in production (Render), local data directory in development
+    const isProduction = process.env.NODE_ENV === 'production';
+    this.dbPath = isProduction 
+      ? '/tmp/events.db' 
+      : path.join(__dirname, '../../data/events.db');
     this.db = null;
   }
 
   async init() {
+    // Ensure directory exists in development mode
+    if (process.env.NODE_ENV !== 'production') {
+      const dataDir = path.dirname(this.dbPath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+    }
+
     return new Promise((resolve, reject) => {
       this.db = new sqlite3.Database(this.dbPath, (err) => {
         if (err) {
