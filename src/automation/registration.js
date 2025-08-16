@@ -1,4 +1,4 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 const path = require('path');
 const fs = require('fs');
 const { config } = require('../config');
@@ -12,23 +12,44 @@ class RegistrationAutomator {
 
   async init() {
     try {
+      if (process.env.NODE_ENV === 'production' && process.env.DISABLE_PUPPETEER === 'true') {
+        this.logger.info('Puppeteer disabled in production - registration automation unavailable');
+        this.browser = null;
+        return;
+      }
+
+      const isProduction = process.env.NODE_ENV === 'production';
+      
       this.browser = await puppeteer.launch({
         headless: true,
+        executablePath: isProduction ? '/usr/bin/google-chrome' : undefined,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-web-security',
-          '--disable-features=VizDisplayCompositor'
+          '--disable-features=VizDisplayCompositor',
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
         ]
       });
       this.logger.info('Registration automator initialized');
     } catch (error) {
       this.logger.error('Failed to initialize registration automator:', error.message);
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.warn('Continuing without registration automation in production');
+        this.browser = null;
+        return;
+      }
       throw error;
     }
   }
 
   async registerForEvent(event) {
+    if (!this.browser) {
+      this.logger.warn(`Cannot auto-register for ${event.title} - browser automation unavailable`);
+      throw new Error('Browser automation not available in this environment');
+    }
+
     if (!event.registrationUrl) {
       throw new Error('No registration URL provided');
     }
