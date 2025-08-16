@@ -1,18 +1,32 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const PostgresDatabase = require('./postgres');
 
 class Database {
   constructor() {
-    // Use /tmp directory in production (Render), local data directory in development
-    const isProduction = process.env.NODE_ENV === 'production';
-    this.dbPath = isProduction 
-      ? '/tmp/events.db' 
-      : path.join(__dirname, '../../data/events.db');
-    this.db = null;
+    // Use PostgreSQL in production if DATABASE_URL is available, otherwise fallback to SQLite
+    if (process.env.DATABASE_URL) {
+      this.usePostgres = true;
+      this.postgres = new PostgresDatabase();
+      this.db = null;
+    } else {
+      this.usePostgres = false;
+      // Use /tmp directory in production (Render), local data directory in development
+      const isProduction = process.env.NODE_ENV === 'production';
+      this.dbPath = isProduction 
+        ? '/tmp/events.db' 
+        : path.join(__dirname, '../../data/events.db');
+      this.db = null;
+    }
   }
 
   async init() {
+    if (this.usePostgres) {
+      return await this.postgres.init();
+    }
+
+    // SQLite fallback
     // Ensure directory exists in development mode
     if (process.env.NODE_ENV !== 'production') {
       const dataDir = path.dirname(this.dbPath);
@@ -50,6 +64,10 @@ class Database {
   }
 
   async saveEvent(event) {
+    if (this.usePostgres) {
+      return await this.postgres.saveEvent(event);
+    }
+
     const sql = `
       INSERT OR REPLACE INTO events (
         id, source, title, date, location_address, location_lat, location_lng,
@@ -80,6 +98,10 @@ class Database {
   }
 
   async saveEventScore(eventId, scores) {
+    if (this.usePostgres) {
+      return await this.postgres.saveEventScore(eventId, scores);
+    }
+
     const sql = `
       INSERT OR REPLACE INTO event_scores (
         event_id, novelty_score, urgency_score, social_score, match_score, total_score
@@ -103,6 +125,10 @@ class Database {
   }
 
   async getEventsByStatus(status) {
+    if (this.usePostgres) {
+      return await this.postgres.getEventsByStatus(status);
+    }
+
     const sql = `
       SELECT e.*, es.total_score
       FROM events e
@@ -123,6 +149,10 @@ class Database {
   }
 
   async updateEventStatus(eventId, status) {
+    if (this.usePostgres) {
+      return await this.postgres.updateEventStatus(eventId, status);
+    }
+
     const sql = `UPDATE events SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
     
     return new Promise((resolve, reject) => {
@@ -229,6 +259,10 @@ class Database {
   }
 
   async close() {
+    if (this.usePostgres) {
+      return await this.postgres.close();
+    }
+
     return new Promise((resolve) => {
       if (this.db) {
         this.db.close((err) => {
