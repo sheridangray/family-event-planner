@@ -4,7 +4,9 @@ const config = {
   gmail: {
     parent1Email: process.env.PARENT1_EMAIL,
     parent2Email: process.env.PARENT2_EMAIL,
-    mcpCredentials: process.env.MCP_GMAIL_CREDENTIALS,
+    mcpCredentials: process.env.MCP_GMAIL_CREDENTIALS_JSON ? 
+      JSON.parse(process.env.MCP_GMAIL_CREDENTIALS_JSON) : 
+      process.env.MCP_GMAIL_CREDENTIALS,
   },
   
   twilio: {
