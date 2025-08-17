@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { config } = require('../config');
+const ReportingService = require('../services/reporting');
 
 class TaskScheduler {
   constructor(logger, database, scraperManager, eventScorer, eventFilter, smsManager, registrationAutomator, calendarManager) {
@@ -11,6 +12,7 @@ class TaskScheduler {
     this.smsManager = smsManager;
     this.registrationAutomator = registrationAutomator;
     this.calendarManager = calendarManager;
+    this.reportingService = new ReportingService(logger);
     this.tasks = [];
   }
 
@@ -279,6 +281,7 @@ Date: ${new Date().toDateString()}
 ⚠️ Attention Needed:
 - Pending approvals: ${stats.pendingApprovals}
 - Failed registrations: ${stats.failedRegistrations}
+- Registration success rate: ${stats.registrationSuccessRate}%
 
 💰 Cost Summary:
 - Free events: ${stats.freeEvents}
@@ -290,7 +293,16 @@ Date: ${new Date().toDateString()}
       
       this.logger.info('Daily Report:\n' + report);
       
-      // TODO: Send report via email or save to file
+      // Save report to file
+      try {
+        const savedPath = await this.reportingService.saveDailyReport(report);
+        this.logger.info(`Daily report saved to: ${savedPath}`);
+        
+        // Optionally email the report (currently logs intention)
+        await this.reportingService.emailReport(report);
+      } catch (error) {
+        this.logger.error('Error saving/emailing daily report:', error.message);
+      }
       
     } catch (error) {
       this.logger.error('Daily report generation failed:', error.message);
@@ -301,15 +313,21 @@ Date: ${new Date().toDateString()}
     const today = new Date().toDateString();
     
     try {
-      const allEvents = await Promise.all([
-        this.database.getEventsByStatus('discovered'),
-        this.database.getEventsByStatus('proposed'),
-        this.database.getEventsByStatus('approved'),
-        this.database.getEventsByStatus('booked'),
-        this.database.getEventsByStatus('scheduled')
+      const [allEvents, registrationStats] = await Promise.all([
+        Promise.all([
+          this.database.getEventsByStatus('discovered'),
+          this.database.getEventsByStatus('proposed'),
+          this.database.getEventsByStatus('approved'),
+          this.database.getEventsByStatus('booked'),
+          this.database.getEventsByStatus('scheduled')
+        ]),
+        this.database.getRegistrationStats('24 hours')
       ]);
       
       const [discovered, proposed, approved, booked, scheduled] = allEvents;
+      
+      // Calculate system health score
+      const healthScore = await this.calculateSystemHealthScore();
       
       return {
         discovered: discovered.length,
@@ -321,11 +339,12 @@ Date: ${new Date().toDateString()}
         sentToday: proposed.filter(e => new Date(e.updated_at).toDateString() === today).length,
         registeredToday: booked.filter(e => new Date(e.updated_at).toDateString() === today).length,
         pendingApprovals: proposed.length,
-        failedRegistrations: 0, // TODO: implement failed registration tracking
+        failedRegistrations: registrationStats.failed,
+        registrationSuccessRate: registrationStats.successRate,
         freeEvents: [...approved, ...booked].filter(e => e.cost === 0).length,
         paidEvents: [...approved, ...booked].filter(e => e.cost > 0).length,
         totalPendingCost: [...approved, ...booked].reduce((sum, e) => sum + (e.cost || 0), 0),
-        systemHealth: 'Good' // TODO: implement health scoring
+        systemHealth: healthScore.description
       };
     } catch (error) {
       this.logger.error('Error calculating daily stats:', error.message);
@@ -368,13 +387,131 @@ Date: ${new Date().toDateString()}
   }
 
   async checkMCPHealth() {
-    // TODO: Implement MCP health checks
-    return { healthy: true };
+    try {
+      const healthChecks = {
+        gmail: { healthy: false, error: null },
+        twilio: { healthy: false, error: null }
+      };
+
+      // Check Gmail MCP health
+      try {
+        if (this.calendarManager && typeof this.calendarManager.hasConflict === 'function') {
+          // Test with a future date that won't have conflicts
+          const testDate = new Date();
+          testDate.setDate(testDate.getDate() + 365); // Test 1 year from now
+          await this.calendarManager.hasConflict(testDate.toISOString());
+          healthChecks.gmail.healthy = true;
+        } else {
+          healthChecks.gmail.error = 'Calendar manager not initialized or missing methods';
+        }
+      } catch (error) {
+        healthChecks.gmail.error = error.message;
+      }
+
+      // Check Twilio MCP health
+      try {
+        if (this.smsManager && typeof this.smsManager.shouldSendEvent === 'function') {
+          // Test basic functionality without sending actual SMS
+          const canSend = await this.smsManager.shouldSendEvent();
+          healthChecks.twilio.healthy = typeof canSend === 'boolean';
+        } else {
+          healthChecks.twilio.error = 'SMS manager not initialized or missing methods';
+        }
+      } catch (error) {
+        healthChecks.twilio.error = error.message;
+      }
+
+      const overallHealthy = healthChecks.gmail.healthy && healthChecks.twilio.healthy;
+      
+      return {
+        healthy: overallHealthy,
+        details: healthChecks
+      };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        error: error.message,
+        details: { gmail: { healthy: false }, twilio: { healthy: false } }
+      };
+    }
   }
 
   async checkAutomationHealth() {
-    // TODO: Implement automation health checks
-    return { healthy: true };
+    try {
+      // Check recent registration success rate
+      const registrationStats = await this.database.getRegistrationStats('24 hours');
+      const successRate = parseFloat(registrationStats.successRate) || 100;
+      
+      // Check if registration automator is responsive
+      const isResponsive = this.registrationAutomator && typeof this.registrationAutomator.processApprovedEvents === 'function';
+      
+      return {
+        healthy: successRate >= 70 && isResponsive,
+        details: {
+          registrationSuccessRate: successRate,
+          isResponsive: isResponsive,
+          recentAttempts: registrationStats.totalAttempts
+        }
+      };
+    } catch (error) {
+      return { healthy: false, error: error.message };
+    }
+  }
+
+  async calculateSystemHealthScore() {
+    try {
+      const healthChecks = await Promise.all([
+        this.checkDatabaseHealth(),
+        this.checkScrapersHealth(),
+        this.checkMCPHealth(),
+        this.checkAutomationHealth()
+      ]);
+
+      const [database, scrapers, mcp, automation] = healthChecks;
+      
+      // Calculate weighted health score
+      let score = 0;
+      let maxScore = 0;
+      
+      // Database health (40% weight)
+      maxScore += 40;
+      if (database.healthy) score += 40;
+      else score += 0;
+      
+      // Scrapers health (20% weight)
+      maxScore += 20;
+      if (scrapers.healthy) score += 20;
+      else score += 0;
+      
+      // MCP health (20% weight)
+      maxScore += 20;
+      if (mcp.healthy) score += 20;
+      else score += 0;
+      
+      // Automation health (20% weight)
+      maxScore += 20;
+      if (automation.healthy) score += 20;
+      else score += 0;
+      
+      const healthPercentage = (score / maxScore) * 100;
+      
+      let description;
+      if (healthPercentage >= 90) description = 'Excellent';
+      else if (healthPercentage >= 75) description = 'Good';
+      else if (healthPercentage >= 50) description = 'Fair';
+      else if (healthPercentage >= 25) description = 'Poor';
+      else description = 'Critical';
+      
+      return {
+        score: healthPercentage,
+        description: description,
+        details: { database, scrapers, mcp, automation }
+      };
+      
+    } catch (error) {
+      this.logger.error('Error calculating system health score:', error.message);
+      return { score: 0, description: 'Unknown', details: {} };
+    }
   }
 
   delay(ms) {

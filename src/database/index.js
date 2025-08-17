@@ -494,6 +494,80 @@ class Database {
     return this.updateFamilyMember(id, { active: false });
   }
 
+  async getRegistrationStats(timeframe = '24 hours') {
+    if (this.usePostgres) {
+      return await this.postgres.getRegistrationStats(timeframe);
+    }
+
+    const timeframeSql = this.getTimeframeSql(timeframe);
+    
+    const sql = `
+      SELECT 
+        COUNT(*) as total_attempts,
+        SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
+        SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed,
+        COUNT(DISTINCT event_id) as unique_events
+      FROM registrations
+      WHERE attempt_at >= ${timeframeSql}
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [], (err, row) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve({
+          totalAttempts: row.total_attempts || 0,
+          successful: row.successful || 0,
+          failed: row.failed || 0,
+          uniqueEvents: row.unique_events || 0,
+          successRate: row.total_attempts > 0 ? (row.successful / row.total_attempts * 100).toFixed(1) : 0
+        });
+      });
+    });
+  }
+
+  async getFailedRegistrations(limit = 10) {
+    if (this.usePostgres) {
+      return await this.postgres.getFailedRegistrations(limit);
+    }
+
+    const sql = `
+      SELECT r.*, e.title, e.date, e.registration_url
+      FROM registrations r
+      LEFT JOIN events e ON r.event_id = e.id
+      WHERE r.success = 0
+      ORDER BY r.attempt_at DESC
+      LIMIT ?
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [limit], (err, rows) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(rows);
+      });
+    });
+  }
+
+  getTimeframeSql(timeframe) {
+    switch (timeframe) {
+      case '1 hour':
+        return "datetime('now', '-1 hour')";
+      case '24 hours':
+        return "datetime('now', '-1 day')";
+      case '7 days':
+        return "datetime('now', '-7 days')";
+      case '30 days':
+        return "datetime('now', '-30 days')";
+      default:
+        return "datetime('now', '-1 day')";
+    }
+  }
+
   async close() {
     if (this.usePostgres) {
       return await this.postgres.close();
