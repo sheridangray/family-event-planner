@@ -154,14 +154,25 @@ class EventFilter {
 
   async filterByCalendarConflicts(events, calendarChecker) {
     const filtered = [];
+    let blockedCount = 0;
+    let warningCount = 0;
     
     for (const event of events) {
       try {
-        const hasConflict = await calendarChecker.hasConflict(event.date);
-        if (!hasConflict) {
+        // Get detailed conflict information
+        const conflictDetails = await calendarChecker.getConflictDetails(event.date);
+        
+        if (!conflictDetails.hasConflict) {
+          // Check for warnings (Sheridan's conflicts)
+          if (conflictDetails.hasWarning) {
+            this.logger.warn(`⚠️  Event has calendar warning: ${event.title} on ${event.date} (Sheridan's calendar conflict)`);
+            warningCount++;
+          }
           filtered.push(event);
         } else {
-          this.logger.debug(`Event filtered - calendar conflict: ${event.title} on ${event.date}`);
+          // Joyce's calendar has conflict - block the event
+          this.logger.info(`❌ Event filtered - Joyce's calendar conflict: ${event.title} on ${event.date}`);
+          blockedCount++;
         }
       } catch (error) {
         this.logger.warn(`Error checking calendar for event ${event.title}:`, error.message);
@@ -169,7 +180,7 @@ class EventFilter {
       }
     }
     
-    this.logger.info(`Calendar conflict check: ${events.length} events -> ${filtered.length} events`);
+    this.logger.info(`Calendar conflict check: ${events.length} events -> ${filtered.length} events (${blockedCount} blocked by Joyce's calendar, ${warningCount} warnings from Sheridan's calendar)`);
     return filtered;
   }
 

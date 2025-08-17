@@ -88,31 +88,44 @@ class GmailMCPClient {
       const checkStart = new Date(eventStart.getTime() - (bufferMinutes * 60 * 1000));
       const checkEnd = new Date(eventEnd.getTime() + (bufferMinutes * 60 * 1000));
       
-      const conflicts = [];
-      
-      const parent1Conflicts = await this.checkSingleCalendar(
+      // Check Joyce's calendar (parent1) - BLOCKS event if conflicts found
+      const joyceConflicts = await this.checkSingleCalendar(
         config.gmail.parent1Email, 
         checkStart, 
         checkEnd
       );
       
-      const parent2Conflicts = await this.checkSingleCalendar(
+      // Check Sheridan's calendar (parent2) - WARNS only, doesn't block
+      const sheridanConflicts = await this.checkSingleCalendar(
         config.gmail.parent2Email, 
         checkStart, 
         checkEnd
       );
       
-      conflicts.push(...parent1Conflicts, ...parent2Conflicts);
+      // Only Joyce's conflicts block the event
+      const hasBlockingConflict = joyceConflicts.length > 0;
+      const hasWarningConflict = sheridanConflicts.length > 0;
       
-      const hasConflict = conflicts.length > 0;
+      if (hasBlockingConflict) {
+        this.logger.info(`❌ Event BLOCKED - Joyce has ${joyceConflicts.length} calendar conflict(s) for ${eventDate}`);
+        joyceConflicts.forEach(conflict => {
+          this.logger.debug(`  Conflict: "${conflict.title}" (${conflict.start} - ${conflict.end})`);
+        });
+      }
       
-      if (hasConflict) {
-        this.logger.debug(`Calendar conflict found for ${eventDate}: ${conflicts.length} conflicting events`);
+      if (hasWarningConflict) {
+        this.logger.warn(`⚠️  Event WARNING - Sheridan has ${sheridanConflicts.length} calendar conflict(s) for ${eventDate}`);
+        sheridanConflicts.forEach(conflict => {
+          this.logger.debug(`  Conflict: "${conflict.title}" (${conflict.start} - ${conflict.end})`);
+        });
       }
       
       return {
-        hasConflict,
-        conflicts,
+        hasConflict: hasBlockingConflict, // Only Joyce's conflicts block
+        hasWarning: hasWarningConflict,   // Sheridan's conflicts warn
+        blockingConflicts: joyceConflicts,
+        warningConflicts: sheridanConflicts,
+        conflicts: [...joyceConflicts, ...sheridanConflicts], // All conflicts for reference
         checkedTimeRange: {
           start: checkStart,
           end: checkEnd
@@ -123,6 +136,9 @@ class GmailMCPClient {
       this.logger.warn(`Error checking calendar conflicts for ${eventDate}:`, error.message);
       return {
         hasConflict: false,
+        hasWarning: false,
+        blockingConflicts: [],
+        warningConflicts: [],
         conflicts: [],
         error: error.message
       };
@@ -169,12 +185,54 @@ class GmailMCPClient {
 
   async getCalendarEvents(email, timeMin, timeMax) {
     try {
-      this.logger.debug(`Fetching calendar events for ${email}`);
+      this.logger.debug(`Fetching calendar events for ${email} from ${timeMin} to ${timeMax}`);
       
-      return [];
+      // Determine which calendar to access
+      let calendarId = 'primary';
+      
+      // If checking a specific email that's not the authenticated user, we might need to access their calendar
+      // For now, we'll use 'primary' and rely on shared calendar access or delegation
+      if (email !== config.gmail.parent1Email && email !== config.gmail.parent2Email) {
+        this.logger.warn(`Unknown email ${email}, using primary calendar`);
+      }
+      
+      // If checking Joyce's calendar and it's not the primary authenticated account
+      if (email === config.gmail.parent1Email && email !== process.env.PARENT1_EMAIL) {
+        // Try to access Joyce's calendar directly if shared
+        calendarId = email;
+      }
+      
+      const response = await this.calendar.events.list({
+        calendarId: calendarId,
+        timeMin: timeMin,
+        timeMax: timeMax,
+        maxResults: 50,
+        singleEvents: true,
+        orderBy: 'startTime',
+        fields: 'items(id,summary,start,end,status)'
+      });
+      
+      const events = response.data.items || [];
+      
+      // Filter out cancelled events
+      const activeEvents = events.filter(event => event.status !== 'cancelled');
+      
+      this.logger.debug(`Found ${activeEvents.length} active events for ${email}`);
+      
+      return activeEvents;
       
     } catch (error) {
-      this.logger.error(`Error fetching calendar events for ${email}:`, error.message);
+      // Handle specific API errors
+      if (error.code === 403) {
+        this.logger.warn(`No access to calendar for ${email}: ${error.message}`);
+      } else if (error.code === 404) {
+        this.logger.warn(`Calendar not found for ${email}: ${error.message}`);
+      } else if (error.code === 401) {
+        this.logger.error(`Authentication failed for calendar access: ${error.message}`);
+      } else {
+        this.logger.error(`Error fetching calendar events for ${email}:`, error.message);
+      }
+      
       return [];
     }
   }
