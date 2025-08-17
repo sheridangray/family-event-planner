@@ -106,6 +106,32 @@ CREATE TABLE IF NOT EXISTS venues (
     visit_count INTEGER DEFAULT 0
 );
 
+-- Event interactions for preference learning
+CREATE TABLE IF NOT EXISTS event_interactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL,
+    event_data TEXT NOT NULL, -- JSON of event details
+    interaction_type TEXT NOT NULL, -- 'discovered', 'proposed', 'approved', 'rejected', 'registered', 'attended', 'cancelled'
+    interaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    metadata TEXT, -- JSON for additional context
+    user_feedback TEXT, -- Optional user notes
+    FOREIGN KEY (event_id) REFERENCES events (id)
+);
+
+-- Weather data cache
+CREATE TABLE IF NOT EXISTS weather_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location TEXT NOT NULL,
+    date TEXT NOT NULL, -- YYYY-MM-DD format
+    temperature REAL,
+    condition TEXT,
+    precipitation REAL,
+    wind_speed REAL,
+    is_outdoor_friendly BOOLEAN,
+    fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(location, date)
+);
+
 -- Insert initial event sources
 INSERT OR IGNORE INTO event_sources (name, url, scrape_frequency_hours) VALUES
 ('SF Recreation & Parks', 'https://www.sfrecpark.org/events/', 6),

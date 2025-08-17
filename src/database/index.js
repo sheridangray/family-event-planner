@@ -258,6 +258,140 @@ class Database {
     });
   }
 
+  async recordEventInteraction(eventId, interactionType, metadata = {}) {
+    if (this.usePostgres) {
+      return await this.postgres.recordEventInteraction(eventId, interactionType, metadata);
+    }
+
+    // Get event data for context
+    const eventSql = `SELECT * FROM events WHERE id = ?`;
+    const event = await new Promise((resolve, reject) => {
+      this.db.get(eventSql, [eventId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    const sql = `
+      INSERT INTO event_interactions (event_id, event_data, interaction_type, metadata)
+      VALUES (?, ?, ?, ?)
+    `;
+    
+    const params = [
+      eventId,
+      JSON.stringify(event),
+      interactionType,
+      JSON.stringify(metadata)
+    ];
+
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, params, function(err) {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(this.lastID);
+      });
+    });
+  }
+
+  async getEventInteractions(limit = 1000) {
+    if (this.usePostgres) {
+      return await this.postgres.getEventInteractions(limit);
+    }
+
+    const sql = `
+      SELECT event_id, event_data, interaction_type, interaction_date, metadata, user_feedback
+      FROM event_interactions
+      ORDER BY interaction_date DESC
+      LIMIT ?
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [limit], (err, rows) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        // Parse JSON data
+        const interactions = rows.map(row => ({
+          ...row,
+          event: JSON.parse(row.event_data),
+          metadata: row.metadata ? JSON.parse(row.metadata) : {}
+        }));
+        
+        resolve(interactions);
+      });
+    });
+  }
+
+  async cacheWeatherData(location, date, weatherData) {
+    if (this.usePostgres) {
+      return await this.postgres.cacheWeatherData(location, date, weatherData);
+    }
+
+    const sql = `
+      INSERT OR REPLACE INTO weather_cache 
+      (location, date, temperature, condition, precipitation, wind_speed, is_outdoor_friendly, fetched_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `;
+    
+    const params = [
+      location,
+      date,
+      weatherData.temperature,
+      weatherData.condition,
+      weatherData.precipitation,
+      weatherData.windSpeed,
+      weatherData.isOutdoorFriendly
+    ];
+
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, params, function(err) {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(this.lastID);
+      });
+    });
+  }
+
+  async getCachedWeatherData(location, date) {
+    if (this.usePostgres) {
+      return await this.postgres.getCachedWeatherData(location, date);
+    }
+
+    const sql = `
+      SELECT temperature, condition, precipitation, wind_speed, is_outdoor_friendly, fetched_at
+      FROM weather_cache
+      WHERE location = ? AND date = ?
+      AND datetime(fetched_at, '+6 hours') > datetime('now')
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [location, date], (err, row) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        if (row) {
+          resolve({
+            temperature: row.temperature,
+            condition: row.condition,
+            precipitation: row.precipitation,
+            windSpeed: row.wind_speed,
+            isOutdoorFriendly: !!row.is_outdoor_friendly
+          });
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  }
+
   async close() {
     if (this.usePostgres) {
       return await this.postgres.close();

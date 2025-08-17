@@ -112,7 +112,7 @@ async function initializeComponents() {
     logger.info('Scrapers initialized');
     
     // Initialize filtering and scoring
-    const eventFilter = new EventFilter(logger);
+    const eventFilter = new EventFilter(logger, database);
     const eventScorer = new EventScorer(logger, database);
     logger.info('Event processing systems initialized');
     

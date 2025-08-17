@@ -1,19 +1,29 @@
 const { config } = require('../config');
+const WeatherService = require('../services/weather');
+const PreferenceLearningService = require('../services/preference-learning');
 
 class EventFilter {
-  constructor(logger) {
+  constructor(logger, database) {
     this.logger = logger;
+    this.database = database;
+    this.weatherService = new WeatherService(logger);
+    this.preferenceLearning = new PreferenceLearningService(logger, database);
   }
 
-  filterEvents(events) {
-    const filtered = events.filter(event => {
-      return this.isAgeAppropriate(event) &&
-             this.isWithinTimeRange(event) &&
-             this.isScheduleCompatible(event) &&
-             this.isWithinBudget(event) &&
-             this.hasAvailableCapacity(event) &&
-             this.isNotPreviouslyAttended(event);
-    });
+  async filterEvents(events) {
+    const filtered = [];
+    
+    for (const event of events) {
+      if (this.isAgeAppropriate(event) &&
+          this.isWithinTimeRange(event) &&
+          this.isScheduleCompatible(event) &&
+          this.isWithinBudget(event) &&
+          this.hasAvailableCapacity(event) &&
+          this.isNotPreviouslyAttended(event) &&
+          await this.isWeatherSuitable(event)) {
+        filtered.push(event);
+      }
+    }
 
     this.logger.info(`Filtered ${events.length} events down to ${filtered.length} suitable events`);
     return filtered;
@@ -169,7 +179,7 @@ class EventFilter {
   }
 
   async filterAndSort(events, options = {}) {
-    let filtered = this.filterEvents(events);
+    let filtered = await this.filterEvents(events);
     
     if (options.calendarChecker) {
       filtered = await this.filterByCalendarConflicts(filtered, options.calendarChecker);
@@ -179,8 +189,14 @@ class EventFilter {
       filtered = this.filterByNovelty(filtered, options.database);
     }
     
+    // Add preference scoring to all filtered events
+    filtered = await this.addPreferenceScores(filtered);
+    
     if (options.prioritizeUrgent) {
       filtered = this.prioritizeUrgentEvents(filtered);
+    } else {
+      // Sort by preference score if not prioritizing urgent events
+      filtered = this.sortByPreferenceScore(filtered);
     }
     
     return filtered;
@@ -214,6 +230,76 @@ class EventFilter {
     }
     
     return false;
+  }
+
+  async isWeatherSuitable(event) {
+    try {
+      // Only check weather for outdoor events
+      if (!this.weatherService.isEventOutdoor(event)) {
+        return true;
+      }
+
+      const eventDate = new Date(event.date);
+      const weather = await this.weatherService.getWeatherForecast(eventDate);
+      
+      // Cache weather data in database
+      if (this.database) {
+        await this.database.cacheWeatherData(
+          'San Francisco, CA',
+          eventDate.toISOString().split('T')[0],
+          weather
+        );
+      }
+
+      const isSuitable = weather.isOutdoorFriendly;
+      
+      if (!isSuitable) {
+        this.logger.debug(`Event filtered - weather: ${event.title} on ${eventDate.toDateString()} (${weather.condition}, ${weather.temperature}°F)`);
+      }
+      
+      return isSuitable;
+    } catch (error) {
+      this.logger.warn(`Error checking weather for event ${event.title}:`, error.message);
+      return true; // Default to allowing the event if weather check fails
+    }
+  }
+
+  async addPreferenceScores(events) {
+    const scoredEvents = [];
+    
+    for (const event of events) {
+      try {
+        const preferenceScore = await this.preferenceLearning.getEventPreferenceScore(event);
+        event.preferenceScore = preferenceScore;
+        scoredEvents.push(event);
+        
+        this.logger.debug(`Event preference score: ${event.title} = ${preferenceScore}`);
+      } catch (error) {
+        this.logger.warn(`Error calculating preference score for ${event.title}:`, error.message);
+        event.preferenceScore = 50; // Neutral score
+        scoredEvents.push(event);
+      }
+    }
+    
+    return scoredEvents;
+  }
+
+  sortByPreferenceScore(events) {
+    return events.sort((a, b) => {
+      // Sort by preference score (higher is better), then by date
+      if (b.preferenceScore !== a.preferenceScore) {
+        return b.preferenceScore - a.preferenceScore;
+      }
+      return new Date(a.date) - new Date(b.date);
+    });
+  }
+
+  async recordEventInteraction(eventId, interactionType, metadata = {}) {
+    try {
+      await this.preferenceLearning.recordEventInteraction(eventId, interactionType, metadata);
+    } catch (error) {
+      this.logger.error(`Error recording event interaction:`, error.message);
+    }
   }
 }
 
