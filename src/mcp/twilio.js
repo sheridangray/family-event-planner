@@ -205,11 +205,32 @@ class TwilioMCPClient {
       
       if (pendingApprovals.length === 0) {
         this.logger.warn(`No pending approvals found for ${from}`);
+        
+        // Send helpful response if no pending approvals
+        await this.sendConfirmationMessage(from, {
+          type: 'no_pending',
+          message: "No pending event approvals found. You'll receive new event suggestions soon! 🎉"
+        });
+        
         return null;
       }
       
       const latestApproval = pendingApprovals[0];
       
+      // Handle unclear responses
+      if (response.confidence === 'low' || response.status === 'unclear') {
+        this.logger.warn(`Unclear response from ${from}: "${body}"`);
+        
+        await this.sendConfirmationMessage(from, {
+          type: 'unclear',
+          eventTitle: latestApproval.event_title,
+          message: `I didn't understand "${body}". Please reply YES to book "${latestApproval.event_title}" or NO to skip it.`
+        });
+        
+        return { unclear: true, eventId: latestApproval.event_id };
+      }
+      
+      // Update SMS response in database
       await this.database.updateSMSResponse(
         latestApproval.id,
         body.trim(),
@@ -218,21 +239,61 @@ class TwilioMCPClient {
       
       if (response.approved) {
         await this.database.updateEventStatus(latestApproval.event_id, 'approved');
-        this.logger.info(`Event ${latestApproval.event_id} approved via SMS`);
+        this.logger.info(`✅ Event ${latestApproval.event_id} (${latestApproval.event_title}) approved via SMS`);
+        
+        // Send confirmation
+        await this.sendConfirmationMessage(from, {
+          type: 'approved',
+          eventTitle: latestApproval.event_title,
+          eventCost: latestApproval.event_cost,
+          message: latestApproval.event_cost > 0 
+            ? `✅ Great! "${latestApproval.event_title}" approved. Payment link coming next...`
+            : `✅ Perfect! "${latestApproval.event_title}" approved and will be booked automatically. You'll get calendar invite soon! 🎉`
+        });
         
         return {
           approved: true,
           eventId: latestApproval.event_id,
-          approvalId: latestApproval.id
+          approvalId: latestApproval.id,
+          eventTitle: latestApproval.event_title,
+          requiresPayment: latestApproval.event_cost > 0
         };
-      } else if (response.rejected) {
+        
+      } else if (response.rejected || response.status === 'cancelled') {
         await this.database.updateEventStatus(latestApproval.event_id, 'rejected');
-        this.logger.info(`Event ${latestApproval.event_id} rejected via SMS`);
+        this.logger.info(`❌ Event ${latestApproval.event_id} (${latestApproval.event_title}) rejected via SMS`);
+        
+        // Send confirmation
+        await this.sendConfirmationMessage(from, {
+          type: 'rejected',
+          eventTitle: latestApproval.event_title,
+          message: `👍 Got it! Skipping "${latestApproval.event_title}". I'll keep looking for other great events for the family!`
+        });
         
         return {
           approved: false,
           eventId: latestApproval.event_id,
-          approvalId: latestApproval.id
+          approvalId: latestApproval.id,
+          eventTitle: latestApproval.event_title
+        };
+        
+      } else if (response.isPaymentConfirmation) {
+        // Handle payment confirmation for paid events
+        this.logger.info(`💳 Payment confirmation received for ${latestApproval.event_title}`);
+        
+        await this.database.updateEventStatus(latestApproval.event_id, 'ready_for_registration');
+        
+        await this.sendConfirmationMessage(from, {
+          type: 'payment_confirmed',
+          eventTitle: latestApproval.event_title,
+          message: `💳 Payment confirmed for "${latestApproval.event_title}"! Now processing registration...`
+        });
+        
+        return {
+          paymentConfirmed: true,
+          eventId: latestApproval.event_id,
+          approvalId: latestApproval.id,
+          eventTitle: latestApproval.event_title
         };
       }
       
@@ -240,34 +301,184 @@ class TwilioMCPClient {
       
     } catch (error) {
       this.logger.error(`Error handling incoming SMS from ${from}:`, error.message);
+      
+      // Send error message to user
+      try {
+        await this.sendConfirmationMessage(from, {
+          type: 'error',
+          message: "Sorry, there was an error processing your response. Please try again or contact support."
+        });
+      } catch (confirmError) {
+        this.logger.error('Failed to send error confirmation:', confirmError.message);
+      }
+      
       throw error;
+    }
+  }
+
+  async sendConfirmationMessage(phoneNumber, confirmation) {
+    try {
+      const messageId = await this.sendSMS(phoneNumber, confirmation.message);
+      this.logger.info(`Sent confirmation to ${phoneNumber}: ${confirmation.type}`);
+      return messageId;
+    } catch (error) {
+      this.logger.error(`Failed to send confirmation message:`, error.message);
+      // Don't throw - confirmation failures shouldn't break the main flow
     }
   }
 
   parseResponse(body) {
     const text = body.toLowerCase().trim();
     
-    const approvalKeywords = ['yes', 'y', 'yeah', 'sure', 'ok', 'okay', 'yep', 'approve'];
-    const rejectionKeywords = ['no', 'n', 'nope', 'pass', 'skip', 'reject'];
+    // Comprehensive approval patterns
+    const approvalKeywords = [
+      // Basic yes variations
+      'yes', 'y', 'yeah', 'yep', 'yup', 'yas', 'ya', 'yea',
+      // Affirmative words  
+      'sure', 'ok', 'okay', 'good', 'great', 'perfect', 'sounds good',
+      // Action words
+      'approve', 'book', 'register', 'go', 'do it', 'lets do it',
+      // Enthusiastic
+      'awesome', 'love it', 'want it', 'interested',
+      // Numbers and symbols
+      '1', 'true', 'accept', '✓', '👍'
+    ];
     
-    const approved = approvalKeywords.some(keyword => text === keyword || text.includes(keyword));
-    const rejected = rejectionKeywords.some(keyword => text === keyword || text.includes(keyword));
+    // Comprehensive rejection patterns  
+    const rejectionKeywords = [
+      // Basic no variations
+      'no', 'n', 'nope', 'nah', 'na', 'nay',
+      // Negative words
+      'pass', 'skip', 'reject', 'decline', 'not interested',
+      // Dismissive
+      'not now', 'next time', 'not this time',
+      // Numbers and symbols
+      '0', 'false', '❌', '👎'
+    ];
+    
+    // Special handling for payment-related responses
+    const paymentKeywords = ['pay', 'paid', 'payment', 'complete', 'done'];
+    const cancelKeywords = ['cancel', 'cancelled', 'abort'];
+    
+    // Check for exact matches first (highest priority)
+    if (['yes', 'y', '1', 'ok'].includes(text)) {
+      return { approved: true, rejected: false, status: 'approved', originalText: body.trim(), confidence: 'high' };
+    }
+    
+    if (['no', 'n', '0'].includes(text)) {
+      return { approved: false, rejected: true, status: 'rejected', originalText: body.trim(), confidence: 'high' };
+    }
+    
+    // Check for payment confirmation
+    if (paymentKeywords.some(keyword => text.includes(keyword))) {
+      return { 
+        approved: false, 
+        rejected: false, 
+        status: 'payment_confirmed', 
+        originalText: body.trim(),
+        isPaymentConfirmation: true,
+        confidence: 'high'
+      };
+    }
+    
+    // Check for cancellation
+    if (cancelKeywords.some(keyword => text.includes(keyword))) {
+      return { 
+        approved: false, 
+        rejected: true, 
+        status: 'cancelled', 
+        originalText: body.trim(),
+        confidence: 'high'
+      };
+    }
+    
+    // Check for approval patterns (medium confidence)
+    const approved = approvalKeywords.some(keyword => 
+      text === keyword || text.includes(keyword)
+    );
+    
+    // Check for rejection patterns (medium confidence)  
+    const rejected = rejectionKeywords.some(keyword =>
+      text === keyword || text.includes(keyword)
+    );
+    
+    // Handle ambiguous responses
+    if (approved && rejected) {
+      // If both patterns match, prioritize shorter/more direct responses
+      const directApproval = ['yes', 'y', 'ok', 'sure'].some(word => text.includes(word));
+      const directRejection = ['no', 'n', 'nope'].some(word => text.includes(word));
+      
+      if (directApproval && !directRejection) {
+        return { approved: true, rejected: false, status: 'approved', originalText: body.trim(), confidence: 'medium' };
+      } else if (directRejection && !directApproval) {
+        return { approved: false, rejected: true, status: 'rejected', originalText: body.trim(), confidence: 'medium' };
+      } else {
+        return { approved: false, rejected: false, status: 'unclear', originalText: body.trim(), confidence: 'low' };
+      }
+    }
     
     let status = 'sent';
-    if (approved) status = 'approved';
-    else if (rejected) status = 'rejected';
+    let confidence = 'medium';
+    
+    if (approved) {
+      status = 'approved';
+    } else if (rejected) {
+      status = 'rejected';
+    } else {
+      status = 'unclear';
+      confidence = 'low';
+    }
     
     return {
       approved,
       rejected,
       status,
-      originalText: body.trim()
+      originalText: body.trim(),
+      confidence,
+      isPaymentConfirmation: false
     };
   }
 
   async getPendingApprovals(phoneNumber) {
     try {
-      return [];
+      // Get pending approvals from database, ordered by most recent first
+      const sql = `
+        SELECT sa.*, e.title as event_title, e.date as event_date, e.cost as event_cost
+        FROM sms_approvals sa
+        LEFT JOIN events e ON sa.event_id = e.id  
+        WHERE sa.phone_number = ? 
+        AND sa.status = 'sent'
+        AND datetime(sa.sent_at, '+24 hours') > datetime('now')
+        ORDER BY sa.sent_at DESC
+      `;
+      
+      // Use database connection through this.database
+      if (this.database.usePostgres) {
+        // For PostgreSQL, adjust the query
+        const pgSql = `
+          SELECT sa.*, e.title as event_title, e.date as event_date, e.cost as event_cost
+          FROM sms_approvals sa
+          LEFT JOIN events e ON sa.event_id = e.id  
+          WHERE sa.phone_number = $1 
+          AND sa.status = 'sent'
+          AND sa.sent_at + INTERVAL '24 hours' > NOW()
+          ORDER BY sa.sent_at DESC
+        `;
+        
+        const result = await this.database.postgres.query(pgSql, [phoneNumber]);
+        return result.rows;
+      } else {
+        // SQLite version
+        return new Promise((resolve, reject) => {
+          this.database.db.all(sql, [phoneNumber], (err, rows) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            resolve(rows || []);
+          });
+        });
+      }
     } catch (error) {
       this.logger.error(`Error getting pending approvals for ${phoneNumber}:`, error.message);
       return [];

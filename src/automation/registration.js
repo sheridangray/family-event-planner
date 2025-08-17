@@ -80,6 +80,84 @@ class RegistrationAutomator {
     }
   }
 
+  async processApprovedEvents() {
+    try {
+      this.logger.info('Processing approved events for registration...');
+      
+      const approvedEvents = await this.database.getEventsByStatus('approved');
+      const readyEvents = await this.database.getEventsByStatus('ready_for_registration');
+      
+      const eventsToProcess = [...approvedEvents, ...readyEvents];
+      const results = [];
+      
+      for (const event of eventsToProcess) {
+        try {
+          this.logger.info(`Processing event: ${event.title}`);
+          
+          // Check if event requires payment
+          if (event.cost > 0 && event.status === 'approved') {
+            // Paid events need payment confirmation first
+            this.logger.info(`Event ${event.title} requires payment ($${event.cost}) - skipping auto-registration`);
+            results.push({
+              eventId: event.id,
+              title: event.title,
+              success: false,
+              requiresPayment: true,
+              message: 'Waiting for payment confirmation'
+            });
+            continue;
+          }
+          
+          // Process free events or events that are ready for registration
+          const registrationResult = await this.registerForEvent(event);
+          
+          if (registrationResult.success) {
+            await this.database.updateEventStatus(event.id, 'booked');
+            this.logger.info(`Successfully processed registration for: ${event.title}`);
+          }
+          
+          results.push({
+            eventId: event.id,
+            title: event.title,
+            success: registrationResult.success,
+            requiresPayment: false,
+            message: registrationResult.message,
+            registrationUrl: registrationResult.registrationUrl,
+            requiresManualAction: registrationResult.requiresManualAction
+          });
+          
+        } catch (error) {
+          this.logger.error(`Error processing event ${event.title}:`, error.message);
+          
+          // Save failed registration attempt
+          await this.database.saveRegistration({
+            eventId: event.id,
+            success: false,
+            errorMessage: error.message,
+            paymentRequired: event.cost > 0,
+            paymentAmount: event.cost
+          });
+          
+          results.push({
+            eventId: event.id,
+            title: event.title,
+            success: false,
+            requiresPayment: event.cost > 0,
+            message: error.message,
+            error: true
+          });
+        }
+      }
+      
+      this.logger.info(`Processed ${results.length} events: ${results.filter(r => r.success).length} successful, ${results.filter(r => !r.success).length} failed`);
+      return results;
+      
+    } catch (error) {
+      this.logger.error('Error processing approved events:', error.message);
+      return [];
+    }
+  }
+
   async close() {
     if (this.browser) {
       await this.browser.close();

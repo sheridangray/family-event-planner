@@ -82,4 +82,58 @@ router.post('/process-approvals', authenticateAPI, async (req, res) => {
   }
 });
 
+// Twilio webhook endpoint for incoming SMS messages
+router.post('/sms-webhook', async (req, res) => {
+  try {
+    const { smsManager, registrationAutomator, logger } = req.app.locals;
+    
+    // Extract Twilio webhook parameters
+    const { From: from, Body: body, MessageSid: messageId } = req.body;
+    
+    if (!from || !body) {
+      logger.warn('Invalid SMS webhook payload received');
+      return res.status(400).send('Invalid payload');
+    }
+    
+    logger.info(`📱 SMS webhook received from ${from}: "${body}"`);
+    
+    // Process the incoming SMS response
+    const result = await smsManager.handleIncomingResponse(from, body, messageId);
+    
+    if (result) {
+      // Immediately process approved events if SMS was approved
+      if (result.approved) {
+        logger.info(`🚀 Immediately processing approved event: ${result.eventTitle}`);
+        
+        try {
+          // Process the specific approved event
+          await smsManager.processApprovedEvent(result.eventId, result.approvalId);
+          
+          // If it's a free event, trigger registration automation immediately
+          if (!result.requiresPayment) {
+            const registrationResults = await registrationAutomator.processApprovedEvents();
+            logger.info(`Registration automation triggered: ${registrationResults.length} events processed`);
+          }
+        } catch (processingError) {
+          logger.error(`Error in immediate processing: ${processingError.message}`);
+          // Don't fail the webhook - the scheduled task will pick it up
+        }
+      }
+      
+      logger.info(`SMS response processed successfully: ${JSON.stringify(result)}`);
+    }
+    
+    // Send TwiML response to acknowledge webhook
+    res.type('text/xml');
+    res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    
+  } catch (error) {
+    req.app.locals.logger.error('Error processing SMS webhook:', error.message);
+    
+    // Still return success to Twilio to avoid retries
+    res.type('text/xml');
+    res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  }
+});
+
 module.exports = router;
