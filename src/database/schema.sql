@@ -142,6 +142,20 @@ INSERT OR IGNORE INTO event_sources (name, url, scrape_frequency_hours) VALUES
 ('Exploratorium', 'https://www.exploratorium.edu/visit/calendar', 12),
 ('SF Zoo', 'https://www.sfzoo.org/events/', 12);
 
+-- Family members for dynamic age calculation and demographics
+CREATE TABLE IF NOT EXISTS family_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    birthdate DATE NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('parent', 'child', 'guardian')),
+    emergency_contact BOOLEAN DEFAULT 0,
+    active BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
 CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
@@ -150,3 +164,5 @@ CREATE INDEX IF NOT EXISTS idx_events_cost ON events(cost);
 CREATE INDEX IF NOT EXISTS idx_event_scores_total ON event_scores(total_score);
 CREATE INDEX IF NOT EXISTS idx_sms_approvals_status ON sms_approvals(status);
 CREATE INDEX IF NOT EXISTS idx_registrations_success ON registrations(success);
+CREATE INDEX IF NOT EXISTS idx_family_members_role ON family_members(role);
+CREATE INDEX IF NOT EXISTS idx_family_members_active ON family_members(active);

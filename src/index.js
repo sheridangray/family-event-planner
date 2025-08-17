@@ -9,6 +9,7 @@ const Database = require('./database');
 const ScraperManager = require('./scrapers');
 const EventFilter = require('./filters');
 const EventScorer = require('./scoring');
+const FamilyDemographicsService = require('./services/family-demographics');
 const { CalendarConflictChecker } = require('./mcp/gmail');
 const { SMSApprovalManager } = require('./mcp/twilio');
 const RegistrationAutomator = require('./automation/registration');
@@ -111,6 +112,11 @@ async function initializeComponents() {
     const scraperManager = new ScraperManager(logger, database);
     logger.info('Scrapers initialized');
     
+    // Initialize family demographics and migrate from environment if needed
+    const familyService = new FamilyDemographicsService(logger, database);
+    await familyService.initializeFamilyFromEnvironment();
+    logger.info('Family demographics initialized');
+    
     // Initialize filtering and scoring
     const eventFilter = new EventFilter(logger, database);
     const eventScorer = new EventScorer(logger, database);
@@ -149,6 +155,7 @@ async function initializeComponents() {
     app.locals.scraperManager = scraperManager;
     app.locals.eventFilter = eventFilter;
     app.locals.eventScorer = eventScorer;
+    app.locals.familyService = familyService;
     app.locals.calendarManager = calendarManager;
     app.locals.smsManager = smsManager;
     app.locals.registrationAutomator = registrationAutomator;
@@ -157,7 +164,7 @@ async function initializeComponents() {
     app.locals.paymentGuard = paymentGuard;
     
     return {
-      database, scraperManager, eventFilter, eventScorer,
+      database, scraperManager, eventFilter, eventScorer, familyService,
       calendarManager, smsManager, registrationAutomator, scheduler
     };
     

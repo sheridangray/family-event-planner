@@ -1,6 +1,7 @@
 const { config } = require('../config');
 const WeatherService = require('../services/weather');
 const PreferenceLearningService = require('../services/preference-learning');
+const FamilyDemographicsService = require('../services/family-demographics');
 
 class EventFilter {
   constructor(logger, database) {
@@ -8,13 +9,17 @@ class EventFilter {
     this.database = database;
     this.weatherService = new WeatherService(logger);
     this.preferenceLearning = new PreferenceLearningService(logger, database);
+    this.familyService = new FamilyDemographicsService(logger, database);
   }
 
   async filterEvents(events) {
     const filtered = [];
     
+    // Get current family demographics for age checking
+    const familyDemographics = await this.familyService.getFamilyDemographics();
+    
     for (const event of events) {
-      if (this.isAgeAppropriate(event) &&
+      if (this.isAgeAppropriate(event, familyDemographics) &&
           this.isWithinTimeRange(event) &&
           this.isScheduleCompatible(event) &&
           this.isWithinBudget(event) &&
@@ -25,24 +30,26 @@ class EventFilter {
       }
     }
 
-    this.logger.info(`Filtered ${events.length} events down to ${filtered.length} suitable events`);
+    this.logger.info(`Filtered ${events.length} events down to ${filtered.length} suitable events (${familyDemographics.children.length} children: ages ${familyDemographics.childAges.join(', ')})`);
     return filtered;
   }
 
-  isAgeAppropriate(event) {
-    const { minChildAge, maxChildAge } = config.preferences;
-    
+  isAgeAppropriate(event, familyDemographics) {
     if (!event.ageRange || (!event.ageRange.min && !event.ageRange.max)) {
-      return true;
+      return true; // No age restrictions
     }
 
     const eventMinAge = event.ageRange.min || 0;
     const eventMaxAge = event.ageRange.max || 18;
 
-    const isAppropriate = eventMinAge <= maxChildAge && eventMaxAge >= minChildAge;
+    // Check if any child fits in the event age range
+    const isAppropriate = familyDemographics.children.some(child => {
+      return child.currentAge >= eventMinAge && child.currentAge <= eventMaxAge;
+    });
     
     if (!isAppropriate) {
-      this.logger.debug(`Event filtered - age range: ${event.title} (${eventMinAge}-${eventMaxAge} vs ${minChildAge}-${maxChildAge})`);
+      const childAges = familyDemographics.childAges.join(', ');
+      this.logger.debug(`Event filtered - age range: ${event.title} (${eventMinAge}-${eventMaxAge} vs children ages ${childAges})`);
     }
     
     return isAppropriate;

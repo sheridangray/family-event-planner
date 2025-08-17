@@ -392,6 +392,108 @@ class Database {
     });
   }
 
+  async addFamilyMember(member) {
+    if (this.usePostgres) {
+      return await this.postgres.addFamilyMember(member);
+    }
+
+    const sql = `
+      INSERT INTO family_members (name, email, phone, birthdate, role, emergency_contact)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+    
+    const params = [
+      member.name,
+      member.email || null,
+      member.phone || null,
+      member.birthdate,
+      member.role,
+      member.emergencyContact || false
+    ];
+
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, params, function(err) {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(this.lastID);
+      });
+    });
+  }
+
+  async getFamilyMembers(activeOnly = true) {
+    if (this.usePostgres) {
+      return await this.postgres.getFamilyMembers(activeOnly);
+    }
+
+    const sql = activeOnly 
+      ? `SELECT * FROM family_members WHERE active = 1 ORDER BY role, birthdate`
+      : `SELECT * FROM family_members ORDER BY role, birthdate`;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(rows);
+      });
+    });
+  }
+
+  async getFamilyMembersByRole(role, activeOnly = true) {
+    if (this.usePostgres) {
+      return await this.postgres.getFamilyMembersByRole(role, activeOnly);
+    }
+
+    const sql = activeOnly
+      ? `SELECT * FROM family_members WHERE role = ? AND active = 1 ORDER BY birthdate`
+      : `SELECT * FROM family_members WHERE role = ? ORDER BY birthdate`;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [role], (err, rows) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(rows);
+      });
+    });
+  }
+
+  async updateFamilyMember(id, updates) {
+    if (this.usePostgres) {
+      return await this.postgres.updateFamilyMember(id, updates);
+    }
+
+    const setClause = Object.keys(updates)
+      .map(key => `${key} = ?`)
+      .join(', ');
+    
+    const sql = `
+      UPDATE family_members 
+      SET ${setClause}, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `;
+    
+    const params = [...Object.values(updates), id];
+
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, params, function(err) {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(this.changes);
+      });
+    });
+  }
+
+  async deactivateFamilyMember(id) {
+    return this.updateFamilyMember(id, { active: false });
+  }
+
   async close() {
     if (this.usePostgres) {
       return await this.postgres.close();
