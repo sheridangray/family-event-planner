@@ -6,7 +6,10 @@ yarn-error.log*
 
 # Environment variables
 .env
-gmail-credentials.json
+
+# Credentials directory (all files except .gitkeep)
+credentials/*
+!credentials/.gitkeep
 
 # Database
 data/

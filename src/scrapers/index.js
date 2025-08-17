@@ -1,4 +1,7 @@
 const SFRecParksScraper = require('./sf-rec-parks');
+const SFLibraryScraper = require('./sf-library');
+const CalAcademyScraper = require('./cal-academy');
+const ChaseCenterScraper = require('./chase-center');
 
 class ScraperManager {
   constructor(logger, database) {
@@ -10,7 +13,10 @@ class ScraperManager {
 
   initScrapers() {
     this.scrapers = [
-      new SFRecParksScraper(this.logger)
+      new SFRecParksScraper(this.logger),
+      new SFLibraryScraper(this.logger),
+      new CalAcademyScraper(this.logger),
+      new ChaseCenterScraper(this.logger)
     ];
   }
 

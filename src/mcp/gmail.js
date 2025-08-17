@@ -1,9 +1,13 @@
 const { config } = require('../config');
+const { google } = require('googleapis');
+const fs = require('fs');
+const path = require('path');
 
 class GmailMCPClient {
   constructor(logger) {
     this.logger = logger;
-    this.mcpClient = null;
+    this.auth = null;
+    this.calendar = null;
   }
 
   async init() {
@@ -14,10 +18,63 @@ class GmailMCPClient {
         throw new Error('Gmail MCP credentials not configured');
       }
       
-      this.logger.info('Gmail MCP client initialized successfully');
+      // Load credentials from file
+      const credentialsPath = config.gmail.mcpCredentials;
+      if (!fs.existsSync(credentialsPath)) {
+        throw new Error(`Gmail credentials file not found: ${credentialsPath}`);
+      }
+      
+      const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+      
+      // Create OAuth2 client
+      const { client_secret, client_id, redirect_uris } = credentials.installed;
+      this.auth = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+      
+      // Set up Calendar API
+      this.calendar = google.calendar({ version: 'v3', auth: this.auth });
+      
+      // Check if we have a token file, if not, we'll need to authenticate
+      const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
+      if (fs.existsSync(tokenPath)) {
+        const token = fs.readFileSync(tokenPath, 'utf8');
+        this.auth.setCredentials(JSON.parse(token));
+        this.logger.info('Gmail MCP client initialized successfully with existing token');
+      } else {
+        this.logger.warn('No token found. Will need to authenticate when first accessing calendar.');
+      }
+      
       return true;
     } catch (error) {
       this.logger.error('Failed to initialize Gmail MCP client:', error.message);
+      throw error;
+    }
+  }
+
+  async authenticate() {
+    const authUrl = this.auth.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar']
+    });
+    
+    this.logger.info('Authorize this app by visiting this URL:');
+    this.logger.info('[OAuth URL generated - contains sensitive client_id]');
+    
+    return authUrl;
+  }
+
+  async setAuthCode(code) {
+    try {
+      const { tokens } = await this.auth.getToken(code);
+      this.auth.setCredentials(tokens);
+      
+      // Save token to file for future use
+      const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
+      fs.writeFileSync(tokenPath, JSON.stringify(tokens));
+      
+      this.logger.info('Token saved successfully');
+      return true;
+    } catch (error) {
+      this.logger.error('Error setting auth code:', error.message);
       throw error;
     }
   }
@@ -131,7 +188,7 @@ class GmailMCPClient {
         description: this.buildEventDescription(eventData),
         location: eventData.location?.address || '',
         start: {
-          dateTime: eventData.date,
+          dateTime: new Date(eventData.date).toISOString(),
           timeZone: 'America/Los_Angeles'
         },
         end: {
@@ -152,22 +209,18 @@ class GmailMCPClient {
         ]
       };
       
-      const results = [];
+      // Create event in primary calendar
+      const event = await this.calendar.events.insert({
+        calendarId: 'primary',
+        resource: calendarEvent,
+      });
       
-      const parent1Result = await this.createEventInCalendar(
-        config.gmail.parent1Email, 
-        calendarEvent
-      );
-      results.push({ email: config.gmail.parent1Email, eventId: parent1Result });
-      
-      const parent2Result = await this.createEventInCalendar(
-        config.gmail.parent2Email, 
-        calendarEvent
-      );
-      results.push({ email: config.gmail.parent2Email, eventId: parent2Result });
-      
-      this.logger.info(`Successfully created calendar events for ${eventData.title}`);
-      return results;
+      this.logger.info(`Successfully created calendar event with ID: ${event.data.id}`);
+      return [{
+        email: 'primary',
+        eventId: event.data.id,
+        htmlLink: event.data.htmlLink
+      }];
       
     } catch (error) {
       this.logger.error(`Error creating calendar event for ${eventData.title}:`, error.message);
@@ -175,17 +228,6 @@ class GmailMCPClient {
     }
   }
 
-  async createEventInCalendar(email, eventData) {
-    try {
-      this.logger.debug(`Creating event in calendar for ${email}`);
-      
-      return 'mock-event-id-' + Date.now();
-      
-    } catch (error) {
-      this.logger.error(`Error creating event in calendar for ${email}:`, error.message);
-      throw error;
-    }
-  }
 
   buildEventDescription(eventData) {
     let description = eventData.description || '';

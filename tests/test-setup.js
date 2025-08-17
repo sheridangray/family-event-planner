@@ -1,6 +1,6 @@
-const Database = require('./src/database');
-const ScraperManager = require('./src/scrapers');
-const EventFilter = require('./src/filters');
+const Database = require('../src/database');
+const ScraperManager = require('../src/scrapers');
+const EventFilter = require('../src/filters');
 const winston = require('winston');
 
 const logger = winston.createLogger({

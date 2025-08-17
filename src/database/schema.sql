@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS events (
     capacity_total INTEGER,
     description TEXT,
     image_url TEXT,
-    status TEXT CHECK(status IN ('discovered', 'monitoring', 'proposed', 'approved', 'rejected', 'booked', 'attended')) DEFAULT 'discovered',
+    status TEXT CHECK(status IN ('discovered', 'monitoring', 'proposed', 'approved', 'rejected', 'ready_for_registration', 'booked', 'attended')) DEFAULT 'discovered',
     is_recurring BOOLEAN DEFAULT 0,
     previously_attended BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

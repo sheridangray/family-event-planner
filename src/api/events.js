@@ -1,7 +1,8 @@
 const express = require('express');
+const { authenticateAPI } = require('../middleware/auth');
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', authenticateAPI, async (req, res) => {
   try {
     const { database, logger } = req.app.locals;
     
@@ -22,7 +23,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/:id/approve', async (req, res) => {
+router.post('/:id/approve', authenticateAPI, async (req, res) => {
   try {
     const { database, logger, smsManager } = req.app.locals;
     const eventId = req.params.id;
@@ -56,7 +57,7 @@ router.post('/:id/approve', async (req, res) => {
   }
 });
 
-router.post('/:id/reject', async (req, res) => {
+router.post('/:id/reject', authenticateAPI, async (req, res) => {
   try {
     const { database } = req.app.locals;
     const eventId = req.params.id;
@@ -77,7 +78,7 @@ router.post('/:id/reject', async (req, res) => {
   }
 });
 
-router.post('/:id/register', async (req, res) => {
+router.post('/:id/register', authenticateAPI, async (req, res) => {
   try {
     const { database, logger, registrationAutomator } = req.app.locals;
     const eventId = req.params.id;
@@ -115,7 +116,7 @@ router.post('/:id/register', async (req, res) => {
   }
 });
 
-router.post('/:id/calendar', async (req, res) => {
+router.post('/:id/calendar', authenticateAPI, async (req, res) => {
   try {
     const { database, logger, calendarManager } = req.app.locals;
     const eventId = req.params.id;

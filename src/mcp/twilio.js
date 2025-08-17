@@ -1,10 +1,12 @@
 const { config } = require('../config');
+const twilio = require('twilio');
 
 class TwilioMCPClient {
   constructor(logger, database) {
     this.logger = logger;
     this.database = database;
-    this.mcpClient = null;
+    this.twilioClient = null;
+    this.twilioConfig = null;
   }
 
   async init() {
@@ -18,6 +20,18 @@ class TwilioMCPClient {
       if (!config.twilio.phoneTo) {
         throw new Error('Twilio phone number not configured');
       }
+      
+      // Parse Twilio credentials from JSON string or object
+      this.twilioConfig = typeof config.twilio.mcpCredentials === 'string' 
+        ? JSON.parse(config.twilio.mcpCredentials)
+        : config.twilio.mcpCredentials;
+      
+      if (!this.twilioConfig.accountSid || !this.twilioConfig.authToken || !this.twilioConfig.phoneNumber) {
+        throw new Error('Twilio credentials missing required fields: accountSid, authToken, phoneNumber');
+      }
+      
+      // Initialize Twilio client
+      this.twilioClient = twilio(this.twilioConfig.accountSid, this.twilioConfig.authToken);
       
       this.logger.info('Twilio MCP client initialized successfully');
       return true;
@@ -162,10 +176,18 @@ class TwilioMCPClient {
     try {
       this.logger.debug(`Sending SMS to ${toNumber}: ${message.substring(0, 50)}...`);
       
-      const messageId = 'mock-message-' + Date.now();
+      if (!this.twilioClient) {
+        throw new Error('Twilio client not initialized. Call init() first.');
+      }
       
-      this.logger.info(`SMS sent successfully, message ID: ${messageId}`);
-      return messageId;
+      const messageResponse = await this.twilioClient.messages.create({
+        body: message,
+        from: this.twilioConfig.phoneNumber,
+        to: toNumber
+      });
+      
+      this.logger.info(`SMS sent successfully, message SID: ${messageResponse.sid}`);
+      return messageResponse.sid;
       
     } catch (error) {
       this.logger.error(`Error sending SMS to ${toNumber}:`, error.message);

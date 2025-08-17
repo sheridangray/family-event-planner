@@ -20,6 +20,7 @@ const PaymentGuard = require('./safety/payment-guard');
 
 // API routes
 const apiRouter = require('./api');
+const { authenticateAPI } = require('./middleware/auth');
 
 const logger = winston.createLogger({
   level: config.app.logLevel,
@@ -87,7 +88,7 @@ app.get('/health', async (req, res) => {
 app.use('/api', apiRouter);
 
 // Emergency shutdown endpoint (for safety)
-app.post('/emergency-shutdown', (req, res) => {
+app.post('/emergency-shutdown', authenticateAPI, (req, res) => {
   logger.error('EMERGENCY SHUTDOWN REQUESTED via API');
   res.json({ message: 'Emergency shutdown initiated' });
   process.exit(1);

@@ -1,6 +1,5 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer');
 const { v4: uuidv4 } = require('crypto').randomUUID || (() => uuidv4());
 
 class BaseScraper {
@@ -14,24 +13,23 @@ class BaseScraper {
   async initBrowser() {
     if (!this.browser) {
       try {
-        const isProduction = process.env.NODE_ENV === 'production';
-        
+        // Render-friendly Puppeteer configuration
         this.browser = await puppeteer.launch({
           headless: true,
-          executablePath: isProduction ? '/usr/bin/google-chrome' : undefined,
           args: [
-            '--no-sandbox', 
+            '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process'
           ]
         });
+        this.logger.debug('Browser initialized successfully');
       } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          this.logger.warn('Browser automation unavailable in production - using HTTP fallback');
-          return null;
-        }
-        throw error;
+        this.logger.warn('Browser initialization failed, will use HTTP fallback:', error.message);
+        return null;
       }
     }
     return this.browser;
@@ -93,7 +91,13 @@ class BaseScraper {
 
   parseDate(dateString) {
     try {
-      const date = new Date(dateString);
+      // Clean up the date string by removing extra whitespace and non-breaking spaces
+      const cleanDateString = dateString.replace(/\s+/g, ' ').replace(/\u00A0/g, ' ').trim();
+      
+      // Extract just the date part before the time if it contains time info
+      const dateOnly = cleanDateString.split(',').slice(0, 2).join(',');
+      
+      const date = new Date(dateOnly);
       if (isNaN(date.getTime())) {
         this.logger.warn(`Invalid date string: ${dateString}`);
         return null;

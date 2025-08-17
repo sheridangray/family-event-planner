@@ -1,5 +1,6 @@
 const express = require('express');
 const eventsRouter = require('./events');
+const { authenticateAPI } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ router.get('/status', (req, res) => {
   });
 });
 
-router.post('/scrape', async (req, res) => {
+router.post('/scrape', authenticateAPI, async (req, res) => {
   try {
     const { scraperManager, logger } = req.app.locals;
     const source = req.body.source;
@@ -40,7 +41,7 @@ router.post('/scrape', async (req, res) => {
   }
 });
 
-router.post('/score', async (req, res) => {
+router.post('/score', authenticateAPI, async (req, res) => {
   try {
     const { database, eventScorer, logger } = req.app.locals;
     
@@ -61,7 +62,7 @@ router.post('/score', async (req, res) => {
   }
 });
 
-router.post('/process-approvals', async (req, res) => {
+router.post('/process-approvals', authenticateAPI, async (req, res) => {
   try {
     const { registrationAutomator, logger } = req.app.locals;
     
