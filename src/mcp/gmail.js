@@ -30,8 +30,9 @@ class GmailMCPClient {
       const { client_secret, client_id, redirect_uris } = credentials.installed;
       this.auth = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
       
-      // Set up Calendar API
+      // Set up Calendar and Gmail APIs
       this.calendar = google.calendar({ version: 'v3', auth: this.auth });
+      this.gmail = google.gmail({ version: 'v1', auth: this.auth });
       
       // Check if we have a token file, if not, we'll need to authenticate
       const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
@@ -88,19 +89,36 @@ class GmailMCPClient {
       const checkStart = new Date(eventStart.getTime() - (bufferMinutes * 60 * 1000));
       const checkEnd = new Date(eventEnd.getTime() + (bufferMinutes * 60 * 1000));
       
-      // Check Joyce's calendar (parent1) - BLOCKS event if conflicts found
-      const joyceConflicts = await this.checkSingleCalendar(
-        config.gmail.parent1Email, 
-        checkStart, 
-        checkEnd
-      );
+      // Check both calendars with enhanced error handling using Promise.allSettled
+      const calendarChecks = await Promise.allSettled([
+        this.checkSingleCalendar(config.gmail.parent1Email, checkStart, checkEnd),
+        this.checkSingleCalendar(config.gmail.parent2Email, checkStart, checkEnd)
+      ]);
       
-      // Check Sheridan's calendar (parent2) - WARNS only, doesn't block
-      const sheridanConflicts = await this.checkSingleCalendar(
-        config.gmail.parent2Email, 
-        checkStart, 
-        checkEnd
-      );
+      const joyceResult = calendarChecks[0];
+      const sheridanResult = calendarChecks[1];
+      
+      let joyceConflicts = [];
+      let sheridanConflicts = [];
+      let warnings = [];
+      
+      // Handle Joyce's calendar result (blocking conflicts)
+      if (joyceResult.status === 'fulfilled') {
+        joyceConflicts = joyceResult.value;
+      } else {
+        const error = joyceResult.reason;
+        this.logger.warn(`Joyce's calendar check failed: ${error.message}`);
+        warnings.push(`Joyce's calendar unavailable (${error.message})`);
+      }
+      
+      // Handle Sheridan's calendar result (warning conflicts)
+      if (sheridanResult.status === 'fulfilled') {
+        sheridanConflicts = sheridanResult.value;
+      } else {
+        const error = sheridanResult.reason;
+        this.logger.warn(`Sheridan's calendar check failed: ${error.message}`);
+        warnings.push(`Sheridan's calendar unavailable (${error.message})`);
+      }
       
       // Only Joyce's conflicts block the event
       const hasBlockingConflict = joyceConflicts.length > 0;
@@ -120,12 +138,21 @@ class GmailMCPClient {
         });
       }
       
+      if (warnings.length > 0) {
+        this.logger.warn(`Calendar accessibility issues: ${warnings.join(', ')}`);
+      }
+      
       return {
         hasConflict: hasBlockingConflict, // Only Joyce's conflicts block
         hasWarning: hasWarningConflict,   // Sheridan's conflicts warn
         blockingConflicts: joyceConflicts,
         warningConflicts: sheridanConflicts,
         conflicts: [...joyceConflicts, ...sheridanConflicts], // All conflicts for reference
+        warnings,
+        calendarAccessible: {
+          joyce: joyceResult.status === 'fulfilled',
+          sheridan: sheridanResult.status === 'fulfilled'
+        },
         checkedTimeRange: {
           start: checkStart,
           end: checkEnd
@@ -133,14 +160,21 @@ class GmailMCPClient {
       };
       
     } catch (error) {
-      this.logger.warn(`Error checking calendar conflicts for ${eventDate}:`, error.message);
+      this.logger.error(`Calendar conflict check failed completely for ${eventDate}:`, error.message);
+      
       return {
         hasConflict: false,
         hasWarning: false,
         blockingConflicts: [],
         warningConflicts: [],
         conflicts: [],
-        error: error.message
+        warnings: [`Calendar system completely unavailable: ${error.message}`],
+        calendarAccessible: {
+          joyce: false,
+          sheridan: false
+        },
+        error: error.message,
+        summary: 'Calendar check failed - proceeding with caution'
       };
     }
   }
@@ -309,6 +343,164 @@ class GmailMCPClient {
     description += '\n🤖 Generated with Family Event Planner';
     
     return description;
+  }
+
+  async refreshToken() {
+    try {
+      this.logger.info('Attempting to refresh Google API token...');
+      
+      // This would typically involve refreshing the OAuth token
+      // For now, we'll log the attempt and continue
+      this.logger.warn('Token refresh not implemented - manual re-authentication may be required');
+      
+    } catch (error) {
+      this.logger.error('Token refresh failed:', error.message);
+    }
+  }
+
+  async sendEmail(to, subject, body, options = {}) {
+    try {
+      this.logger.info(`Sending email to ${Array.isArray(to) ? to.join(', ') : to}: ${subject}`);
+      
+      if (!this.auth || !this.gmail) {
+        throw new Error('Gmail client not initialized. Call init() first.');
+      }
+
+      // Ensure to is an array
+      const recipients = Array.isArray(to) ? to : [to];
+      
+      // Create email message
+      const message = this.createEmailMessage(recipients, subject, body, options);
+      
+      // Send the email
+      const response = await this.gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+          raw: message
+        }
+      });
+      
+      this.logger.info(`Email sent successfully, message ID: ${response.data.id}`);
+      return {
+        success: true,
+        messageId: response.data.id,
+        recipients: recipients
+      };
+      
+    } catch (error) {
+      this.logger.error(`Error sending email to ${Array.isArray(to) ? to.join(', ') : to}:`, error.message);
+      
+      if (error.code === 401) {
+        this.logger.error('Gmail authentication failed. Token may have expired.');
+      } else if (error.code === 403) {
+        this.logger.error('Gmail API access denied. Check scopes and permissions.');
+      }
+      
+      return {
+        success: false,
+        error: error.message,
+        recipients: Array.isArray(to) ? to : [to]
+      };
+    }
+  }
+
+  createEmailMessage(to, subject, body, options = {}) {
+    // Create RFC2822 email message
+    const boundary = 'boundary_' + Math.random().toString(36).substr(2, 9);
+    
+    let message = [
+      `To: ${to.join(', ')}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: 7bit',
+      '',
+      body,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset="UTF-8"',
+      'Content-Transfer-Encoding: 7bit',
+      '',
+      this.convertTextToHtml(body),
+      '',
+      `--${boundary}--`
+    ].join('\n');
+
+    // Encode the message in base64url format
+    return Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  convertTextToHtml(text) {
+    // Convert plain text to basic HTML
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/===\s*(.*?)\s*===/g, '<h3>$1</h3>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+  }
+
+  async sendDailyReport(reportContent, recipients = []) {
+    try {
+      if (recipients.length === 0) {
+        // Use default recipients from config
+        recipients = [
+          config.gmail.parent1Email,
+          config.gmail.parent2Email
+        ].filter(Boolean);
+      }
+      
+      if (recipients.length === 0) {
+        throw new Error('No email recipients configured for daily reports');
+      }
+
+      const today = new Date().toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+
+      const subject = `🎉 Family Event Planner Daily Report - ${today}`;
+      
+      const emailBody = `Hi Joyce and Sheridan!
+
+Here's your daily family event activity report:
+
+${reportContent}
+
+This automated report helps you stay informed about:
+- New events discovered for Apollo (4) and Athena (2)  
+- Registration successes and any issues
+- System health and performance
+- Upcoming events and calendar synchronization
+
+Questions or feedback? Just reply to this email!
+
+Best regards,
+🤖 Family Event Planner`;
+
+      return await this.sendEmail(recipients, subject, emailBody);
+      
+    } catch (error) {
+      this.logger.error('Error sending daily report email:', error.message);
+      return {
+        success: false,
+        error: error.message,
+        recipients: recipients
+      };
+    }
   }
 }
 

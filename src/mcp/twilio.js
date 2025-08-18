@@ -526,8 +526,93 @@ class TwilioMCPClient {
       this.logger.debug('Checking for approval timeouts...');
       
       const timeoutHours = 24;
-      const urgentTimeoutHours = 6;
+      const reminderHours = 12; // Send reminder after 12 hours
       
+      // Get approvals that are approaching timeout (12+ hours old) or have timed out (24+ hours old)
+      const sql = `
+        SELECT sa.*, e.title as event_title, e.date as event_date, e.cost as event_cost,
+               CASE 
+                 WHEN datetime(sa.sent_at, '+24 hours') <= datetime('now') THEN 'expired'
+                 WHEN datetime(sa.sent_at, '+12 hours') <= datetime('now') THEN 'reminder_due'
+                 ELSE 'active'
+               END as timeout_status
+        FROM sms_approvals sa
+        LEFT JOIN events e ON sa.event_id = e.id  
+        WHERE sa.status = 'sent'
+        AND (
+          datetime(sa.sent_at, '+12 hours') <= datetime('now') OR
+          datetime(sa.sent_at, '+24 hours') <= datetime('now')
+        )
+        ORDER BY sa.sent_at ASC
+      `;
+      
+      let timeoutApprovals = [];
+      
+      if (this.database.usePostgres) {
+        // PostgreSQL version
+        const pgSql = `
+          SELECT sa.*, e.title as event_title, e.date as event_date, e.cost as event_cost,
+                 CASE 
+                   WHEN sa.sent_at + INTERVAL '24 hours' <= NOW() THEN 'expired'
+                   WHEN sa.sent_at + INTERVAL '12 hours' <= NOW() THEN 'reminder_due'
+                   ELSE 'active'
+                 END as timeout_status
+          FROM sms_approvals sa
+          LEFT JOIN events e ON sa.event_id = e.id  
+          WHERE sa.status = 'sent'
+          AND (
+            sa.sent_at + INTERVAL '12 hours' <= NOW() OR
+            sa.sent_at + INTERVAL '24 hours' <= NOW()
+          )
+          ORDER BY sa.sent_at ASC
+        `;
+        
+        const result = await this.database.postgres.query(pgSql);
+        timeoutApprovals = result.rows;
+      } else {
+        // SQLite version
+        timeoutApprovals = await new Promise((resolve, reject) => {
+          this.database.db.all(sql, [], (err, rows) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            resolve(rows || []);
+          });
+        });
+      }
+      
+      if (timeoutApprovals.length > 0) {
+        this.logger.info(`Found ${timeoutApprovals.length} approvals with timeout issues`);
+        
+        // Process expired approvals
+        const expiredApprovals = timeoutApprovals.filter(a => a.timeout_status === 'expired');
+        const reminderDueApprovals = timeoutApprovals.filter(a => a.timeout_status === 'reminder_due');
+        
+        // Auto-expire old approvals
+        for (const approval of expiredApprovals) {
+          try {
+            await this.database.updateSMSResponse(approval.id, 'AUTO_EXPIRED', 'expired');
+            await this.database.updateEventStatus(approval.event_id, 'timeout_expired');
+            
+            this.logger.info(`⏰ Auto-expired approval for: ${approval.event_title} (sent ${approval.sent_at})`);
+            
+            // Send timeout notification
+            await this.sendConfirmationMessage(approval.phone_number, {
+              type: 'timeout_expired',
+              eventTitle: approval.event_title,
+              message: `⏰ Event approval expired: "${approval.event_title}". No worries - I'll keep looking for other great family events!`
+            });
+          } catch (expireError) {
+            this.logger.error(`Error expiring approval ${approval.id}:`, expireError.message);
+          }
+        }
+        
+        this.logger.info(`Processed timeouts: ${expiredApprovals.length} expired, ${reminderDueApprovals.length} reminders due`);
+        return reminderDueApprovals; // Return only those needing reminders
+      }
+      
+      this.logger.debug('No approval timeouts found');
       return [];
       
     } catch (error) {
@@ -538,11 +623,35 @@ class TwilioMCPClient {
 
   async sendReminderMessage(approval) {
     try {
-      const reminderMessage = `Reminder: You have a pending event approval.\n\n"${approval.event_title}"\n\nReply YES to book or NO to skip`;
+      const eventDate = new Date(approval.event_date);
+      const daysUntilEvent = Math.ceil((eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      
+      let reminderMessage = `⏰ Reminder: Event approval pending\n\n"${approval.event_title}"`;
+      
+      if (daysUntilEvent > 0) {
+        if (daysUntilEvent === 1) {
+          reminderMessage += `\n📅 Event is TOMORROW!`;
+        } else if (daysUntilEvent <= 3) {
+          reminderMessage += `\n📅 Event is in ${daysUntilEvent} days`;
+        } else {
+          reminderMessage += `\n📅 Event is in ${daysUntilEvent} days`;
+        }
+      }
+      
+      if (approval.event_cost > 0) {
+        reminderMessage += `\n💰 Cost: $${approval.event_cost}`;
+      } else {
+        reminderMessage += `\n✅ FREE event`;
+      }
+      
+      reminderMessage += `\n\nReply YES to book or NO to skip\n⏳ Expires in 12 hours if no response`;
       
       const messageId = await this.sendSMS(approval.phone_number, reminderMessage);
       
-      this.logger.info(`Reminder sent for approval ${approval.id}`);
+      // Update the approval to mark that a reminder was sent
+      await this.database.updateSMSResponse(approval.id, 'REMINDER_SENT', 'reminder_sent');
+      
+      this.logger.info(`Reminder sent for approval ${approval.id}: ${approval.event_title}`);
       return messageId;
       
     } catch (error) {

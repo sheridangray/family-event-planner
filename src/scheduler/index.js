@@ -298,8 +298,13 @@ Date: ${new Date().toDateString()}
         const savedPath = await this.reportingService.saveDailyReport(report);
         this.logger.info(`Daily report saved to: ${savedPath}`);
         
-        // Optionally email the report (currently logs intention)
-        await this.reportingService.emailReport(report);
+        // Email the report
+        const emailResult = await this.reportingService.emailReport(report);
+        if (emailResult.success) {
+          this.logger.info(`Daily report emailed to: ${emailResult.recipients.join(', ')}`);
+        } else {
+          this.logger.warn(`Email failed (${emailResult.reason}), but report saved to file`);
+        }
       } catch (error) {
         this.logger.error('Error saving/emailing daily report:', error.message);
       }

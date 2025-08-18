@@ -1,10 +1,13 @@
 const fs = require('fs').promises;
 const path = require('path');
+const { GmailMCPClient } = require('../mcp/gmail');
 
 class ReportingService {
   constructor(logger) {
     this.logger = logger;
     this.reportsDir = path.join(__dirname, '../../reports');
+    this.gmailClient = new GmailMCPClient(logger);
+    this.isGmailInitialized = false;
   }
 
   async ensureReportsDirectory() {
@@ -123,31 +126,61 @@ class ReportingService {
     }
   }
 
+  async initializeGmail() {
+    if (!this.isGmailInitialized) {
+      try {
+        await this.gmailClient.init();
+        this.isGmailInitialized = true;
+        this.logger.info('Gmail client initialized for email reports');
+      } catch (error) {
+        this.logger.warn('Gmail client initialization failed:', error.message);
+        this.isGmailInitialized = false;
+      }
+    }
+    return this.isGmailInitialized;
+  }
+
   async emailReport(reportContent, recipients = []) {
-    // Placeholder for email functionality
-    // This would integrate with the Gmail MCP or another email service
     try {
-      if (recipients.length === 0) {
-        // Use default recipients from config
-        recipients = [
-          process.env.PARENT1_EMAIL,
-          process.env.PARENT2_EMAIL
-        ].filter(Boolean);
+      // Try to initialize Gmail if not already done
+      const gmailReady = await this.initializeGmail();
+      
+      if (!gmailReady) {
+        this.logger.warn('Gmail not available - saving report to file only');
+        return {
+          success: false,
+          reason: 'Gmail not initialized',
+          fallback: 'file_saved'
+        };
+      }
+
+      // Send email using Gmail MCP client
+      const result = await this.gmailClient.sendDailyReport(reportContent, recipients);
+      
+      if (result.success) {
+        this.logger.info(`Daily report emailed successfully to: ${result.recipients.join(', ')}`);
+        return {
+          success: true,
+          messageId: result.messageId,
+          recipients: result.recipients
+        };
+      } else {
+        this.logger.error(`Failed to send daily report email: ${result.error}`);
+        return {
+          success: false,
+          reason: result.error,
+          fallback: 'file_saved',
+          recipients: result.recipients
+        };
       }
       
-      if (recipients.length === 0) {
-        this.logger.warn('No email recipients configured for daily reports');
-        return false;
-      }
-      
-      // TODO: Implement actual email sending via Gmail MCP
-      this.logger.info(`Daily report would be emailed to: ${recipients.join(', ')}`);
-      this.logger.debug('Email functionality not yet implemented - report content saved to file instead');
-      
-      return true;
     } catch (error) {
       this.logger.error('Error emailing report:', error.message);
-      return false;
+      return {
+        success: false,
+        reason: error.message,
+        fallback: 'file_saved'
+      };
     }
   }
 
