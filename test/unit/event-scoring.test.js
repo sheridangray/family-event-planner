@@ -16,6 +16,7 @@ describe('Event Scoring System', () => {
       const freeEvent = {
         id: 1,
         title: 'Free Family Fun',
+        description: 'A fun free family event for all ages',
         cost: 0,
         ageRange: { min: 2, max: 8 },
         date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
@@ -25,6 +26,7 @@ describe('Event Scoring System', () => {
       const paidEvent = {
         id: 2,
         title: 'Expensive Adventure',
+        description: 'An expensive adventure for families',
         cost: 50,
         ageRange: { min: 2, max: 8 },
         date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -41,6 +43,7 @@ describe('Event Scoring System', () => {
       const perfectAgeEvent = {
         id: 1,
         title: 'Perfect Age Event',
+        description: 'Perfect age event for kids',
         cost: 0,
         ageRange: { min: 2, max: 5 }, // Perfect for both kids
         date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -50,6 +53,7 @@ describe('Event Scoring System', () => {
       const poorAgeEvent = {
         id: 2,
         title: 'Poor Age Event',
+        description: 'An event for older kids',
         cost: 0,
         ageRange: { min: 10, max: 15 }, // Too old for both kids
         date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -66,6 +70,7 @@ describe('Event Scoring System', () => {
       const soonEvent = {
         id: 1,
         title: 'Soon Event',
+        description: 'An event happening soon',
         cost: 0,
         ageRange: { min: 2, max: 8 },
         date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
@@ -75,6 +80,7 @@ describe('Event Scoring System', () => {
       const farEvent = {
         id: 2,
         title: 'Far Event',
+        description: 'An event happening in the future',
         cost: 0,
         ageRange: { min: 2, max: 8 },
         date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
@@ -198,6 +204,7 @@ describe('Event Scoring System', () => {
         {
           id: 1,
           title: 'Good Event',
+          description: 'A good family event',
           cost: 0,
           ageRange: { min: 2, max: 6 },
           date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -206,6 +213,7 @@ describe('Event Scoring System', () => {
         {
           id: 2,
           title: 'Bad Event',
+          description: 'An expensive event for teens',
           cost: 100,
           ageRange: { min: 15, max: 18 },
           date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
@@ -238,6 +246,7 @@ describe('Event Scoring System', () => {
       const invalidDateEvent = {
         id: 1,
         title: 'Invalid Date Event',
+        description: 'An event with invalid date',
         cost: 0,
         ageRange: { min: 2, max: 8 },
         date: 'invalid-date',

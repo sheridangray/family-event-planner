@@ -328,6 +328,17 @@ class TwilioMCPClient {
   }
 
   parseResponse(body) {
+    // Handle null/undefined/empty input
+    if (!body || typeof body !== 'string') {
+      return { 
+        approved: false, 
+        rejected: false, 
+        status: 'unclear', 
+        originalText: body || '', 
+        confidence: 'low' 
+      };
+    }
+    
     const text = body.toLowerCase().trim();
     
     // Exact match keywords (highest confidence)

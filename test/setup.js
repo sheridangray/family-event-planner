@@ -24,6 +24,39 @@ jest.mock('twilio', () => {
   }));
 });
 
+// Mock the Gmail MCP client methods specifically for calendar tests
+jest.mock('../src/mcp/gmail', () => {
+  const original = jest.requireActual('../src/mcp/gmail');
+  
+  return {
+    ...original,
+    GmailMCPClient: jest.fn().mockImplementation(() => ({
+      init: jest.fn().mockResolvedValue(),
+      checkCalendarConflicts: jest.fn().mockImplementation(async (eventDate, durationMinutes = 120) => {
+        // Default to no conflicts
+        return {
+          hasConflict: false,
+          hasWarning: false,
+          blockingConflicts: [],
+          warningConflicts: [],
+          conflicts: [],
+          warnings: [],
+          calendarAccessible: {
+            joyce: true,
+            sheridan: true
+          },
+          checkedTimeRange: {
+            start: new Date(eventDate),
+            end: new Date(new Date(eventDate).getTime() + durationMinutes * 60000)
+          }
+        };
+      }),
+      checkSingleCalendar: jest.fn().mockResolvedValue([])
+    })),
+    CalendarConflictChecker: original.CalendarConflictChecker
+  };
+});
+
 jest.mock('googleapis', () => ({
   google: {
     auth: {
@@ -86,7 +119,16 @@ global.createMockDatabase = () => ({
   getFamilyMembers: jest.fn().mockResolvedValue([
     { name: 'Apollo', birthdate: '2021-04-26' },
     { name: 'Athena', birthdate: '2023-03-10' }
-  ])
+  ]),
+  saveEventScore: jest.fn().mockResolvedValue(),
+  isVenueVisited: jest.fn().mockResolvedValue(false),
+  db: {
+    all: jest.fn((sql, params, callback) => callback(null, [])),
+    run: jest.fn((sql, params, callback) => callback(null)),
+    get: jest.fn((sql, params, callback) => callback(null, null))
+  },
+  usePostgres: false,
+  postgres: null
 });
 
 // Increase timeout for integration tests
