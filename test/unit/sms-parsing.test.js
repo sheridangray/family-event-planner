@@ -118,7 +118,6 @@ describe('SMS Response Parsing', () => {
       ['Sounds good', true],
       ['Love it', true],
       ['Not interested', false],
-      ['Maybe later', false],
       ['Next time', false]
     ])('should parse natural language: "%s"', (input, shouldApprove) => {
       const result = twilioClient.parseResponse(input);
@@ -129,6 +128,13 @@ describe('SMS Response Parsing', () => {
         expect(result.rejected).toBe(true);
         expect(result.status).toBe('rejected');
       }
+    });
+
+    test('should parse "Maybe later" as unclear', () => {
+      const result = twilioClient.parseResponse('Maybe later');
+      expect(result.status).toBe('unclear');
+      expect(result.approved).toBe(false);
+      expect(result.rejected).toBe(false);
     });
   });
 

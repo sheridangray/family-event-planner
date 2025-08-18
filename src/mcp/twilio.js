@@ -330,30 +330,35 @@ class TwilioMCPClient {
   parseResponse(body) {
     const text = body.toLowerCase().trim();
     
-    // Comprehensive approval patterns
-    const approvalKeywords = [
-      // Basic yes variations
-      'yes', 'y', 'yeah', 'yep', 'yup', 'yas', 'ya', 'yea',
-      // Affirmative words  
-      'sure', 'ok', 'okay', 'good', 'great', 'perfect', 'sounds good',
-      // Action words
-      'approve', 'book', 'register', 'go', 'do it', 'lets do it',
-      // Enthusiastic
-      'awesome', 'love it', 'want it', 'interested',
-      // Numbers and symbols
+    // Exact match keywords (highest confidence)
+    const exactApprovalKeywords = [
+      'yes', 'y', 'yeah', 'yep', 'yup', 'yas', 'ya', 'yea', 'sure', 'ok', 'okay', 
+      'good', 'great', 'perfect', 'awesome', 'approve', 'book', 'register', 'go',
       '1', 'true', 'accept', '✓', '👍'
     ];
     
-    // Comprehensive rejection patterns  
-    const rejectionKeywords = [
-      // Basic no variations
-      'no', 'n', 'nope', 'nah', 'na', 'nay',
-      // Negative words
-      'pass', 'skip', 'reject', 'decline', 'not interested',
-      // Dismissive
-      'not now', 'next time', 'not this time',
-      // Numbers and symbols
+    const exactRejectionKeywords = [
+      'no', 'n', 'nope', 'nah', 'na', 'nay', 'pass', 'skip', 'reject', 'decline',
       '0', 'false', '❌', '👎'
+    ];
+    
+    // Phrase-based patterns (require full phrase match)
+    const approvalPhrases = [
+      'sounds good', 'sure thing', 'do it', 'lets do it', 'let\'s do it',
+      'love it', 'want it', 'sign us up', 'count me in'
+    ];
+    
+    // Word-based approval that needs boundary checking
+    const approvalWords = ['interested'];
+    
+    const rejectionPhrases = [
+      'not interested', 'not now', 'next time', 'not this time', 'maybe later',
+      'no thanks', 'not really'
+    ];
+    
+    // Ambiguous keywords that should be unclear
+    const ambiguousKeywords = [
+      'maybe', 'perhaps', 'possibly', 'might', 'not sure', 'hmm', 'dunno'
     ];
     
     // Special handling for payment-related responses
@@ -369,7 +374,7 @@ class TwilioMCPClient {
       return { approved: false, rejected: true, status: 'rejected', originalText: body.trim(), confidence: 'high' };
     }
     
-    // Check for payment confirmation
+    // Check for payment confirmation (single purpose)
     if (paymentKeywords.some(keyword => text.includes(keyword))) {
       return { 
         approved: false, 
@@ -381,8 +386,55 @@ class TwilioMCPClient {
       };
     }
     
-    // Check for cancellation
-    if (cancelKeywords.some(keyword => text.includes(keyword))) {
+    // Check for ambiguous responses first (before cancellation to catch mixed signals)
+    if (ambiguousKeywords.some(keyword => text.includes(keyword))) {
+      return { approved: false, rejected: false, status: 'unclear', originalText: body.trim(), confidence: 'low' };
+    }
+    
+    // Check for cancellation signals
+    const hasCancellation = cancelKeywords.some(keyword => text.includes(keyword));
+    
+    // Check for rejection patterns first (phrases take priority to avoid conflicts)
+    const hasRejectionPhrase = rejectionPhrases.some(phrase => text.includes(phrase));
+    const hasRejectionWord = exactRejectionKeywords.some(keyword => {
+      // Handle emojis and symbols that don't work with word boundaries
+      if (['❌', '👎'].includes(keyword)) {
+        return text.includes(keyword);
+      }
+      const wordPattern = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+      return wordPattern.test(text);
+    });
+    const rejected = hasRejectionPhrase || hasRejectionWord;
+    
+    // Only check approval if not already rejected by phrase
+    let approved = false;
+    if (!hasRejectionPhrase) {
+      // Check for approval patterns (exact word matches, phrases, and boundary-checked words)
+      const hasApprovalPhrase = approvalPhrases.some(phrase => text.includes(phrase));
+      const hasApprovalWord = exactApprovalKeywords.some(keyword => {
+        // Handle emojis and symbols that don't work with word boundaries
+        if (['✓', '👍'].includes(keyword)) {
+          return text.includes(keyword);
+        }
+        // Use word boundary matching for regular words to avoid partial matches
+        const wordPattern = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+        return wordPattern.test(text);
+      });
+      const hasApprovalBoundaryWord = approvalWords.some(word => {
+        const wordPattern = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+        return wordPattern.test(text);
+      });
+      approved = hasApprovalPhrase || hasApprovalWord || hasApprovalBoundaryWord;
+    }
+    
+    // Handle mixed signals (approval/rejection + cancellation, or approval + rejection)
+    if ((approved && hasCancellation) || (approved && rejected)) {
+      // If conflicting signals, it's unclear - user sent mixed signals
+      return { approved: false, rejected: false, status: 'unclear', originalText: body.trim(), confidence: 'low' };
+    }
+    
+    // Handle pure cancellation (no conflicting approval signals)
+    if (hasCancellation && !approved) {
       return { 
         approved: false, 
         rejected: true, 
@@ -390,31 +442,6 @@ class TwilioMCPClient {
         originalText: body.trim(),
         confidence: 'high'
       };
-    }
-    
-    // Check for approval patterns (medium confidence)
-    const approved = approvalKeywords.some(keyword => 
-      text === keyword || text.includes(keyword)
-    );
-    
-    // Check for rejection patterns (medium confidence)  
-    const rejected = rejectionKeywords.some(keyword =>
-      text === keyword || text.includes(keyword)
-    );
-    
-    // Handle ambiguous responses
-    if (approved && rejected) {
-      // If both patterns match, prioritize shorter/more direct responses
-      const directApproval = ['yes', 'y', 'ok', 'sure'].some(word => text.includes(word));
-      const directRejection = ['no', 'n', 'nope'].some(word => text.includes(word));
-      
-      if (directApproval && !directRejection) {
-        return { approved: true, rejected: false, status: 'approved', originalText: body.trim(), confidence: 'medium' };
-      } else if (directRejection && !directApproval) {
-        return { approved: false, rejected: true, status: 'rejected', originalText: body.trim(), confidence: 'medium' };
-      } else {
-        return { approved: false, rejected: false, status: 'unclear', originalText: body.trim(), confidence: 'low' };
-      }
     }
     
     let status = 'sent';
