@@ -2,6 +2,11 @@ const SFRecParksScraper = require('./sf-rec-parks');
 const SFLibraryScraper = require('./sf-library');
 const CalAcademyScraper = require('./cal-academy');
 const ChaseCenterScraper = require('./chase-center');
+const FunCheapSFScraper = require('./funcheapsf');
+const BayAreaKidFunScraper = require('./bayareakidfun');
+const SanFranKidsOutAndAboutScraper = require('./sanfran-kidsoutandabout');
+const YBGFestivalScraper = require('./ybgfestival');
+const ExploratoriumScraper = require('./exploratorium');
 
 class ScraperManager {
   constructor(logger, database) {
@@ -16,7 +21,12 @@ class ScraperManager {
       new SFRecParksScraper(this.logger),
       new SFLibraryScraper(this.logger),
       new CalAcademyScraper(this.logger),
-      new ChaseCenterScraper(this.logger)
+      new ChaseCenterScraper(this.logger),
+      new FunCheapSFScraper(this.logger),
+      new BayAreaKidFunScraper(this.logger),
+      new SanFranKidsOutAndAboutScraper(this.logger),
+      new YBGFestivalScraper(this.logger),
+      new ExploratoriumScraper(this.logger)
     ];
   }
 
