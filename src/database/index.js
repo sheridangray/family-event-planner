@@ -456,7 +456,11 @@ class Database {
 
   async getFamilyMembers(activeOnly = true) {
     if (this.usePostgres) {
-      return await this.postgres.getFamilyMembers(activeOnly);
+      const sql = activeOnly 
+        ? `SELECT * FROM family_members WHERE active = true ORDER BY role, birthdate`
+        : `SELECT * FROM family_members ORDER BY role, birthdate`;
+      const result = await this.postgres.query(sql);
+      return result.rows;
     }
 
     const sql = activeOnly 
@@ -476,7 +480,11 @@ class Database {
 
   async getFamilyMembersByRole(role, activeOnly = true) {
     if (this.usePostgres) {
-      return await this.postgres.getFamilyMembersByRole(role, activeOnly);
+      const sql = activeOnly 
+        ? `SELECT * FROM family_members WHERE role = $1 AND active = true ORDER BY birthdate`
+        : `SELECT * FROM family_members WHERE role = $1 ORDER BY birthdate`;
+      const result = await this.postgres.query(sql, [role]);
+      return result.rows;
     }
 
     const sql = activeOnly
