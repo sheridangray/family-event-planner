@@ -126,8 +126,16 @@ async function initializeComponents() {
     const calendarManager = new CalendarConflictChecker(logger);
     await calendarManager.init();
     
-    const smsManager = new SMSApprovalManager(logger, database);
-    await smsManager.init();
+    // SMS Manager is optional - skip if Twilio credentials not configured
+    let smsManager = null;
+    try {
+      smsManager = new SMSApprovalManager(logger, database);
+      await smsManager.init();
+      logger.info('SMS Manager initialized');
+    } catch (error) {
+      logger.warn('SMS Manager not available - continuing with email-only notifications:', error.message);
+    }
+    
     logger.info('MCP clients initialized');
     
     // Initialize automation with safety guards
