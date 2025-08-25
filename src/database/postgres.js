@@ -237,6 +237,10 @@ class PostgresDatabase {
     return result.rows.length > 0;
   }
 
+  async query(sql, params = []) {
+    return await this.pool.query(sql, params);
+  }
+
   async close() {
     if (this.pool) {
       await this.pool.end();
