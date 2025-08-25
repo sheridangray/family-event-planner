@@ -66,12 +66,8 @@ class EmailNotificationClient {
   }
 
   getRecipientEmail() {
-    // In development: use Sheridan's email, in production: use Joyce's email
-    if (config.app.nodeEnv === 'production') {
-      return config.gmail.parent1Email; // Joyce in production
-    } else {
-      return config.gmail.parent2Email; // Sheridan in development
-    }
+    // Always send to Sheridan Gray for now
+    return config.gmail.parent2Email; // Sheridan in all environments
   }
 
   buildEmailSubject(event) {
