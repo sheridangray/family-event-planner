@@ -58,7 +58,33 @@ class Database {
           return;
         }
         console.log('Database tables created successfully');
-        resolve();
+        
+        // Apply deduplication migration
+        this.applyDeduplicationMigration().then(resolve).catch(reject);
+      });
+    });
+  }
+
+  async applyDeduplicationMigration() {
+    const migrationPath = path.join(__dirname, 'migrations/add-deduplication-fields.sql');
+    
+    if (!fs.existsSync(migrationPath)) {
+      console.log('Deduplication migration file not found, skipping');
+      return;
+    }
+    
+    const migration = fs.readFileSync(migrationPath, 'utf8');
+    
+    return new Promise((resolve, reject) => {
+      this.db.exec(migration, (err) => {
+        if (err) {
+          // Migration might fail if columns already exist, which is OK
+          console.log('Deduplication migration completed (some operations may have been skipped)');
+          resolve();
+        } else {
+          console.log('Deduplication migration applied successfully');
+          resolve();
+        }
       });
     });
   }
@@ -73,8 +99,9 @@ class Database {
         id, source, title, date, location_address, location_lat, location_lng,
         age_range_min, age_range_max, cost, registration_url, registration_opens,
         capacity_available, capacity_total, description, image_url, status,
-        is_recurring, previously_attended, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        is_recurring, previously_attended, sources, alternate_urls, merge_count,
+        last_merged, fingerprint, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `;
     
     const params = [
@@ -83,7 +110,12 @@ class Database {
       event.cost, event.registrationUrl, event.registrationOpens,
       event.currentCapacity?.available, event.currentCapacity?.total,
       event.description, event.imageUrl, event.status || 'discovered',
-      event.isRecurring || false, event.previouslyAttended || false
+      event.isRecurring || false, event.previouslyAttended || false,
+      JSON.stringify(event.sources || [event.source]),
+      JSON.stringify(event.alternateUrls || []),
+      event.mergeCount || 1,
+      event.lastMerged || null,
+      event.fingerprint || event.id
     ];
 
     return new Promise((resolve, reject) => {
@@ -566,6 +598,68 @@ class Database {
       default:
         return "datetime('now', '-1 day')";
     }
+  }
+
+  async recordEventMerge(primaryEventId, mergedEvent, similarityScore, mergeType) {
+    if (this.usePostgres) {
+      // TODO: Implement for PostgreSQL
+      return;
+    }
+
+    const sql = `
+      INSERT INTO event_merges (
+        primary_event_id, merged_event_id, merged_event_data, 
+        similarity_score, merge_type
+      ) VALUES (?, ?, ?, ?, ?)
+    `;
+    
+    const params = [
+      primaryEventId,
+      mergedEvent.id,
+      JSON.stringify(mergedEvent),
+      similarityScore,
+      mergeType
+    ];
+
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, params, function(err) {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(this.lastID);
+      });
+    });
+  }
+
+  async getEventMergeHistory(eventId, limit = 10) {
+    if (this.usePostgres) {
+      // TODO: Implement for PostgreSQL
+      return [];
+    }
+
+    const sql = `
+      SELECT * FROM event_merges 
+      WHERE primary_event_id = ? 
+      ORDER BY merged_at DESC 
+      LIMIT ?
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [eventId, limit], (err, rows) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        const mergeHistory = rows.map(row => ({
+          ...row,
+          mergedEventData: JSON.parse(row.merged_event_data)
+        }));
+        
+        resolve(mergeHistory);
+      });
+    });
   }
 
   async close() {

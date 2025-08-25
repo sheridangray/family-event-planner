@@ -54,7 +54,11 @@ class GmailMCPClient {
   async authenticate() {
     const authUrl = this.auth.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar']
+      scope: [
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/gmail.readonly'
+      ]
     });
     
     this.logger.info('Authorize this app by visiting this URL:');
@@ -410,21 +414,21 @@ class GmailMCPClient {
     
     let message = [
       `To: ${to.join(', ')}`,
-      `Subject: ${subject}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`,
       'MIME-Version: 1.0',
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
       '',
       `--${boundary}`,
       'Content-Type: text/plain; charset="UTF-8"',
-      'Content-Transfer-Encoding: 7bit',
+      'Content-Transfer-Encoding: base64',
       '',
-      body,
+      Buffer.from(body, 'utf-8').toString('base64'),
       '',
       `--${boundary}`,
       'Content-Type: text/html; charset="UTF-8"',
-      'Content-Transfer-Encoding: 7bit',
+      'Content-Transfer-Encoding: base64',
       '',
-      this.convertTextToHtml(body),
+      Buffer.from(this.convertTextToHtml(body), 'utf-8').toString('base64'),
       '',
       `--${boundary}--`
     ].join('\n');
