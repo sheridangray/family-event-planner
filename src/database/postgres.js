@@ -95,8 +95,23 @@ class PostgresDatabase {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS family_members (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT,
+        phone TEXT,
+        birthdate DATE NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('parent', 'child', 'guardian')),
+        emergency_contact BOOLEAN DEFAULT FALSE,
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
       CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
+      CREATE INDEX IF NOT EXISTS idx_family_members_role ON family_members(role);
+      CREATE INDEX IF NOT EXISTS idx_family_members_active ON family_members(active);
       CREATE INDEX IF NOT EXISTS idx_event_scores_total ON event_scores(total_score);
     `;
 
