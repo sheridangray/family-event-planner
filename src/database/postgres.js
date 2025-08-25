@@ -252,6 +252,26 @@ class PostgresDatabase {
     return result.rows.length > 0;
   }
 
+  async addFamilyMember(member) {
+    const sql = `
+      INSERT INTO family_members (name, email, phone, birthdate, role, emergency_contact)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id
+    `;
+    
+    const params = [
+      member.name,
+      member.email || null,
+      member.phone || null,
+      member.birthdate,
+      member.role,
+      member.emergency_contact || false
+    ];
+    
+    const result = await this.pool.query(sql, params);
+    return result.rows[0].id;
+  }
+
   async query(sql, params = []) {
     return await this.pool.query(sql, params);
   }
