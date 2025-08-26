@@ -196,6 +196,19 @@ async function startServer() {
     components.scheduler.start();
     logger.info('Task scheduler started');
     
+    // Trigger initial event discovery on startup (production deployment)
+    if (process.env.NODE_ENV === 'production') {
+      logger.info('Triggering initial event discovery on startup...');
+      setTimeout(async () => {
+        try {
+          await components.scheduler.runEventDiscovery();
+          logger.info('Initial startup event discovery completed');
+        } catch (error) {
+          logger.error('Error in startup event discovery:', error.message);
+        }
+      }, 5000); // 5 second delay to ensure all services are ready
+    }
+    
     // Start the web server
     const server = app.listen(config.app.port, () => {
       logger.info(`Server running on port ${config.app.port}`);

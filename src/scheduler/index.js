@@ -196,8 +196,21 @@ class TaskScheduler {
 
   async checkApprovalTimeouts() {
     try {
-      const timeoutCount = await this.smsManager.checkTimeouts();
-      const reminderCount = await this.smsManager.sendReminders();
+      // Check SMS timeouts if SMS manager available
+      let timeoutCount = 0;
+      let reminderCount = 0;
+      
+      if (this.smsManager) {
+        timeoutCount = await this.smsManager.checkTimeouts();
+        reminderCount = await this.smsManager.sendReminders();
+      } else {
+        // Email-only mode - use unified notification service
+        const emailTimeouts = await this.unifiedNotifications.checkTimeouts();
+        timeoutCount = emailTimeouts.email ? emailTimeouts.email.length : 0;
+        
+        const emailReminders = await this.unifiedNotifications.sendReminders();
+        reminderCount = emailReminders || 0;
+      }
       
       if (timeoutCount > 0 || reminderCount > 0) {
         this.logger.info(`Approval timeout check: ${timeoutCount} timeouts, ${reminderCount} reminders sent`);
