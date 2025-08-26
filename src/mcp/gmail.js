@@ -260,15 +260,22 @@ class GmailMCPClient {
       return activeEvents;
       
     } catch (error) {
-      // Handle specific API errors
+      // Handle specific API errors with detailed logging
+      const errorDetails = {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        stack: error.stack?.split('\n')[0] // First line of stack trace
+      };
+      
       if (error.code === 403) {
-        this.logger.warn(`No access to calendar for ${email}: ${error.message}`);
+        this.logger.warn(`No access to calendar for ${email}:`, errorDetails);
       } else if (error.code === 404) {
-        this.logger.warn(`Calendar not found for ${email}: ${error.message}`);
+        this.logger.warn(`Calendar not found for ${email}:`, errorDetails);
       } else if (error.code === 401) {
-        this.logger.error(`Authentication failed for calendar access: ${error.message}`);
+        this.logger.error(`Authentication failed for calendar access:`, errorDetails);
       } else {
-        this.logger.error(`Error fetching calendar events for ${email}:`, error.message);
+        this.logger.error(`Error fetching calendar events for ${email}:`, errorDetails);
       }
       
       return [];
