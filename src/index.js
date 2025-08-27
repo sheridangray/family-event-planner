@@ -12,6 +12,7 @@ const EventScorer = require('./scoring');
 const FamilyDemographicsService = require('./services/family-demographics');
 const { CalendarConflictChecker } = require('./mcp/gmail');
 const { SMSApprovalManager } = require('./mcp/twilio');
+const UnifiedNotificationService = require('./services/unified-notification');
 const RegistrationAutomator = require('./automation/registration');
 const TaskScheduler = require('./scheduler');
 
@@ -126,14 +127,26 @@ async function initializeComponents() {
     const calendarManager = new CalendarConflictChecker(logger);
     await calendarManager.init();
     
-    // SMS Manager is optional - skip if Twilio credentials not configured
+    // Initialize notification services - SMS Manager is optional  
     let smsManager = null;
+    let unifiedNotifications = null;
+    
     try {
       smsManager = new SMSApprovalManager(logger, database);
       await smsManager.init();
       logger.info('SMS Manager initialized');
     } catch (error) {
-      logger.warn('SMS Manager not available - continuing with email-only notifications:', error.message);
+      logger.warn('SMS Manager not available - using email-only notifications:', error.message);
+      
+      // Initialize email-only notification service as fallback
+      try {
+        unifiedNotifications = new UnifiedNotificationService(logger, database);
+        await unifiedNotifications.init();
+        logger.info('Email-only notification service initialized as SMS fallback');
+      } catch (emailError) {
+        logger.error('Email notification service also failed:', emailError.message);
+        throw new Error('No notification services available');
+      }
     }
     
     logger.info('MCP clients initialized');
