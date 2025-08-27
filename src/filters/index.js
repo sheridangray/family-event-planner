@@ -2,6 +2,7 @@ const { config } = require('../config');
 const WeatherService = require('../services/weather');
 const PreferenceLearningService = require('../services/preference-learning');
 const FamilyDemographicsService = require('../services/family-demographics');
+const LLMAgeEvaluator = require('../services/llm-age-evaluator');
 
 class EventFilter {
   constructor(logger, database) {
@@ -10,27 +11,66 @@ class EventFilter {
     this.weatherService = new WeatherService(logger);
     this.preferenceLearning = new PreferenceLearningService(logger, database);
     this.familyService = new FamilyDemographicsService(logger, database);
+    
+    // Initialize LLM age evaluator if Together.ai API key is available
+    this.llmEvaluator = null;
+    try {
+      this.llmEvaluator = new LLMAgeEvaluator(logger);
+      this.logger.info('LLM age evaluator initialized - will use AI for age appropriateness');
+    } catch (error) {
+      this.logger.warn('LLM age evaluator not available, falling back to rule-based filtering:', error.message);
+    }
   }
 
   async filterEvents(events) {
-    const filtered = [];
-    
     // Get current family demographics for age checking
     const familyDemographics = await this.familyService.getFamilyDemographics();
     
+    // Use LLM batch evaluation for age appropriateness if available
+    let ageEvaluations = new Map();
+    if (this.llmEvaluator && events.length > 0) {
+      try {
+        this.logger.info(`Using LLM to evaluate age appropriateness for ${events.length} events`);
+        ageEvaluations = await this.llmEvaluator.batchEvaluateEvents(events, familyDemographics.childAges);
+      } catch (error) {
+        this.logger.error('LLM age evaluation failed, falling back to rule-based:', error.message);
+      }
+    }
+    
+    const filtered = [];
+    
     for (const event of events) {
-      if (this.isAgeAppropriate(event, familyDemographics) &&
+      // Check age appropriateness using LLM if available, otherwise use rules
+      let ageAppropriate = true;
+      if (ageEvaluations.has(event.id)) {
+        const evaluation = ageEvaluations.get(event.id);
+        ageAppropriate = evaluation.suitable;
+        if (!ageAppropriate) {
+          this.logger.debug(`Event filtered by LLM - age inappropriate: ${event.title} (${evaluation.reason})`);
+        }
+      } else {
+        ageAppropriate = this.isAgeAppropriate(event, familyDemographics);
+      }
+      
+      if (ageAppropriate &&
           this.isWithinTimeRange(event) &&
           this.isScheduleCompatible(event) &&
           this.isWithinBudget(event) &&
           this.hasAvailableCapacity(event) &&
           this.isNotPreviouslyAttended(event) &&
           await this.isWeatherSuitable(event)) {
+        
+        // Add LLM evaluation metadata to event
+        if (ageEvaluations.has(event.id)) {
+          event.llmEvaluation = ageEvaluations.get(event.id);
+        }
+        
         filtered.push(event);
       }
     }
 
-    this.logger.info(`Filtered ${events.length} events down to ${filtered.length} suitable events (${familyDemographics.children.length} children: ages ${familyDemographics.childAges.join(', ')})`);
+    const evaluationMethod = this.llmEvaluator ? 'LLM' : 'rule-based';
+    this.logger.info(`Filtered ${events.length} events down to ${filtered.length} suitable events using ${evaluationMethod} age evaluation (${familyDemographics.children.length} children: ages ${familyDemographics.childAges.join(', ')})`);
     return filtered;
   }
 
