@@ -140,12 +140,17 @@ async function initializeComponents() {
       
       // Initialize email-only notification service as fallback
       try {
+        logger.info('Attempting to initialize UnifiedNotificationService...');
         unifiedNotifications = new UnifiedNotificationService(logger, database);
+        logger.info('UnifiedNotificationService created, now calling init()...');
         await unifiedNotifications.init();
         logger.info('Email-only notification service initialized as SMS fallback');
       } catch (emailError) {
-        logger.error('Email notification service also failed:', emailError.message);
-        throw new Error('No notification services available');
+        logger.error('Email notification service initialization failed:', emailError.message);
+        logger.error('Email service error stack:', emailError.stack);
+        logger.error('Will continue without notification services (no emails will be sent)');
+        // Don't throw - continue without notifications for now
+        unifiedNotifications = null;
       }
     }
     

@@ -159,12 +159,13 @@ class TaskScheduler {
             }
           } else if (this.unifiedNotifications) {
             // Email-only mode - use unified notification service
+            this.logger.info(`Using email-only notification service for: ${event.title}`);
             if (await this.unifiedNotifications.shouldSendEvent()) {
               await this.unifiedNotifications.sendEventForApproval(event);
               sentCount++;
             }
           } else {
-            this.logger.error('No notification service available - cannot send approval requests');
+            this.logger.error('No notification service available - cannot send approval requests (smsManager and unifiedNotifications are both null)');
             break;
           }
           
