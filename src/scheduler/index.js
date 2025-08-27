@@ -3,7 +3,7 @@ const { config } = require('../config');
 const ReportingService = require('../services/reporting');
 
 class TaskScheduler {
-  constructor(logger, database, scraperManager, eventScorer, eventFilter, smsManager, registrationAutomator, calendarManager) {
+  constructor(logger, database, scraperManager, eventScorer, eventFilter, smsManager, registrationAutomator, calendarManager, unifiedNotifications) {
     this.logger = logger;
     this.database = database;
     this.scraperManager = scraperManager;
@@ -12,6 +12,7 @@ class TaskScheduler {
     this.smsManager = smsManager;
     this.registrationAutomator = registrationAutomator;
     this.calendarManager = calendarManager;
+    this.unifiedNotifications = unifiedNotifications;
     this.reportingService = new ReportingService(logger);
     this.tasks = [];
   }
@@ -149,16 +150,29 @@ class TaskScheduler {
         let sentCount = 0;
         
         for (const event of topEvents) {
-          if (await this.smsManager.shouldSendEvent()) {
-            await this.smsManager.sendEventForApproval(event);
-            sentCount++;
-            
-            if (sentCount >= config.discovery.eventsPerDayMax) {
-              break;
+          // Use unified notification service if SMS manager is not available
+          if (this.smsManager) {
+            // SMS available - use SMS manager
+            if (await this.smsManager.shouldSendEvent()) {
+              await this.smsManager.sendEventForApproval(event);
+              sentCount++;
             }
-            
-            await this.delay(2000);
+          } else if (this.unifiedNotifications) {
+            // Email-only mode - use unified notification service
+            if (await this.unifiedNotifications.shouldSendEvent()) {
+              await this.unifiedNotifications.sendEventForApproval(event);
+              sentCount++;
+            }
+          } else {
+            this.logger.error('No notification service available - cannot send approval requests');
+            break;
           }
+          
+          if (sentCount >= config.discovery.eventsPerDayMax) {
+            break;
+          }
+          
+          await this.delay(2000);
         }
         
         this.logger.info(`Event discovery completed: ${events.length} discovered, ${filteredEvents.length} filtered, ${sentCount} sent for approval`);

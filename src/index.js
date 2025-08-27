@@ -151,10 +151,10 @@ async function initializeComponents() {
     
     logger.info('Registration automation initialized with safety guards');
     
-    // Initialize scheduler
+    // Initialize scheduler with notification services
     const scheduler = new TaskScheduler(
       logger, database, scraperManager, eventScorer, eventFilter,
-      smsManager, registrationAutomator, calendarManager
+      smsManager, registrationAutomator, calendarManager, unifiedNotifications
     );
     
     // Store components in app locals for API access

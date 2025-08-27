@@ -34,14 +34,39 @@ class GmailMCPClient {
       this.calendar = google.calendar({ version: 'v3', auth: this.auth });
       this.gmail = google.gmail({ version: 'v1', auth: this.auth });
       
-      // Check if we have a token file, if not, we'll need to authenticate
+      // Load OAuth token from local file or Render secret file
+      let tokenLoaded = false;
+      
+      // First try local development path
       const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
       if (fs.existsSync(tokenPath)) {
-        const token = fs.readFileSync(tokenPath, 'utf8');
-        this.auth.setCredentials(JSON.parse(token));
-        this.logger.info('Gmail MCP client initialized successfully with existing token');
-      } else {
-        this.logger.warn('No token found. Will need to authenticate when first accessing calendar.');
+        try {
+          const token = fs.readFileSync(tokenPath, 'utf8');
+          this.auth.setCredentials(JSON.parse(token));
+          this.logger.info('Gmail MCP client initialized with local token file');
+          tokenLoaded = true;
+        } catch (error) {
+          this.logger.warn('Error loading local token file:', error.message);
+        }
+      }
+      
+      // If no local token, try Render secret file path (production)
+      if (!tokenLoaded && process.env.NODE_ENV === 'production') {
+        const renderTokenPath = '/etc/secrets/google-oauth-token.json';
+        if (fs.existsSync(renderTokenPath)) {
+          try {
+            const token = fs.readFileSync(renderTokenPath, 'utf8');
+            this.auth.setCredentials(JSON.parse(token));
+            this.logger.info('Gmail MCP client initialized with Render secret token');
+            tokenLoaded = true;
+          } catch (error) {
+            this.logger.warn('Error loading Render secret token:', error.message);
+          }
+        }
+      }
+      
+      if (!tokenLoaded) {
+        this.logger.warn('No OAuth token found. Calendar access will require authentication.');
       }
       
       return true;
