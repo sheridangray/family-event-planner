@@ -272,6 +272,31 @@ class PostgresDatabase {
     return result.rows[0].id;
   }
 
+  async getRegistrationStats(timeframe = '24 hours') {
+    const sql = `
+      SELECT 
+        COUNT(*) as total_attempts,
+        COUNT(CASE WHEN success = true THEN 1 END) as successful,
+        COUNT(CASE WHEN success = false THEN 1 END) as failed,
+        CASE 
+          WHEN COUNT(*) > 0 THEN ROUND((COUNT(CASE WHEN success = true THEN 1 END) * 100.0 / COUNT(*)), 2)
+          ELSE 100
+        END as success_rate
+      FROM registrations 
+      WHERE created_at >= NOW() - INTERVAL '${timeframe}'
+    `;
+    
+    const result = await this.pool.query(sql);
+    const stats = result.rows[0] || {};
+    
+    return {
+      totalAttempts: parseInt(stats.total_attempts) || 0,
+      successful: parseInt(stats.successful) || 0,
+      failed: parseInt(stats.failed) || 0,
+      successRate: parseFloat(stats.success_rate) || 100
+    };
+  }
+
   async query(sql, params = []) {
     return await this.pool.query(sql, params);
   }
