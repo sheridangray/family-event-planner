@@ -30,7 +30,7 @@ const config = {
     minChildAge: parseInt(process.env.MIN_CHILD_AGE) || 2,
     maxChildAge: parseInt(process.env.MAX_CHILD_AGE) || 4,
     maxCostPerEvent: parseInt(process.env.MAX_COST_PER_EVENT) || 200,
-    minAdvanceWeeks: parseInt(process.env.MIN_ADVANCE_WEEKS) || 2,
+    minAdvanceDays: parseInt(process.env.MIN_ADVANCE_DAYS) || parseInt(process.env.MIN_ADVANCE_WEEKS) * 7 || 2,
     maxAdvanceMonths: parseInt(process.env.MAX_ADVANCE_MONTHS) || 6,
   },
   

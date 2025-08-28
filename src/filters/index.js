@@ -99,7 +99,7 @@ class EventFilter {
     const now = new Date();
     const eventDate = new Date(event.date);
     
-    const minAdvanceMs = config.preferences.minAdvanceWeeks * 7 * 24 * 60 * 60 * 1000;
+    const minAdvanceMs = config.preferences.minAdvanceDays * 24 * 60 * 60 * 1000;
     const maxAdvanceMs = config.preferences.maxAdvanceMonths * 30 * 24 * 60 * 60 * 1000;
     
     const timeDiff = eventDate.getTime() - now.getTime();
@@ -107,8 +107,8 @@ class EventFilter {
     const isInRange = timeDiff >= minAdvanceMs && timeDiff <= maxAdvanceMs;
     
     if (!isInRange) {
-      const weeksAway = Math.round(timeDiff / (7 * 24 * 60 * 60 * 1000));
-      this.logger.debug(`Event filtered - timing: ${event.title} (${weeksAway} weeks away)`);
+      const daysAway = Math.round(timeDiff / (24 * 60 * 60 * 1000));
+      this.logger.debug(`Event filtered - timing: ${event.title} (${daysAway} days away)`);
     }
     
     return isInRange;

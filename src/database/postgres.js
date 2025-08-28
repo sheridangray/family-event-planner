@@ -297,6 +297,39 @@ class PostgresDatabase {
     };
   }
 
+  async getFamilyMembers(activeOnly = true) {
+    const sql = activeOnly 
+      ? `SELECT * FROM family_members WHERE active = true ORDER BY role, birthdate`
+      : `SELECT * FROM family_members ORDER BY role, birthdate`;
+    const result = await this.pool.query(sql);
+    return result.rows;
+  }
+
+  async getFamilyMembersByRole(role, activeOnly = true) {
+    const sql = activeOnly 
+      ? `SELECT * FROM family_members WHERE role = $1 AND active = true ORDER BY birthdate`
+      : `SELECT * FROM family_members WHERE role = $1 ORDER BY birthdate`;
+    const result = await this.pool.query(sql, [role]);
+    return result.rows;
+  }
+
+  async updateFamilyMember(id, updates) {
+    const setClause = Object.keys(updates)
+      .map((key, index) => `${key} = $${index + 2}`)
+      .join(', ');
+    
+    const sql = `
+      UPDATE family_members 
+      SET ${setClause}, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $1
+      RETURNING id
+    `;
+    
+    const params = [id, ...Object.values(updates)];
+    const result = await this.pool.query(sql, params);
+    return result.rowCount;
+  }
+
   async query(sql, params = []) {
     return await this.pool.query(sql, params);
   }
