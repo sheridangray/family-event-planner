@@ -18,7 +18,7 @@ class LLMAgeEvaluator {
       const prompt = this.buildEvaluationPrompt(event, childAges);
       
       const response = await axios.post(this.baseUrl, {
-        model: 'meta-llama/Llama-3-8b-chat-hf', // Fast, reliable model
+        model: 'meta-llama/Llama-3.2-3B-Instruct-Turbo', // Fast, reliable model
         messages: [
           {
             role: 'system',
@@ -44,7 +44,17 @@ class LLMAgeEvaluator {
       return this.parseEvaluation(completion, event, childAges);
       
     } catch (error) {
-      this.logger.error(`LLM age evaluation failed for ${event.title}:`, error.message);
+      // Log detailed error information
+      const errorDetails = {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseData: error.response?.data ? JSON.stringify(error.response.data).substring(0, 500) : 'No response data',
+        code: error.code,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n') // First 3 lines of stack
+      };
+      
+      this.logger.error(`LLM age evaluation failed for ${event.title}:`, errorDetails);
       
       // Fallback to permissive default if LLM fails
       return {
