@@ -52,20 +52,32 @@ class EventFilter {
         ageAppropriate = this.isAgeAppropriate(event, familyDemographics);
       }
       
-      if (ageAppropriate &&
-          this.isWithinTimeRange(event) &&
-          this.isScheduleCompatible(event) &&
-          this.isWithinBudget(event) &&
-          this.hasAvailableCapacity(event) &&
-          this.isNotPreviouslyAttended(event) &&
-          await this.isWeatherSuitable(event)) {
-        
+      // Debug each filter step
+      const timeRange = this.isWithinTimeRange(event);
+      const schedule = this.isScheduleCompatible(event);
+      const budget = this.isWithinBudget(event);
+      const capacity = this.hasAvailableCapacity(event);
+      const notAttended = this.isNotPreviouslyAttended(event);
+      const weather = await this.isWeatherSuitable(event);
+      
+      if (ageAppropriate && timeRange && schedule && budget && capacity && notAttended && weather) {
         // Add LLM evaluation metadata to event
         if (ageEvaluations.has(event.id)) {
           event.llmEvaluation = ageEvaluations.get(event.id);
         }
         
         filtered.push(event);
+      } else if (ageAppropriate) {
+        // Log which filter eliminated this LLM-approved event
+        const reasons = [];
+        if (!timeRange) reasons.push('time-range');
+        if (!schedule) reasons.push('schedule');
+        if (!budget) reasons.push('budget');
+        if (!capacity) reasons.push('capacity');
+        if (!notAttended) reasons.push('previously-attended');
+        if (!weather) reasons.push('weather');
+        
+        this.logger.info(`Event "${event.title}" eliminated by filters: ${reasons.join(', ')}`);
       }
     }
 
