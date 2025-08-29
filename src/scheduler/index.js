@@ -150,18 +150,19 @@ class TaskScheduler {
         let sentCount = 0;
         
         for (const event of topEvents) {
-          // Use unified notification service if SMS manager is not available
-          if (this.smsManager) {
-            // SMS available - use SMS manager
-            if (await this.smsManager.shouldSendEvent()) {
-              await this.smsManager.sendEventForApproval(event);
-              sentCount++;
-            }
-          } else if (this.unifiedNotifications) {
+          // Always prefer email-only unified notification service over SMS
+          if (this.unifiedNotifications) {
             // Email-only mode - use unified notification service
             this.logger.info(`Using email-only notification service for: ${event.title}`);
             if (await this.unifiedNotifications.shouldSendEvent()) {
               await this.unifiedNotifications.sendEventForApproval(event);
+              sentCount++;
+            }
+          } else if (this.smsManager) {
+            // Fallback to SMS only if email notifications unavailable
+            this.logger.warn(`Falling back to SMS for: ${event.title} (email notifications unavailable)`);
+            if (await this.smsManager.shouldSendEvent()) {
+              await this.smsManager.sendEventForApproval(event);
               sentCount++;
             }
           } else {
@@ -211,20 +212,22 @@ class TaskScheduler {
 
   async checkApprovalTimeouts() {
     try {
-      // Check SMS timeouts if SMS manager available
+      // Always prefer email-only unified notifications over SMS
       let timeoutCount = 0;
       let reminderCount = 0;
       
-      if (this.smsManager) {
-        timeoutCount = await this.smsManager.checkTimeouts();
-        reminderCount = await this.smsManager.sendReminders();
-      } else {
+      if (this.unifiedNotifications) {
         // Email-only mode - use unified notification service
         const emailTimeouts = await this.unifiedNotifications.checkTimeouts();
         timeoutCount = emailTimeouts.email ? emailTimeouts.email.length : 0;
         
         const emailReminders = await this.unifiedNotifications.sendReminders();
         reminderCount = emailReminders || 0;
+      } else if (this.smsManager) {
+        // Fallback to SMS timeouts if email notifications unavailable
+        this.logger.warn('Using SMS for timeout checks (email notifications unavailable)');
+        timeoutCount = await this.smsManager.checkTimeouts();
+        reminderCount = await this.smsManager.sendReminders();
       }
       
       if (timeoutCount > 0 || reminderCount > 0) {

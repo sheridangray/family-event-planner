@@ -131,27 +131,20 @@ async function initializeComponents() {
     let smsManager = null;
     let unifiedNotifications = null;
     
+    // Skip SMS initialization entirely, use email-only
+    logger.info('SMS Manager disabled - using email-only notifications');
+    
     try {
-      smsManager = new SMSApprovalManager(logger, database);
-      await smsManager.init();
-      logger.info('SMS Manager initialized');
-    } catch (error) {
-      logger.warn('SMS Manager not available - using email-only notifications:', error.message);
-      
-      // Initialize email-only notification service as fallback
-      try {
-        logger.info('Attempting to initialize UnifiedNotificationService...');
-        unifiedNotifications = new UnifiedNotificationService(logger, database);
-        logger.info('UnifiedNotificationService created, now calling init()...');
-        await unifiedNotifications.init();
-        logger.info('Email-only notification service initialized as SMS fallback');
-      } catch (emailError) {
-        logger.error('Email notification service initialization failed:', emailError.message);
-        logger.error('Email service error stack:', emailError.stack);
-        logger.error('Will continue without notification services (no emails will be sent)');
-        // Don't throw - continue without notifications for now
-        unifiedNotifications = null;
-      }
+      logger.info('Initializing UnifiedNotificationService (email-only)...');
+      unifiedNotifications = new UnifiedNotificationService(logger, database);
+      await unifiedNotifications.init();
+      logger.info('Email-only notification service initialized');
+    } catch (emailError) {
+      logger.error('Email notification service failed to initialize:', emailError.message);
+      logger.error('Email service error stack:', emailError.stack);
+      logger.error('Will continue without notification services (no emails will be sent)');
+      // Don't throw - continue without notifications for now
+      unifiedNotifications = null;
     }
     
     logger.info('MCP clients initialized');
