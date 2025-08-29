@@ -115,12 +115,28 @@ class EventFilter {
     const maxAdvanceMs = config.preferences.maxAdvanceMonths * 30 * 24 * 60 * 60 * 1000;
     
     const timeDiff = eventDate.getTime() - now.getTime();
+    const daysAway = Math.round(timeDiff / (24 * 60 * 60 * 1000));
     
     const isInRange = timeDiff >= minAdvanceMs && timeDiff <= maxAdvanceMs;
     
+    // DETAILED DEBUG LOGGING
+    this.logger.info(`TIME RANGE DEBUG: Event "${event.title}"`);
+    this.logger.info(`  - Event Date: ${eventDate.toISOString()} (${event.date})`);
+    this.logger.info(`  - Current Time: ${now.toISOString()}`);
+    this.logger.info(`  - Days Away: ${daysAway}`);
+    this.logger.info(`  - Min Advance Days: ${config.preferences.minAdvanceDays}`);
+    this.logger.info(`  - Max Advance Months: ${config.preferences.maxAdvanceMonths}`);
+    this.logger.info(`  - Time Diff (ms): ${timeDiff}`);
+    this.logger.info(`  - Min Required (ms): ${minAdvanceMs}`);
+    this.logger.info(`  - Max Allowed (ms): ${maxAdvanceMs}`);
+    this.logger.info(`  - Passes Time Filter: ${isInRange}`);
+    
     if (!isInRange) {
-      const daysAway = Math.round(timeDiff / (24 * 60 * 60 * 1000));
-      this.logger.debug(`Event filtered - timing: ${event.title} (${daysAway} days away)`);
+      if (timeDiff < minAdvanceMs) {
+        this.logger.info(`  - REJECTED: Event is ${daysAway} days away, minimum ${config.preferences.minAdvanceDays} days required`);
+      } else if (timeDiff > maxAdvanceMs) {
+        this.logger.info(`  - REJECTED: Event is ${daysAway} days away, maximum ${config.preferences.maxAdvanceMonths * 30} days allowed`);
+      }
     }
     
     return isInRange;
@@ -132,20 +148,38 @@ class EventFilter {
     const eventTime = eventDate.toTimeString().substr(0, 5); // HH:MM format
     
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     
+    // DETAILED DEBUG LOGGING
+    this.logger.info(`SCHEDULE DEBUG: Event "${event.title}"`);
+    this.logger.info(`  - Event Date: ${eventDate.toISOString()}`);
+    this.logger.info(`  - Day of Week: ${dayNames[dayOfWeek]} (${dayOfWeek})`);
+    this.logger.info(`  - Event Time: ${eventTime}`);
+    this.logger.info(`  - Is Weekend: ${isWeekend}`);
+    
+    let compatible;
     if (isWeekend) {
-      return this.isWeekendCompatible(eventDate, eventTime);
+      compatible = this.isWeekendCompatible(eventDate, eventTime);
+      this.logger.info(`  - Weekend Compatibility: ${compatible}`);
     } else {
-      return this.isWeekdayCompatible(eventTime);
+      compatible = this.isWeekdayCompatible(eventTime);
+      this.logger.info(`  - Weekday Compatibility: ${compatible}`);
     }
+    
+    return compatible;
   }
 
   isWeekdayCompatible(eventTime) {
     const earliestTime = config.schedule.weekdayEarliestTime;
     const isCompatible = eventTime >= earliestTime;
     
+    this.logger.info(`    - WEEKDAY CHECK:`);
+    this.logger.info(`      - Event Time: ${eventTime}`);
+    this.logger.info(`      - Earliest Allowed: ${earliestTime}`);
+    this.logger.info(`      - Compatible: ${isCompatible}`);
+    
     if (!isCompatible) {
-      this.logger.debug(`Event filtered - weekday schedule: event at ${eventTime}, earliest allowed ${earliestTime}`);
+      this.logger.info(`      - REJECTED: Event at ${eventTime} is before earliest weekday time ${earliestTime}`);
     }
     
     return isCompatible;
@@ -156,39 +190,65 @@ class EventFilter {
     const napEnd = config.schedule.weekendNapEnd;
     const earliestTime = config.schedule.weekendEarliestTime;
     
+    this.logger.info(`    - WEEKEND CHECK:`);
+    this.logger.info(`      - Event Time: ${eventTime}`);
+    this.logger.info(`      - Earliest Allowed: ${earliestTime}`);
+    this.logger.info(`      - Nap Time: ${napStart} - ${napEnd}`);
+    
     if (eventTime < earliestTime) {
-      this.logger.debug(`Event filtered - weekend too early: event at ${eventTime}, earliest allowed ${earliestTime}`);
+      this.logger.info(`      - REJECTED: Event at ${eventTime} is before earliest weekend time ${earliestTime}`);
       return false;
     }
 
     if (eventTime >= napStart && eventTime <= napEnd) {
-      this.logger.debug(`Event filtered - conflicts with nap time: event at ${eventTime} (nap ${napStart}-${napEnd})`);
+      this.logger.info(`      - REJECTED: Event at ${eventTime} conflicts with nap time (${napStart}-${napEnd})`);
       return false;
     }
     
+    this.logger.info(`      - ACCEPTED: Weekend schedule compatible`);
     return true;
   }
 
   isWithinBudget(event) {
     const maxCost = config.preferences.maxCostPerEvent;
-    const isAffordable = event.cost <= maxCost;
+    const eventCost = event.cost || 0;
+    const isAffordable = eventCost <= maxCost;
+    
+    this.logger.info(`BUDGET DEBUG: Event "${event.title}"`);
+    this.logger.info(`  - Event Cost: $${eventCost}`);
+    this.logger.info(`  - Max Budget: $${maxCost}`);
+    this.logger.info(`  - Within Budget: ${isAffordable}`);
     
     if (!isAffordable) {
-      this.logger.debug(`Event filtered - cost: ${event.title} costs $${event.cost}, max budget $${maxCost}`);
+      this.logger.info(`  - REJECTED: Event costs $${eventCost}, exceeds max budget $${maxCost}`);
+    } else {
+      this.logger.info(`  - ACCEPTED: Event cost within budget`);
     }
     
     return isAffordable;
   }
 
   hasAvailableCapacity(event) {
+    this.logger.info(`CAPACITY DEBUG: Event "${event.title}"`);
+    
     if (!event.currentCapacity || typeof event.currentCapacity.available !== 'number') {
+      this.logger.info(`  - No capacity info available, assuming available`);
+      this.logger.info(`  - ACCEPTED: No capacity restrictions`);
       return true;
     }
     
-    const hasCapacity = event.currentCapacity.available > 0;
+    const available = event.currentCapacity.available;
+    const total = event.currentCapacity.total || 'unknown';
+    const hasCapacity = available > 0;
+    
+    this.logger.info(`  - Available Spots: ${available}`);
+    this.logger.info(`  - Total Capacity: ${total}`);
+    this.logger.info(`  - Has Capacity: ${hasCapacity}`);
     
     if (!hasCapacity) {
-      this.logger.debug(`Event filtered - no capacity: ${event.title}`);
+      this.logger.info(`  - REJECTED: No available spots (${available} available)`);
+    } else {
+      this.logger.info(`  - ACCEPTED: ${available} spots available`);
     }
     
     return hasCapacity;
@@ -197,8 +257,14 @@ class EventFilter {
   isNotPreviouslyAttended(event) {
     const notAttended = !event.previouslyAttended;
     
+    this.logger.info(`ATTENDANCE DEBUG: Event "${event.title}"`);
+    this.logger.info(`  - Previously Attended: ${event.previouslyAttended || false}`);
+    this.logger.info(`  - Not Previously Attended: ${notAttended}`);
+    
     if (!notAttended) {
-      this.logger.debug(`Event filtered - previously attended: ${event.title}`);
+      this.logger.info(`  - REJECTED: Previously attended this event`);
+    } else {
+      this.logger.info(`  - ACCEPTED: Have not attended this event before`);
     }
     
     return notAttended;
@@ -304,32 +370,55 @@ class EventFilter {
 
   async isWeatherSuitable(event) {
     try {
+      const isOutdoor = this.weatherService.isEventOutdoor(event);
+      
+      this.logger.info(`WEATHER DEBUG: Event "${event.title}"`);
+      this.logger.info(`  - Is Outdoor Event: ${isOutdoor}`);
+      
       // Only check weather for outdoor events
-      if (!this.weatherService.isEventOutdoor(event)) {
+      if (!isOutdoor) {
+        this.logger.info(`  - ACCEPTED: Indoor event, weather check skipped`);
         return true;
       }
 
       const eventDate = new Date(event.date);
+      this.logger.info(`  - Getting weather forecast for: ${eventDate.toDateString()}`);
+      
       const weather = await this.weatherService.getWeatherForecast(eventDate);
+      
+      this.logger.info(`  - Weather Data:`);
+      this.logger.info(`    - Temperature: ${weather.temperature}°F`);
+      this.logger.info(`    - Condition: ${weather.condition}`);
+      this.logger.info(`    - Precipitation: ${weather.precipitation}`);
+      this.logger.info(`    - Wind Speed: ${weather.windSpeed} mph`);
+      this.logger.info(`    - Is Outdoor Friendly: ${weather.isOutdoorFriendly}`);
       
       // Cache weather data in database
       if (this.database) {
-        await this.database.cacheWeatherData(
-          'San Francisco, CA',
-          eventDate.toISOString().split('T')[0],
-          weather
-        );
+        try {
+          await this.database.cacheWeatherData(
+            'San Francisco, CA',
+            eventDate.toISOString().split('T')[0],
+            weather
+          );
+        } catch (cacheError) {
+          this.logger.warn(`Failed to cache weather data: ${cacheError.message}`);
+        }
       }
 
       const isSuitable = weather.isOutdoorFriendly;
       
       if (!isSuitable) {
-        this.logger.debug(`Event filtered - weather: ${event.title} on ${eventDate.toDateString()} (${weather.condition}, ${weather.temperature}°F)`);
+        this.logger.info(`  - REJECTED: Weather unsuitable for outdoor event (${weather.condition}, ${weather.temperature}°F, precipitation: ${weather.precipitation})`);
+      } else {
+        this.logger.info(`  - ACCEPTED: Weather suitable for outdoor event`);
       }
       
       return isSuitable;
     } catch (error) {
-      this.logger.warn(`Error checking weather for event ${event.title}:`, error.message);
+      this.logger.error(`WEATHER ERROR for "${event.title}": ${error.message}`);
+      this.logger.error(`  - Stack: ${error.stack?.split('\n').slice(0, 3).join('\n')}`);
+      this.logger.info(`  - ACCEPTED: Weather check failed, defaulting to allow event`);
       return true; // Default to allowing the event if weather check fails
     }
   }
