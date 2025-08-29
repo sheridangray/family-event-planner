@@ -8,7 +8,7 @@ class EventFilter {
   constructor(logger, database) {
     this.logger = logger;
     this.database = database;
-    this.weatherService = new WeatherService(logger);
+    this.weatherService = new WeatherService(logger, database);
     this.preferenceLearning = new PreferenceLearningService(logger, database);
     this.familyService = new FamilyDemographicsService(logger, database);
     

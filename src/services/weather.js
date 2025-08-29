@@ -1,24 +1,42 @@
 const axios = require('axios');
 
 class WeatherService {
-  constructor(logger) {
+  constructor(logger, database = null) {
     this.logger = logger;
+    this.database = database; // For persistent caching
     this.apiKey = process.env.WEATHER_API_KEY;
     this.baseUrl = 'https://api.openweathermap.org/data/2.5';
-    this.cache = new Map(); // Simple in-memory cache
-    this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
+    this.cache = new Map(); // In-memory cache for speed
+    this.forecastCacheExpiry = 6 * 60 * 60 * 1000; // 6 hours for forecasts
+    this.seasonalCacheExpiry = 24 * 60 * 60 * 1000; // 24 hours for seasonal data
   }
 
   async getWeatherForecast(eventDate, location = 'San Francisco, CA') {
     try {
       const cacheKey = `${location}-${eventDate.toDateString()}`;
       
-      // Check cache first
+      // Check in-memory cache first (fastest)
       if (this.cache.has(cacheKey)) {
         const cached = this.cache.get(cacheKey);
-        if (Date.now() - cached.timestamp < this.cacheExpiry) {
-          this.logger.debug(`Using cached weather for ${location} on ${eventDate.toDateString()}`);
+        const isExpired = Date.now() - cached.timestamp > (cached.isForecast ? this.forecastCacheExpiry : this.seasonalCacheExpiry);
+        if (!isExpired) {
+          this.logger.debug(`Using in-memory cached weather for ${location} on ${eventDate.toDateString()}`);
           return cached.data;
+        }
+      }
+      
+      // Check database cache if available
+      if (this.database) {
+        const dbCached = await this.database.getCachedWeatherData(location, eventDate.toDateString());
+        if (dbCached) {
+          this.logger.debug(`Using database cached weather for ${location} on ${eventDate.toDateString()}`);
+          // Also store in memory for faster next access
+          this.cache.set(cacheKey, {
+            data: dbCached,
+            timestamp: Date.now(),
+            isForecast: this.isDaysForecast(eventDate)
+          });
+          return dbCached;
         }
       }
 
@@ -41,11 +59,23 @@ class WeatherService {
         weatherData = await this.getSeasonalWeather(eventDate, location);
       }
 
-      // Cache the result
+      // Cache the result both in memory and database
+      const isForecast = this.isDaysForecast(eventDate);
       this.cache.set(cacheKey, {
         data: weatherData,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        isForecast: isForecast
       });
+      
+      // Store in database if available for persistence
+      if (this.database) {
+        try {
+          await this.database.cacheWeatherData(location, eventDate.toDateString(), weatherData);
+          this.logger.debug(`Cached weather data in database for ${location} on ${eventDate.toDateString()}`);
+        } catch (error) {
+          this.logger.warn(`Failed to cache weather in database: ${error.message}`);
+        }
+      }
 
       return weatherData;
 
@@ -159,6 +189,12 @@ class WeatherService {
       windSpeed: 10,
       isOutdoorFriendly: true
     };
+  }
+  
+  isDaysForecast(eventDate) {
+    const now = new Date();
+    const daysDiff = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return daysDiff <= 5; // Use forecast API for events within 5 days
   }
 
   isEventOutdoor(event) {
