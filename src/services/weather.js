@@ -9,6 +9,13 @@ class WeatherService {
     this.cache = new Map(); // In-memory cache for speed
     this.forecastCacheExpiry = 6 * 60 * 60 * 1000; // 6 hours for forecasts
     this.seasonalCacheExpiry = 24 * 60 * 60 * 1000; // 24 hours for seasonal data
+    
+    // DEBUG: Log weather API key status
+    if (!this.apiKey) {
+      this.logger.error('WEATHER SERVICE: No WEATHER_API_KEY environment variable found!');
+    } else {
+      this.logger.info(`WEATHER SERVICE: Initialized with API key: ${this.apiKey.substring(0, 8)}...`);
+    }
   }
 
   async getWeatherForecast(eventDate, location = 'San Francisco, CA') {
