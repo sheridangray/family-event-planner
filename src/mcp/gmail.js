@@ -246,7 +246,7 @@ class GmailMCPClient {
     }
   }
 
-  async getCalendarEvents(email, timeMin, timeMax) {
+  async getCalendarEvents(email, timeMin, timeMax, retryCount = 0) {
     try {
       this.logger.debug(`Fetching calendar events for ${email} from ${timeMin} to ${timeMax}`);
       
@@ -285,6 +285,19 @@ class GmailMCPClient {
       return activeEvents;
       
     } catch (error) {
+      // Handle automatic token refresh for invalid_grant errors
+      if (error.message.includes('invalid_grant') && retryCount === 0) {
+        this.logger.warn(`Token expired for ${email}, attempting automatic refresh...`);
+        try {
+          await this.refreshToken();
+          this.logger.info(`Token refreshed successfully, retrying calendar request for ${email}`);
+          return await this.getCalendarEvents(email, timeMin, timeMax, retryCount + 1);
+        } catch (refreshError) {
+          this.logger.error(`Token refresh failed for ${email}:`, refreshError.message);
+          // Fall through to original error handling
+        }
+      }
+      
       // Handle specific API errors with detailed logging
       const errorDetails = {
         message: error.message,
@@ -297,7 +310,7 @@ class GmailMCPClient {
         this.logger.warn(`No access to calendar for ${email}:`, errorDetails);
       } else if (error.code === 404) {
         this.logger.warn(`Calendar not found for ${email}:`, errorDetails);
-      } else if (error.code === 401) {
+      } else if (error.code === 401 || error.message.includes('invalid_grant')) {
         this.logger.error(`Authentication failed for calendar access:`, errorDetails);
       } else {
         this.logger.error(`Error fetching calendar events for ${email}:`, errorDetails);
@@ -307,7 +320,7 @@ class GmailMCPClient {
     }
   }
 
-  async createCalendarEvent(eventData) {
+  async createCalendarEvent(eventData, retryCount = 0) {
     try {
       this.logger.info(`Creating calendar event: ${eventData.title}`);
       
@@ -351,6 +364,19 @@ class GmailMCPClient {
       }];
       
     } catch (error) {
+      // Handle automatic token refresh for invalid_grant errors
+      if (error.message.includes('invalid_grant') && retryCount === 0) {
+        this.logger.warn(`Token expired while creating calendar event, attempting automatic refresh...`);
+        try {
+          await this.refreshToken();
+          this.logger.info(`Token refreshed successfully, retrying calendar event creation`);
+          return await this.createCalendarEvent(eventData, retryCount + 1);
+        } catch (refreshError) {
+          this.logger.error(`Token refresh failed during calendar creation:`, refreshError.message);
+          // Fall through to original error handling
+        }
+      }
+      
       this.logger.error(`Error creating calendar event for ${eventData.title}:`, error.message);
       throw error;
     }
@@ -385,16 +411,54 @@ class GmailMCPClient {
     try {
       this.logger.info('Attempting to refresh Google API token...');
       
-      // This would typically involve refreshing the OAuth token
-      // For now, we'll log the attempt and continue
-      this.logger.warn('Token refresh not implemented - manual re-authentication may be required');
+      if (!this.auth) {
+        throw new Error('OAuth client not initialized');
+      }
+      
+      const { credentials: newTokens } = await this.auth.refreshAccessToken();
+      this.auth.setCredentials(newTokens);
+      
+      // Save refreshed tokens to file for persistence
+      await this.saveTokens(newTokens);
+      
+      this.logger.info('Google API token refreshed successfully');
+      return true;
       
     } catch (error) {
       this.logger.error('Token refresh failed:', error.message);
+      
+      if (error.message.includes('invalid_grant')) {
+        this.logger.error('Refresh token expired - manual re-authentication required');
+      }
+      
+      throw error;
     }
   }
 
-  async sendEmail(to, subject, body, options = {}) {
+  async saveTokens(tokens) {
+    try {
+      // Save to local development path
+      const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
+      fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
+      
+      // In production, also save to Render secret file location if it exists
+      if (process.env.NODE_ENV === 'production') {
+        const renderTokenPath = '/etc/secrets/google-oauth-token.json';
+        try {
+          fs.writeFileSync(renderTokenPath, JSON.stringify(tokens, null, 2));
+          this.logger.info('Tokens saved to both local and production paths');
+        } catch (error) {
+          this.logger.warn('Could not save to production path (expected if not writable):', error.message);
+        }
+      }
+      
+    } catch (error) {
+      this.logger.error('Error saving refreshed tokens:', error.message);
+      throw error;
+    }
+  }
+
+  async sendEmail(to, subject, body, options = {}, retryCount = 0) {
     try {
       this.logger.info(`Sending email to ${Array.isArray(to) ? to.join(', ') : to}: ${subject}`);
       
@@ -424,9 +488,22 @@ class GmailMCPClient {
       };
       
     } catch (error) {
+      // Handle automatic token refresh for invalid_grant errors
+      if (error.message.includes('invalid_grant') && retryCount === 0) {
+        this.logger.warn(`Token expired while sending email, attempting automatic refresh...`);
+        try {
+          await this.refreshToken();
+          this.logger.info(`Token refreshed successfully, retrying email send`);
+          return await this.sendEmail(to, subject, body, options, retryCount + 1);
+        } catch (refreshError) {
+          this.logger.error(`Token refresh failed during email send:`, refreshError.message);
+          // Fall through to original error handling
+        }
+      }
+      
       this.logger.error(`Error sending email to ${Array.isArray(to) ? to.join(', ') : to}:`, error.message);
       
-      if (error.code === 401) {
+      if (error.code === 401 || error.message.includes('invalid_grant')) {
         this.logger.error('Gmail authentication failed. Token may have expired.');
       } else if (error.code === 403) {
         this.logger.error('Gmail API access denied. Check scopes and permissions.');
