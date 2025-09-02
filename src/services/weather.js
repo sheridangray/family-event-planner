@@ -18,7 +18,7 @@ class WeatherService {
     }
   }
 
-  async getWeatherForecast(eventDate, location = 'San Francisco, CA') {
+  async getWeatherForecast(eventDate, location = 'San Francisco') {
     try {
       const cacheKey = `${location}-${eventDate.toDateString()}`;
       

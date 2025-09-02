@@ -119,6 +119,19 @@ class PostgresDatabase {
         FOREIGN KEY (primary_event_id) REFERENCES events(id)
       );
 
+      CREATE TABLE IF NOT EXISTS weather_cache (
+        id SERIAL PRIMARY KEY,
+        location TEXT NOT NULL,
+        date TEXT NOT NULL,
+        temperature DECIMAL(5, 2),
+        condition TEXT,
+        precipitation DECIMAL(5, 2),
+        wind_speed DECIMAL(5, 2),
+        is_outdoor_friendly BOOLEAN,
+        fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(location, date)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
       CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
       CREATE INDEX IF NOT EXISTS idx_family_members_role ON family_members(role);
@@ -503,6 +516,50 @@ class PostgresDatabase {
       event: JSON.parse(row.event_data),
       metadata: row.metadata ? JSON.parse(row.metadata) : null
     }));
+  }
+
+  async cacheWeatherData(location, date, weatherData) {
+    const sql = `
+      INSERT INTO weather_cache (
+        location, date, temperature, condition, precipitation, 
+        wind_speed, is_outdoor_friendly
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (location, date) DO UPDATE SET
+        temperature = EXCLUDED.temperature,
+        condition = EXCLUDED.condition,
+        precipitation = EXCLUDED.precipitation,
+        wind_speed = EXCLUDED.wind_speed,
+        is_outdoor_friendly = EXCLUDED.is_outdoor_friendly,
+        fetched_at = CURRENT_TIMESTAMP
+      RETURNING id
+    `;
+    const result = await this.pool.query(sql, [
+      location, date, weatherData.temperature, weatherData.condition,
+      weatherData.precipitation, weatherData.windSpeed, weatherData.isOutdoorFriendly
+    ]);
+    return result.rows[0].id;
+  }
+
+  async getCachedWeatherData(location, date) {
+    const sql = `
+      SELECT * FROM weather_cache 
+      WHERE location = $1 AND date = $2 
+      AND fetched_at > NOW() - INTERVAL '6 hours'
+    `;
+    const result = await this.pool.query(sql, [location, date]);
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const row = result.rows[0];
+    return {
+      temperature: parseFloat(row.temperature),
+      condition: row.condition,
+      precipitation: parseFloat(row.precipitation),
+      windSpeed: parseFloat(row.wind_speed),
+      isOutdoorFriendly: row.is_outdoor_friendly
+    };
   }
 
   async query(sql, params = []) {

@@ -115,6 +115,14 @@ class Database {
     return await this.postgres.getEventInteractions(limit);
   }
 
+  async cacheWeatherData(location, date, weatherData) {
+    return await this.postgres.cacheWeatherData(location, date, weatherData);
+  }
+
+  async getCachedWeatherData(location, date) {
+    return await this.postgres.getCachedWeatherData(location, date);
+  }
+
   async query(sql, params = []) {
     return await this.postgres.query(sql, params);
   }

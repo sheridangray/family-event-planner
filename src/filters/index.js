@@ -100,9 +100,9 @@ class EventFilter {
         if (!notAttended) reasons.push("previously-attended");
         if (!weather) reasons.push("weather");
 
-        this.logger.info(
-          `Event "${event.title}" eliminated by filters: ${reasons.join(", ")}`
-        );
+        // this.logger.info(
+        //   `Event "${event.title}" eliminated by filters: ${reasons.join(", ")}`
+        // );
       }
     }
 
@@ -256,10 +256,10 @@ class EventFilter {
         eventTime,
         isAllDayEvent
       );
-      this.logger.info(`  - Weekend Compatibility: ${compatible}`);
+      // this.logger.info(`  - Weekend Compatibility: ${compatible}`);
     } else {
       compatible = this.isWeekdayCompatible(eventTime, isAllDayEvent);
-      this.logger.info(`  - Weekday Compatibility: ${compatible}`);
+      // this.logger.info(`  - Weekday Compatibility: ${compatible}`);
     }
 
     return compatible;
@@ -329,9 +329,9 @@ class EventFilter {
     const isAffordable = eventCost <= maxCost;
 
     if (!isAffordable) {
-      this.logger.info(
-        `BUDGET: Event "${event.title}" rejected - costs $${eventCost}, exceeds max budget $${maxCost}`
-      );
+      // this.logger.info(
+      //   `BUDGET: Event "${event.title}" rejected - costs $${eventCost}, exceeds max budget $${maxCost}`
+      // );
     }
 
     return isAffordable;
@@ -349,9 +349,9 @@ class EventFilter {
     const hasCapacity = available > 0;
 
     if (!hasCapacity) {
-      this.logger.info(
-        `CAPACITY: Event "${event.title}" rejected - no available spots (${available} available)`
-      );
+      // this.logger.info(
+      //   `CAPACITY: Event "${event.title}" rejected - no available spots (${available} available)`
+      // );
     }
 
     return hasCapacity;
@@ -361,9 +361,9 @@ class EventFilter {
     const notAttended = !event.previouslyAttended;
 
     if (!notAttended) {
-      this.logger.info(
-        `ATTENDANCE: Event "${event.title}" rejected - previously attended`
-      );
+      // this.logger.info(
+      //   `ATTENDANCE: Event "${event.title}" rejected - previously attended`
+      // );
     }
 
     return notAttended;
@@ -417,7 +417,7 @@ class EventFilter {
       const isNovel = !event.previouslyAttended && !event.isRecurring;
 
       if (!isNovel) {
-        this.logger.debug(`Event filtered - not novel: ${event.title}`);
+        // this.logger.debug(`Event filtered - not novel: ${event.title}`);
       }
 
       return isNovel;
@@ -498,7 +498,7 @@ class EventFilter {
       if (this.database) {
         try {
           await this.database.cacheWeatherData(
-            "San Francisco, CA",
+            "San Francisco",
             eventDate.toISOString().split("T")[0],
             weather
           );
@@ -512,9 +512,9 @@ class EventFilter {
       const isSuitable = weather.isOutdoorFriendly;
 
       if (!isSuitable) {
-        this.logger.info(
-          `WEATHER: Event "${event.title}" rejected - weather unsuitable (${weather.condition}, ${weather.temperature}°F, precipitation: ${weather.precipitation})`
-        );
+        // this.logger.info(
+        //   `WEATHER: Event "${event.title}" rejected - weather unsuitable (${weather.condition}, ${weather.temperature}°F, precipitation: ${weather.precipitation})`
+        // );
       }
 
       return isSuitable;
@@ -534,9 +534,9 @@ class EventFilter {
         event.preferenceScore = preferenceScore;
         scoredEvents.push(event);
 
-        this.logger.debug(
-          `Event preference score: ${event.title} = ${preferenceScore}`
-        );
+        // this.logger.debug(
+        //   `Event preference score: ${event.title} = ${preferenceScore}`
+        // );
       } catch (error) {
         this.logger.warn(
           `Error calculating preference score for ${event.title}:`,
