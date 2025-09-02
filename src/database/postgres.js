@@ -491,6 +491,20 @@ class PostgresDatabase {
     return result.rows[0] || null;
   }
 
+  async getEventInteractions(limit = 1000) {
+    const sql = `
+      SELECT * FROM event_interactions 
+      ORDER BY interaction_date DESC 
+      LIMIT $1
+    `;
+    const result = await this.pool.query(sql, [limit]);
+    return result.rows.map(row => ({
+      ...row,
+      event: JSON.parse(row.event_data),
+      metadata: row.metadata ? JSON.parse(row.metadata) : null
+    }));
+  }
+
   async query(sql, params = []) {
     return await this.pool.query(sql, params);
   }

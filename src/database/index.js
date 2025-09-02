@@ -111,6 +111,10 @@ class Database {
     return await this.postgres.getEventMergeHistory(eventId, limit);
   }
 
+  async getEventInteractions(limit = 1000) {
+    return await this.postgres.getEventInteractions(limit);
+  }
+
   async query(sql, params = []) {
     return await this.postgres.query(sql, params);
   }
