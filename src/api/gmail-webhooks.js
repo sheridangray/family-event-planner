@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { GmailMCPClient } = require('../mcp/gmail');
 const UnifiedNotificationService = require('../services/unified-notification');
 const Database = require('../database');
@@ -98,20 +99,56 @@ class GmailWebhookHandler {
    * Verify Pub/Sub message authenticity (optional but recommended)
    */
   verifyPubSubMessage(req) {
-    // For now, we'll skip signature verification in development
-    // In production, you should verify the JWT token in the Authorization header
     const authHeader = req.headers.authorization;
     
-    if (!authHeader) {
-      this.logger.debug('No authorization header found (OK for development)');
-      return true; // Allow in development
+    // In development, allow requests without authentication
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.debug('Development mode: skipping JWT verification');
+      return true;
+    }
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      this.logger.warn('Missing or invalid Authorization header in production');
+      return false;
     }
 
-    // TODO: Implement proper JWT verification for production
-    // const token = authHeader.replace('Bearer ', '');
-    // Verify token signature and claims
-    
-    return true;
+    try {
+      const token = authHeader.replace('Bearer ', '');
+      
+      // Get JWT secret from environment
+      const jwtSecret = process.env.GMAIL_WEBHOOK_JWT_SECRET;
+      if (!jwtSecret) {
+        this.logger.error('GMAIL_WEBHOOK_JWT_SECRET not configured for production');
+        return false;
+      }
+      
+      // Verify JWT token
+      const decoded = jwt.verify(token, jwtSecret, {
+        algorithms: ['HS256'],
+        issuer: 'family-event-planner',
+        audience: 'gmail-webhooks'
+      });
+      
+      // Validate required claims
+      if (!decoded.sub || !decoded.scope) {
+        this.logger.warn('JWT missing required claims (sub, scope)');
+        return false;
+      }
+      
+      // Validate scope includes gmail notifications
+      const scopes = decoded.scope.split(' ');
+      if (!scopes.includes('gmail:notifications')) {
+        this.logger.warn('JWT missing required scope: gmail:notifications');
+        return false;
+      }
+      
+      this.logger.debug(`JWT verified successfully for subject: ${decoded.sub}`);
+      return true;
+      
+    } catch (error) {
+      this.logger.warn(`JWT verification failed: ${error.message}`);
+      return false;
+    }
   }
 
   /**
@@ -188,7 +225,7 @@ class GmailWebhookHandler {
       this.logger.debug(`Processing message: ${headers.subject}`);
 
       // Check if this is a reply to one of our event notifications
-      if (this.isEventReply(headers, message)) {
+      if (await this.isEventReply(headers, message)) {
         await this.processEventReply(message, headers);
       } else {
         this.logger.debug('Message is not an event reply, ignoring');
@@ -215,23 +252,83 @@ class GmailWebhookHandler {
   /**
    * Check if message is a reply to our event notification
    */
-  isEventReply(headers, message) {
-    // Check if subject contains our event notification keywords
-    const subject = headers.subject || '';
-    const isReply = subject.toLowerCase().includes('re:') || 
-                   subject.toLowerCase().includes('new family event');
-
-    // Check if sender is one of our family members
+  async isEventReply(headers, message) {
+    // Check if sender is one of our family members first
     const from = headers.from || '';
     const isFamilyMember = from.includes(process.env.PARENT1_EMAIL) || 
                           from.includes(process.env.PARENT2_EMAIL);
 
-    // TODO: Better approach would be to check In-Reply-To or References headers
-    // to match against Message-IDs we sent
+    if (!isFamilyMember) {
+      this.logger.debug(`Email from non-family member: ${from}`);
+      return false;
+    }
 
-    this.logger.debug(`Reply check - Subject: "${subject}", From: "${from}", IsReply: ${isReply}, IsFamilyMember: ${isFamilyMember}`);
+    // Primary method: Check In-Reply-To and References headers for Message-IDs we sent
+    const inReplyTo = headers['in-reply-to'] || '';
+    const references = headers['references'] || '';
+    
+    if (inReplyTo || references) {
+      const isReplyToOurMessage = await this.isReplyToOurMessageId(inReplyTo, references);
+      if (isReplyToOurMessage) {
+        this.logger.debug(`Email reply detected via In-Reply-To/References headers`);
+        return true;
+      }
+    }
 
-    return isReply && isFamilyMember;
+    // Fallback method: Check subject for event notification keywords
+    const subject = headers.subject || '';
+    const isReplyBySubject = subject.toLowerCase().includes('re:') && 
+                            subject.toLowerCase().includes('new family event');
+
+    this.logger.debug(`Reply check - Subject: "${subject}", From: "${from}", HeaderReply: ${inReplyTo ? 'YES' : 'NO'}, SubjectReply: ${isReplyBySubject}`);
+
+    return isReplyBySubject;
+  }
+
+  /**
+   * Check if the In-Reply-To or References headers match Message-IDs we sent
+   */
+  async isReplyToOurMessageId(inReplyTo, references) {
+    try {
+      // Extract all message IDs from In-Reply-To and References headers
+      const messageIds = [];
+      
+      if (inReplyTo) {
+        messageIds.push(inReplyTo.trim());
+      }
+      
+      if (references) {
+        // References can contain multiple message IDs separated by spaces
+        const refIds = references.split(/\s+/).filter(id => id.trim());
+        messageIds.push(...refIds);
+      }
+
+      if (messageIds.length === 0) {
+        return false;
+      }
+
+      // Check if any of these message IDs match ones we sent
+      for (const messageId of messageIds) {
+        const cleanId = messageId.replace(/[<>]/g, ''); // Remove angle brackets
+        
+        // Query database for approvals containing this message ID
+        const result = await this.database.query(
+          `SELECT id FROM sms_approvals WHERE message_sent LIKE ? LIMIT 1`,
+          [`%"messageId":"${cleanId}"%`]
+        );
+        
+        if (result.rows && result.rows.length > 0) {
+          this.logger.debug(`Found matching Message-ID: ${cleanId}`);
+          return true;
+        }
+      }
+
+      return false;
+      
+    } catch (error) {
+      this.logger.warn('Error checking Message-ID references:', error.message);
+      return false; // Fall back to subject-based detection
+    }
   }
 
   /**

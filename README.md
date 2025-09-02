@@ -26,7 +26,7 @@ family-event-planner/
 │   ├── safety/         # Payment guards and error handling
 │   └── api/           # REST API endpoints
 ├── config/            # Configuration files
-├── data/             # SQLite database
+├── data/             # Database migrations
 └── logs/             # Application logs and screenshots
 ```
 
@@ -34,9 +34,10 @@ family-event-planner/
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 20+ 
+- PostgreSQL database
+- Docker & Docker Compose (for local development)
 - Gmail account with API access
-- Twilio account for SMS
 - Valid MCP server configurations
 
 ### Installation
@@ -46,6 +47,19 @@ family-event-planner/
    git clone <repository>
    cd family-event-planner
    npm install
+   ```
+
+2. **Start local PostgreSQL database:**
+   ```bash
+   docker-compose up -d postgres
+   ```
+
+3. **Set up environment variables:**
+   ```bash
+   # Local development
+   export DATABASE_URL="postgresql://postgres:password@localhost:5432/family_event_planner"
+   
+   # Production uses Render's DATABASE_URL automatically
    ```
 
 2. **Configure environment:**

@@ -108,11 +108,24 @@ class PostgresDatabase {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS event_merges (
+        id SERIAL PRIMARY KEY,
+        primary_event_id VARCHAR(255) NOT NULL,
+        merged_event_id VARCHAR(255) NOT NULL,
+        merged_event_data JSONB NOT NULL,
+        similarity_score DECIMAL(5, 2),
+        merge_type VARCHAR(20) NOT NULL CHECK(merge_type IN ('exact', 'fuzzy')),
+        merged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (primary_event_id) REFERENCES events(id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
       CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
       CREATE INDEX IF NOT EXISTS idx_family_members_role ON family_members(role);
       CREATE INDEX IF NOT EXISTS idx_family_members_active ON family_members(active);
       CREATE INDEX IF NOT EXISTS idx_event_scores_total ON event_scores(total_score);
+      CREATE INDEX IF NOT EXISTS idx_event_merges_primary ON event_merges(primary_event_id);
+      CREATE INDEX IF NOT EXISTS idx_event_merges_merged_at ON event_merges(merged_at);
     `;
 
     await this.pool.query(createTablesSQL);
@@ -202,7 +215,7 @@ class PostgresDatabase {
     return result.rows[0]?.id;
   }
 
-  async updateSMSResponse(approvalId, response, status) {
+  async updateSMSApproval(approvalId, response, status) {
     const sql = `
       UPDATE sms_approvals 
       SET response_received = $1, response_at = CURRENT_TIMESTAMP, status = $2
@@ -213,7 +226,7 @@ class PostgresDatabase {
     return result.rowCount;
   }
 
-  async saveRegistration(registration) {
+  async saveRegistration(eventId, success, confirmationNumber, errorMessage, screenshotPath, paymentInfo) {
     const sql = `
       INSERT INTO registrations (
         event_id, success, confirmation_number, error_message, 
@@ -223,9 +236,8 @@ class PostgresDatabase {
     `;
 
     const params = [
-      registration.eventId, registration.success, registration.confirmationNumber,
-      registration.errorMessage, registration.screenshotPath, registration.paymentRequired,
-      registration.paymentAmount, registration.paymentCompleted || false
+      eventId, success, confirmationNumber, errorMessage, screenshotPath,
+      paymentInfo?.required || false, paymentInfo?.amount || 0, paymentInfo?.completed || false
     ];
 
     const result = await this.pool.query(sql, params);
@@ -328,6 +340,155 @@ class PostgresDatabase {
     const params = [id, ...Object.values(updates)];
     const result = await this.pool.query(sql, params);
     return result.rowCount;
+  }
+
+  async recordEventMerge(primaryEventId, mergedEvent, similarityScore, mergeType) {
+    const sql = `
+      INSERT INTO event_merges (
+        primary_event_id, merged_event_id, merged_event_data, 
+        similarity_score, merge_type
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING id
+    `;
+    
+    const params = [
+      primaryEventId,
+      mergedEvent.id,
+      JSON.stringify(mergedEvent),
+      similarityScore,
+      mergeType
+    ];
+
+    const result = await this.pool.query(sql, params);
+    return result.rows[0].id;
+  }
+
+  async getEventMergeHistory(eventId, limit = 10) {
+    const sql = `
+      SELECT * FROM event_merges 
+      WHERE primary_event_id = $1 
+      ORDER BY merged_at DESC 
+      LIMIT $2
+    `;
+
+    const result = await this.pool.query(sql, [eventId, limit]);
+    
+    return result.rows.map(row => ({
+      ...row,
+      mergedEventData: JSON.parse(row.merged_event_data)
+    }));
+  }
+
+  async getEventById(id) {
+    const sql = 'SELECT * FROM events WHERE id = $1';
+    const result = await this.pool.query(sql, [id]);
+    return result.rows[0] || null;
+  }
+
+  async getEventsInDateRange(startDate, endDate) {
+    const sql = 'SELECT * FROM events WHERE date BETWEEN $1 AND $2 ORDER BY date';
+    const result = await this.pool.query(sql, [startDate, endDate]);
+    return result.rows;
+  }
+
+  async getTopScoredEvents(limit = 10) {
+    const sql = `
+      SELECT e.*, es.total_score 
+      FROM events e 
+      LEFT JOIN event_scores es ON e.id = es.event_id 
+      ORDER BY es.total_score DESC 
+      LIMIT $1
+    `;
+    const result = await this.pool.query(sql, [limit]);
+    return result.rows;
+  }
+
+  async getApprovalsByStatus(status) {
+    const sql = 'SELECT * FROM sms_approvals WHERE status = $1 ORDER BY created_at DESC';
+    const result = await this.pool.query(sql, [status]);
+    return result.rows;
+  }
+
+  async getRegistrationHistory(eventId) {
+    const sql = 'SELECT * FROM registrations WHERE event_id = $1 ORDER BY created_at DESC';
+    const result = await this.pool.query(sql, [eventId]);
+    return result.rows;
+  }
+
+  async trackVenueVisit(venueName, address) {
+    const sql = `
+      INSERT INTO venues (name, address, visited, first_visit_date, visit_count) 
+      VALUES ($1, $2, true, CURRENT_TIMESTAMP, 1)
+      ON CONFLICT (name) DO UPDATE SET 
+        visit_count = venues.visit_count + 1,
+        visited = true
+      RETURNING id
+    `;
+    const result = await this.pool.query(sql, [venueName, address]);
+    return result.rows[0].id;
+  }
+
+  async hasVisitedVenue(venueName) {
+    const sql = 'SELECT visited FROM venues WHERE name = $1';
+    const result = await this.pool.query(sql, [venueName]);
+    return result.rows[0]?.visited || false;
+  }
+
+  async getVenueVisitCount(venueName) {
+    const sql = 'SELECT visit_count FROM venues WHERE name = $1';
+    const result = await this.pool.query(sql, [venueName]);
+    return result.rows[0]?.visit_count || 0;
+  }
+
+  async cleanupOldEvents(daysToKeep = 90) {
+    const sql = 'DELETE FROM events WHERE created_at < NOW() - INTERVAL $1 day';
+    const result = await this.pool.query(sql, [daysToKeep]);
+    return result.rowCount;
+  }
+
+  async getEventStats() {
+    const sql = `
+      SELECT 
+        COUNT(*) as total_events,
+        COUNT(CASE WHEN status = 'discovered' THEN 1 END) as discovered,
+        COUNT(CASE WHEN status = 'proposed' THEN 1 END) as proposed,
+        COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved,
+        COUNT(CASE WHEN status = 'booked' THEN 1 END) as booked,
+        COUNT(CASE WHEN status = 'scheduled' THEN 1 END) as scheduled,
+        AVG(cost) as avg_cost,
+        COUNT(CASE WHEN cost = 0 THEN 1 END) as free_events,
+        COUNT(CASE WHEN cost > 0 THEN 1 END) as paid_events
+      FROM events
+    `;
+    const result = await this.pool.query(sql);
+    return result.rows[0];
+  }
+
+  async saveFamilyMember(member) {
+    const sql = `
+      INSERT INTO family_members (name, email, phone, birthdate, role, emergency_contact, active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (email) DO UPDATE SET
+        name = EXCLUDED.name,
+        phone = EXCLUDED.phone,
+        birthdate = EXCLUDED.birthdate,
+        role = EXCLUDED.role,
+        emergency_contact = EXCLUDED.emergency_contact,
+        active = EXCLUDED.active,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING id
+    `;
+    const result = await this.pool.query(sql, [
+      member.name, member.email, member.phone, member.birthdate,
+      member.role, member.emergencyContact || false, member.active !== false
+    ]);
+    return result.rows[0].id;
+  }
+
+  async getFamilyMemberById(id) {
+    const sql = 'SELECT * FROM family_members WHERE id = $1';
+    const result = await this.pool.query(sql, [id]);
+    return result.rows[0] || null;
   }
 
   async query(sql, params = []) {

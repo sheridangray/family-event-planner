@@ -41,13 +41,16 @@ class EmailNotificationClient {
       const subject = this.buildEmailSubject(event);
       const emailBody = this.buildApprovalEmailBody(event);
       
-      const messageId = await this.gmailClient.sendEmail([recipient], subject, emailBody);
+      const emailResult = await this.gmailClient.sendEmail([recipient], subject, emailBody);
       
       const approvalId = await this.database.saveSMSApproval(
         event.id,
         recipient, // Store email instead of phone for tracking
         emailBody
       );
+      
+      // Store the Message-ID for improved reply detection
+      await this.storeMessageId(approvalId, emailResult.messageId);
       
       this.logger.info(`Email approval request sent for ${event.title}, approval ID: ${approvalId}`);
       
@@ -715,6 +718,32 @@ class EmailApprovalManager {
     } catch (error) {
       this.logger.error(`Error processing approved event ${eventId}:`, error.message);
       throw error;
+    }
+  }
+
+  async storeMessageId(approvalId, messageId) {
+    try {
+      // Store Message-ID in approval record for reply detection
+      // We'll store it in the message_sent field as JSON with the messageId
+      const existingMessage = await this.database.query(
+        'SELECT message_sent FROM sms_approvals WHERE id = ?',
+        [approvalId]
+      );
+      
+      const messageData = {
+        messageId: messageId,
+        originalBody: existingMessage.rows?.[0]?.message_sent || ''
+      };
+      
+      await this.database.query(
+        'UPDATE sms_approvals SET message_sent = ? WHERE id = ?',
+        [JSON.stringify(messageData), approvalId]
+      );
+      
+      this.logger.debug(`Stored Message-ID ${messageId} for approval ${approvalId}`);
+      
+    } catch (error) {
+      this.logger.warn('Could not store Message-ID for approval:', error.message);
     }
   }
 }
