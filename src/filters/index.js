@@ -31,16 +31,26 @@ class EventFilter {
     // Get current family demographics for age checking
     const familyDemographics = await this.familyService.getFamilyDemographics();
 
-    // Use LLM batch evaluation for age appropriateness if available
+    // Use LLM batch evaluation for age appropriateness and time extraction if available
     let ageEvaluations = new Map();
     if (this.llmEvaluator && events.length > 0) {
       try {
         this.logger.info(
-          `Using LLM to evaluate age appropriateness for ${events.length} events`
+          `Using LLM to evaluate age appropriateness and extract time for ${events.length} events`
         );
+        
+        // Create raw content map for events that have it
+        const rawContentMap = new Map();
+        events.forEach(event => {
+          if (event.rawContent) {
+            rawContentMap.set(event.id, event.rawContent);
+          }
+        });
+        
         ageEvaluations = await this.llmEvaluator.batchEvaluateEvents(
           events,
-          familyDemographics.childAges
+          familyDemographics.childAges,
+          rawContentMap
         );
       } catch (error) {
         this.logger.error(
@@ -55,9 +65,25 @@ class EventFilter {
     for (const event of events) {
       // Check age appropriateness using LLM if available, otherwise use rules
       let ageAppropriate = true;
+      let llmExtractedTime = null;
       if (ageEvaluations.has(event.id)) {
         const evaluation = ageEvaluations.get(event.id);
         ageAppropriate = evaluation.suitable;
+        llmExtractedTime = evaluation.extractedTime;
+        
+        // Update event date if LLM extracted more specific time
+        if (llmExtractedTime && llmExtractedTime !== 'ALL_DAY') {
+          try {
+            const updatedDate = this.parseTimeAndUpdateDate(event.date, llmExtractedTime);
+            if (updatedDate) {
+              event.date = updatedDate;
+              event.llmExtractedTime = llmExtractedTime;
+            }
+          } catch (error) {
+            this.logger.warn(`Failed to parse LLM time "${llmExtractedTime}" for ${event.title}:`, error.message);
+          }
+        }
+        
         if (!ageAppropriate) {
           this.logger.debug(
             `Event filtered by LLM - age inappropriate: ${event.title} (${evaluation.reason})`
@@ -569,6 +595,40 @@ class EventFilter {
       );
     } catch (error) {
       this.logger.error(`Error recording event interaction:`, error.message);
+    }
+  }
+
+  parseTimeAndUpdateDate(originalDate, timeString) {
+    try {
+      // Parse time patterns like "4:30 PM", "10:00 AM - 11:30 AM", "4:30 - 6:30 PM"
+      const timePattern = /(\d+):(\d+)\s*(AM|PM)/i;
+      const match = timeString.match(timePattern);
+      
+      if (!match) {
+        return null;
+      }
+      
+      let hours = parseInt(match[1]);
+      const minutes = parseInt(match[2]);
+      const ampm = match[3].toUpperCase();
+      
+      // Convert to 24-hour format
+      if (ampm === 'PM' && hours !== 12) {
+        hours += 12;
+      } else if (ampm === 'AM' && hours === 12) {
+        hours = 0;
+      }
+      
+      // Create new date with extracted time
+      const newDate = new Date(originalDate);
+      newDate.setHours(hours, minutes, 0, 0);
+      
+      this.logger.debug(`Updated event time from ${originalDate} to ${newDate} using LLM-extracted time: ${timeString}`);
+      return newDate;
+      
+    } catch (error) {
+      this.logger.warn(`Error parsing time string "${timeString}":`, error.message);
+      return null;
     }
   }
 }

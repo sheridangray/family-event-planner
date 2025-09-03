@@ -11,11 +11,11 @@ class LLMAgeEvaluator {
     }
   }
 
-  async evaluateEventForChildren(event, childAges) {
+  async evaluateEventForChildren(event, childAges, rawContent = null) {
     try {
       this.logger.debug(`Evaluating event "${event.title}" for children ages ${childAges.join(', ')}`);
       
-      const prompt = this.buildEvaluationPrompt(event, childAges);
+      const prompt = this.buildEvaluationPrompt(event, childAges, rawContent);
       
       const response = await axios.post(this.baseUrl, {
         model: 'meta-llama/Llama-3.2-3B-Instruct-Turbo', // Fast, reliable model
@@ -66,10 +66,10 @@ class LLMAgeEvaluator {
     }
   }
 
-  buildEvaluationPrompt(event, childAges) {
+  buildEvaluationPrompt(event, childAges, rawContent = null) {
     const childAgeList = childAges.join(' and ');
     
-    return `Evaluate if this event is suitable for children aged ${childAgeList}:
+    let prompt = `Evaluate this event for children aged ${childAgeList} and extract accurate time information:
 
 **Event Details:**
 - Title: ${event.title}
@@ -77,10 +77,22 @@ class LLMAgeEvaluator {
 - Listed Age Range: ${event.ageRange ? `${event.ageRange.min}-${event.ageRange.max}` : 'Not specified'}
 - Cost: $${event.cost || 0}
 - Location: ${event.location?.address || 'Not specified'}
-- Source: ${event.source}
+- Source: ${event.source}`;
 
-**Evaluation Criteria:**
-Consider safety, developmental appropriateness, engagement level, and whether the children would genuinely enjoy and benefit from this activity.
+    if (rawContent) {
+      // Truncate raw content to avoid token limits while preserving key info
+      const truncatedContent = rawContent.length > 2000 ? rawContent.substring(0, 2000) + '...' : rawContent;
+      prompt += `
+
+**Raw Page Content:**
+${truncatedContent}`;
+    }
+
+    prompt += `
+
+**Tasks:**
+1. Determine if this event is suitable for children aged ${childAgeList}
+2. Extract the actual event time from the content (look for patterns like "4:30 - 6:30 PM", "10:00 AM", etc.)
 
 **Children's Ages:** ${childAgeList} years old
 
@@ -88,10 +100,13 @@ Please respond in this exact format:
 SUITABLE: [YES/NO]
 CONFIDENCE: [0.0-1.0]
 REASON: [Brief explanation focusing on age appropriateness]
+EVENT_TIME: [Extracted time in format "HH:MM AM/PM" or "HH:MM AM/PM - HH:MM AM/PM" or "ALL_DAY" if no specific time found]
 
 Example responses:
-- For a toddler storytime: "SUITABLE: YES, CONFIDENCE: 0.9, REASON: Perfect for developing language skills and attention span at ages 2-4"
-- For a teen coding workshop: "SUITABLE: NO, CONFIDENCE: 0.95, REASON: Requires abstract thinking and fine motor skills beyond 2-4 year old capabilities"`;
+- For a toddler storytime: "SUITABLE: YES, CONFIDENCE: 0.9, REASON: Perfect for developing language skills and attention span at ages 2-4, EVENT_TIME: 10:30 AM - 11:00 AM"
+- For a teen coding workshop: "SUITABLE: NO, CONFIDENCE: 0.95, REASON: Requires abstract thinking and fine motor skills beyond 2-4 year old capabilities, EVENT_TIME: 2:00 PM - 4:00 PM"`;
+    
+    return prompt;
   }
 
   parseEvaluation(completion, event, childAges) {
@@ -101,16 +116,19 @@ Example responses:
       // Extract structured response
       const suitableMatch = completion.match(/SUITABLE:\s*(YES|NO)/i);
       const confidenceMatch = completion.match(/CONFIDENCE:\s*([\d.]+)/i);
-      const reasonMatch = completion.match(/REASON:\s*(.+?)(?:\n|$)/i);
+      const reasonMatch = completion.match(/REASON:\s*(.+?)(?:,\s*EVENT_TIME|$)/i);
+      const timeMatch = completion.match(/EVENT_TIME:\s*(.+?)(?:\n|$)/i);
       
       const suitable = suitableMatch ? suitableMatch[1].toUpperCase() === 'YES' : true;
       const confidence = confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.5;
       const reason = reasonMatch ? reasonMatch[1].trim() : 'No specific reason provided';
+      const extractedTime = timeMatch ? timeMatch[1].trim() : null;
       
       const result = {
         suitable,
         confidence: Math.min(Math.max(confidence, 0), 1), // Clamp 0-1
         reason,
+        extractedTime,
         childAges: childAges.slice(),
         fallback: false,
         rawResponse: completion.substring(0, 200) // First 200 chars for debugging
@@ -138,7 +156,7 @@ Example responses:
     }
   }
 
-  async batchEvaluateEvents(events, childAges, maxConcurrent = 3) {
+  async batchEvaluateEvents(events, childAges, rawContentMap = null, maxConcurrent = 3) {
     this.logger.info(`Batch evaluating ${events.length} events for children ages ${childAges.join(', ')}`);
     
     const results = new Map();
@@ -154,7 +172,8 @@ Example responses:
       this.logger.debug(`Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} events)`);
       
       const promises = batch.map(async (event) => {
-        const evaluation = await this.evaluateEventForChildren(event, childAges);
+        const rawContent = rawContentMap ? rawContentMap.get(event.id) : null;
+        const evaluation = await this.evaluateEventForChildren(event, childAges, rawContent);
         return { event, evaluation };
       });
       

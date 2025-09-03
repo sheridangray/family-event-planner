@@ -155,7 +155,8 @@ class BaseScraper {
       imageUrl: data.imageUrl,
       status: 'discovered',
       isRecurring: data.isRecurring || false,
-      previouslyAttended: false
+      previouslyAttended: false,
+      rawContent: data.rawContent || null // Store raw content for LLM processing
     };
 
     return event;

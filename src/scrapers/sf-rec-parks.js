@@ -64,6 +64,9 @@ class SFRecParksScraper extends BaseScraper {
           const cost = this.extractCost(descriptionText);
 
           if (this.isValidFamilyEvent(title, descriptionText, ageRange)) {
+            // Extract raw content for this specific event for LLM processing
+            const rawEventContent = $event.text().trim();
+            
             const event = this.createEvent({
               title,
               date,
@@ -74,7 +77,8 @@ class SFRecParksScraper extends BaseScraper {
               cost,
               registrationUrl: fullRegistrationUrl,
               description: descriptionText,
-              imageUrl: fullImageUrl
+              imageUrl: fullImageUrl,
+              rawContent: rawEventContent // Add raw content for LLM time extraction
             });
 
             events.push(event);
