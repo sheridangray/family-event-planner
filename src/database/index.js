@@ -87,6 +87,10 @@ class Database {
     return await this.postgres.saveFamilyMember(member);
   }
 
+  async addFamilyMember(member) {
+    return await this.postgres.addFamilyMember(member);
+  }
+
   async getFamilyMembers(activeOnly = true) {
     return await this.postgres.getFamilyMembers(activeOnly);
   }

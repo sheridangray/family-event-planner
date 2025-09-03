@@ -38,15 +38,15 @@ class EventFilter {
         this.logger.info(
           `Using LLM to evaluate age appropriateness and extract time for ${events.length} events`
         );
-        
+
         // Create raw content map for events that have it
         const rawContentMap = new Map();
-        events.forEach(event => {
+        events.forEach((event) => {
           if (event.rawContent) {
             rawContentMap.set(event.id, event.rawContent);
           }
         });
-        
+
         ageEvaluations = await this.llmEvaluator.batchEvaluateEvents(
           events,
           familyDemographics.childAges,
@@ -70,20 +70,26 @@ class EventFilter {
         const evaluation = ageEvaluations.get(event.id);
         ageAppropriate = evaluation.suitable;
         llmExtractedTime = evaluation.extractedTime;
-        
+
         // Update event date if LLM extracted more specific time
-        if (llmExtractedTime && llmExtractedTime !== 'ALL_DAY') {
+        if (llmExtractedTime && llmExtractedTime !== "ALL_DAY") {
           try {
-            const updatedDate = this.parseTimeAndUpdateDate(event.date, llmExtractedTime);
+            const updatedDate = this.parseTimeAndUpdateDate(
+              event.date,
+              llmExtractedTime
+            );
             if (updatedDate) {
               event.date = updatedDate;
               event.llmExtractedTime = llmExtractedTime;
             }
           } catch (error) {
-            this.logger.warn(`Failed to parse LLM time "${llmExtractedTime}" for ${event.title}:`, error.message);
+            this.logger.warn(
+              `Failed to parse LLM time "${llmExtractedTime}" for ${event.title}:`,
+              error.message
+            );
           }
         }
-        
+
         if (!ageAppropriate) {
           this.logger.debug(
             `Event filtered by LLM - age inappropriate: ${event.title} (${evaluation.reason})`
@@ -158,9 +164,9 @@ class EventFilter {
 
     if (!isAppropriate) {
       const childAges = familyDemographics.childAges.join(", ");
-      this.logger.debug(
-        `Event filtered - age range: ${event.title} (${eventMinAge}-${eventMaxAge} vs children ages ${childAges})`
-      );
+      // this.logger.debug(
+      //   `Event filtered - age range: ${event.title} (${eventMinAge}-${eventMaxAge} vs children ages ${childAges})`
+      // );
     }
 
     return isAppropriate;
@@ -172,9 +178,9 @@ class EventFilter {
 
     // Validate event date
     if (isNaN(eventDate.getTime())) {
-      this.logger.info(
-        `TIME RANGE: Event "${event.title}" rejected - invalid date: ${event.date}`
-      );
+      // this.logger.info(
+      //   `TIME RANGE: Event "${event.title}" rejected - invalid date: ${event.date}`
+      // );
       return false;
     }
 
@@ -182,18 +188,18 @@ class EventFilter {
     const currentYear = new Date().getFullYear();
     const eventYear = eventDate.getFullYear();
     if (eventYear < currentYear || eventYear > currentYear + 2) {
-      this.logger.info(
-        `TIME RANGE: Event "${event.title}" rejected - invalid year ${eventYear}: ${event.date}`
-      );
+      // this.logger.info(
+      //   `TIME RANGE: Event "${event.title}" rejected - invalid year ${eventYear}: ${event.date}`
+      // );
       return false;
     }
 
     // Check if event is in the past (with 1-hour grace period for today's events)
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     if (eventDate < oneHourAgo) {
-      this.logger.info(
-        `TIME RANGE: Event "${event.title}" rejected - event is in the past: ${event.date}`
-      );
+      // this.logger.info(
+      //   `TIME RANGE: Event "${event.title}" rejected - event is in the past: ${event.date}`
+      // );
       return false;
     }
 
@@ -223,19 +229,19 @@ class EventFilter {
     // this.logger.info(`  - Max Allowed (ms): ${maxAdvanceMs}`);
     // this.logger.info(`  - Passes Time Filter: ${isInRange}`);
 
-    if (!isInRange) {
-      if (bufferedTimeDiff < minAdvanceMs) {
-        this.logger.info(
-          `  - REJECTED: Event is ${daysAway} days away, minimum ${config.preferences.minAdvanceDays} days required`
-        );
-      } else if (timeDiff > maxAdvanceMs) {
-        this.logger.info(
-          `  - REJECTED: Event is ${daysAway} days away, maximum ${
-            config.preferences.maxAdvanceMonths * 30
-          } days allowed`
-        );
-      }
-    }
+    // if (!isInRange) {
+    //   if (bufferedTimeDiff < minAdvanceMs) {
+    //     this.logger.info(
+    //       `  - REJECTED: Event is ${daysAway} days away, minimum ${config.preferences.minAdvanceDays} days required`
+    //     );
+    //   } else if (timeDiff > maxAdvanceMs) {
+    //     this.logger.info(
+    //       `  - REJECTED: Event is ${daysAway} days away, maximum ${
+    //         config.preferences.maxAdvanceMonths * 30
+    //       } days allowed`
+    //     );
+    //   }
+    // }
 
     return isInRange;
   }
@@ -302,13 +308,13 @@ class EventFilter {
     // this.logger.info(`      - Compatible: ${isCompatible}`);
 
     if (!isCompatible && !isAllDayEvent) {
-      this.logger.info(
-        `      - REJECTED: Event at ${eventTime} is before earliest weekday time ${earliestTime}`
-      );
+      // this.logger.info(
+      //   `      - REJECTED: Event at ${eventTime} is before earliest weekday time ${earliestTime}`
+      // );
     } else if (isAllDayEvent) {
-      this.logger.info(
-        `      - ACCEPTED: All-day event with assumed time ${eventTime}`
-      );
+      // this.logger.info(
+      //   `      - ACCEPTED: All-day event with assumed time ${eventTime}`
+      // );
     }
 
     return isCompatible;
@@ -333,19 +339,19 @@ class EventFilter {
     }
 
     if (eventTime >= napStart && eventTime <= napEnd) {
-      this.logger.info(
-        `      - REJECTED: Event at ${eventTime} conflicts with nap time (${napStart}-${napEnd})`
-      );
+      // this.logger.info(
+      //   `      - REJECTED: Event at ${eventTime} conflicts with nap time (${napStart}-${napEnd})`
+      // );
       return false;
     }
 
-    if (isAllDayEvent) {
-      this.logger.info(
-        `      - ACCEPTED: All-day weekend event with assumed time ${eventTime}`
-      );
-    } else {
-      this.logger.info(`      - ACCEPTED: Weekend schedule compatible`);
-    }
+    // if (isAllDayEvent) {
+    //   // this.logger.info(
+    //   //   `      - ACCEPTED: All-day weekend event with assumed time ${eventTime}`
+    //   // );
+    // } else {
+    //   this.logger.info(`      - ACCEPTED: Weekend schedule compatible`);
+    // }
     return true;
   }
 
@@ -354,11 +360,11 @@ class EventFilter {
     const eventCost = event.cost || 0;
     const isAffordable = eventCost <= maxCost;
 
-    if (!isAffordable) {
-      // this.logger.info(
-      //   `BUDGET: Event "${event.title}" rejected - costs $${eventCost}, exceeds max budget $${maxCost}`
-      // );
-    }
+    // if (!isAffordable) {
+    // this.logger.info(
+    //   `BUDGET: Event "${event.title}" rejected - costs $${eventCost}, exceeds max budget $${maxCost}`
+    // );
+    // }
 
     return isAffordable;
   }
@@ -374,11 +380,11 @@ class EventFilter {
     const available = event.currentCapacity.available;
     const hasCapacity = available > 0;
 
-    if (!hasCapacity) {
-      // this.logger.info(
-      //   `CAPACITY: Event "${event.title}" rejected - no available spots (${available} available)`
-      // );
-    }
+    // if (!hasCapacity) {
+    // this.logger.info(
+    //   `CAPACITY: Event "${event.title}" rejected - no available spots (${available} available)`
+    // );
+    // }
 
     return hasCapacity;
   }
@@ -386,11 +392,11 @@ class EventFilter {
   isNotPreviouslyAttended(event) {
     const notAttended = !event.previouslyAttended;
 
-    if (!notAttended) {
-      // this.logger.info(
-      //   `ATTENDANCE: Event "${event.title}" rejected - previously attended`
-      // );
-    }
+    // if (!notAttended) {
+    // this.logger.info(
+    //   `ATTENDANCE: Event "${event.title}" rejected - previously attended`
+    // );
+    // }
 
     return notAttended;
   }
@@ -418,9 +424,9 @@ class EventFilter {
           filtered.push(event);
         } else {
           // Joyce's calendar has conflict - block the event
-          this.logger.info(
-            `❌ Event filtered - Joyce's calendar conflict: ${event.title} on ${event.date}`
-          );
+          // this.logger.info(
+          //   `❌ Event filtered - Joyce's calendar conflict: ${event.title} on ${event.date}`
+          // );
           blockedCount++;
         }
       } catch (error) {
@@ -603,31 +609,35 @@ class EventFilter {
       // Parse time patterns like "4:30 PM", "10:00 AM - 11:30 AM", "4:30 - 6:30 PM"
       const timePattern = /(\d+):(\d+)\s*(AM|PM)/i;
       const match = timeString.match(timePattern);
-      
+
       if (!match) {
         return null;
       }
-      
+
       let hours = parseInt(match[1]);
       const minutes = parseInt(match[2]);
       const ampm = match[3].toUpperCase();
-      
+
       // Convert to 24-hour format
-      if (ampm === 'PM' && hours !== 12) {
+      if (ampm === "PM" && hours !== 12) {
         hours += 12;
-      } else if (ampm === 'AM' && hours === 12) {
+      } else if (ampm === "AM" && hours === 12) {
         hours = 0;
       }
-      
+
       // Create new date with extracted time
       const newDate = new Date(originalDate);
       newDate.setHours(hours, minutes, 0, 0);
-      
-      this.logger.debug(`Updated event time from ${originalDate} to ${newDate} using LLM-extracted time: ${timeString}`);
+
+      this.logger.debug(
+        `Updated event time from ${originalDate} to ${newDate} using LLM-extracted time: ${timeString}`
+      );
       return newDate;
-      
     } catch (error) {
-      this.logger.warn(`Error parsing time string "${timeString}":`, error.message);
+      this.logger.warn(
+        `Error parsing time string "${timeString}":`,
+        error.message
+      );
       return null;
     }
   }
