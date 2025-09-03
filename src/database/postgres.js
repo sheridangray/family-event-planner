@@ -64,7 +64,7 @@ class PostgresDatabase {
       CREATE TABLE IF NOT EXISTS sms_approvals (
         id SERIAL PRIMARY KEY,
         event_id VARCHAR(255) REFERENCES events(id) ON DELETE CASCADE,
-        phone_number VARCHAR(20) NOT NULL,
+        phone_number VARCHAR(100) NOT NULL,
         message_sent TEXT NOT NULL,
         response_received TEXT,
         response_at TIMESTAMP,
@@ -132,6 +132,17 @@ class PostgresDatabase {
         UNIQUE(location, date)
       );
 
+      CREATE TABLE IF NOT EXISTS event_interactions (
+        id SERIAL PRIMARY KEY,
+        event_id VARCHAR(255) NOT NULL,
+        event_data JSONB NOT NULL,
+        interaction_type VARCHAR(50) NOT NULL CHECK(interaction_type IN ('discovered', 'proposed', 'approved', 'rejected', 'registered', 'attended', 'cancelled')),
+        interaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        metadata JSONB,
+        user_feedback TEXT,
+        FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE
+      );
+
       CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
       CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
       CREATE INDEX IF NOT EXISTS idx_family_members_role ON family_members(role);
@@ -139,6 +150,9 @@ class PostgresDatabase {
       CREATE INDEX IF NOT EXISTS idx_event_scores_total ON event_scores(total_score);
       CREATE INDEX IF NOT EXISTS idx_event_merges_primary ON event_merges(primary_event_id);
       CREATE INDEX IF NOT EXISTS idx_event_merges_merged_at ON event_merges(merged_at);
+      CREATE INDEX IF NOT EXISTS idx_event_interactions_event_id ON event_interactions(event_id);
+      CREATE INDEX IF NOT EXISTS idx_event_interactions_type ON event_interactions(interaction_type);
+      CREATE INDEX IF NOT EXISTS idx_event_interactions_date ON event_interactions(interaction_date);
     `;
 
     await this.pool.query(createTablesSQL);

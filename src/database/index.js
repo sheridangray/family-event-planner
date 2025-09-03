@@ -127,6 +127,10 @@ class Database {
     return await this.postgres.getCachedWeatherData(location, date);
   }
 
+  async isVenueVisited(venueName) {
+    return await this.postgres.isVenueVisited(venueName);
+  }
+
   async query(sql, params = []) {
     return await this.postgres.query(sql, params);
   }

@@ -332,9 +332,9 @@ class EventFilter {
     // this.logger.info(`      - Is All-Day Event: ${isAllDayEvent}`);
 
     if (eventTime < earliestTime) {
-      this.logger.info(
-        `      - REJECTED: Event at ${eventTime} is before earliest weekend time ${earliestTime}`
-      );
+      // this.logger.info(
+      //   `      - REJECTED: Event at ${eventTime} is before earliest weekend time ${earliestTime}`
+      // );
       return false;
     }
 

@@ -27,22 +27,72 @@ class PreferenceLearningService {
 
   async analyzePreferences() {
     try {
+      this.logger.debug('Starting preference analysis...');
       const interactions = await this.database.getEventInteractions();
+      this.logger.debug(`Retrieved ${interactions?.length || 0} event interactions`);
       
-      const analysis = {
-        preferredVenues: this.analyzeVenuePreferences(interactions),
-        preferredEventTypes: this.analyzeEventTypePreferences(interactions),
-        preferredTimes: this.analyzeTimePreferences(interactions),
-        preferredCosts: this.analyzeCostPreferences(interactions),
-        preferredAgeRanges: this.analyzeAgeRangePreferences(interactions),
-        avoidedKeywords: this.analyzeAvoidedKeywords(interactions),
-        seasonalPreferences: this.analyzeSeasonalPreferences(interactions)
-      };
+      const analysis = {};
+      
+      try {
+        analysis.preferredVenues = this.analyzeVenuePreferences(interactions);
+        this.logger.debug('Venue preferences analyzed successfully');
+      } catch (error) {
+        this.logger.error('Error in analyzeVenuePreferences:', error.message, { stack: error.stack });
+        throw error;
+      }
+      
+      try {
+        analysis.preferredEventTypes = this.analyzeEventTypePreferences(interactions);
+        this.logger.debug('Event type preferences analyzed successfully');
+      } catch (error) {
+        this.logger.error('Error in analyzeEventTypePreferences:', error.message, { stack: error.stack });
+        throw error;
+      }
+      
+      try {
+        analysis.preferredTimes = this.analyzeTimePreferences(interactions);
+        this.logger.debug('Time preferences analyzed successfully');
+      } catch (error) {
+        this.logger.error('Error in analyzeTimePreferences:', error.message, { stack: error.stack });
+        throw error;
+      }
+      
+      try {
+        analysis.preferredCosts = this.analyzeCostPreferences(interactions);
+        this.logger.debug('Cost preferences analyzed successfully');
+      } catch (error) {
+        this.logger.error('Error in analyzeCostPreferences:', error.message, { stack: error.stack });
+        throw error;
+      }
+      
+      try {
+        analysis.preferredAgeRanges = this.analyzeAgeRangePreferences(interactions);
+        this.logger.debug('Age range preferences analyzed successfully');
+      } catch (error) {
+        this.logger.error('Error in analyzeAgeRangePreferences:', error.message, { stack: error.stack });
+        throw error;
+      }
+      
+      try {
+        analysis.avoidedKeywords = this.analyzeAvoidedKeywords(interactions);
+        this.logger.debug('Avoided keywords analyzed successfully');
+      } catch (error) {
+        this.logger.error('Error in analyzeAvoidedKeywords:', error.message, { stack: error.stack });
+        throw error;
+      }
+      
+      try {
+        analysis.seasonalPreferences = this.analyzeSeasonalPreferences(interactions);
+        this.logger.debug('Seasonal preferences analyzed successfully');
+      } catch (error) {
+        this.logger.error('Error in analyzeSeasonalPreferences:', error.message, { stack: error.stack });
+        throw error;
+      }
 
       this.logger.debug('Preference analysis completed', analysis);
       return analysis;
     } catch (error) {
-      this.logger.error('Error analyzing preferences:', error.message);
+      this.logger.error('Error analyzing preferences:', error.message, { stack: error.stack });
       return this.getDefaultPreferences();
     }
   }
