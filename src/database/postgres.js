@@ -42,7 +42,7 @@ class PostgresDatabase {
         capacity_total INTEGER,
         description TEXT,
         image_url TEXT,
-        status VARCHAR(50) DEFAULT 'discovered',
+        status VARCHAR(50) DEFAULT 'discovered' CHECK (status IN ('discovered', 'proposed', 'approved', 'registering', 'registered', 'manual_registration_sent', 'registration_failed', 'rejected', 'cancelled')),
         is_recurring BOOLEAN DEFAULT FALSE,
         previously_attended BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -82,6 +82,10 @@ class PostgresDatabase {
         payment_required BOOLEAN DEFAULT FALSE,
         payment_amount DECIMAL(10, 2),
         payment_completed BOOLEAN DEFAULT FALSE,
+        adapter_used VARCHAR(50) DEFAULT 'manual',
+        triggered_by VARCHAR(50) DEFAULT 'manual',
+        approval_id INTEGER REFERENCES sms_approvals(id),
+        requires_manual_completion BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -172,6 +176,8 @@ class PostgresDatabase {
         date = EXCLUDED.date,
         location_address = EXCLUDED.location_address,
         cost = EXCLUDED.cost,
+        registration_url = EXCLUDED.registration_url,
+        description = EXCLUDED.description,
         updated_at = CURRENT_TIMESTAMP
       RETURNING id
     `;
@@ -179,7 +185,7 @@ class PostgresDatabase {
     const params = [
       event.id, event.source, event.title, event.date, event.location?.address,
       event.location?.lat, event.location?.lng, event.ageRange?.min, event.ageRange?.max,
-      event.cost, event.registrationUrl, event.registrationOpens,
+      event.cost, event.registrationUrl || event.registration_url, event.registrationOpens,
       event.currentCapacity?.available, event.currentCapacity?.total,
       event.description, event.imageUrl, event.status || 'discovered',
       event.isRecurring || false, event.previouslyAttended || false

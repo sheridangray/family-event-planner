@@ -1,4 +1,5 @@
 const { config } = require('../config');
+const RegistrationOrchestrator = require('../services/registration-orchestrator');
 const { GmailMCPClient } = require('./gmail');
 
 class EmailNotificationClient {
@@ -700,12 +701,14 @@ class EmailApprovalManager {
     this.logger = logger;
     this.database = database;
     this.emailClient = new EmailNotificationClient(logger, database);
+    this.registrationOrchestrator = new RegistrationOrchestrator(logger, database);
     this.dailyEventCount = 0;
     this.lastResetDate = new Date().toDateString();
   }
 
   async init() {
     await this.emailClient.init();
+    await this.registrationOrchestrator.init();
   }
 
   async sendEventForApproval(event) {
@@ -761,13 +764,41 @@ class EmailApprovalManager {
       }
       
       if (event.cost > 0) {
+        // For paid events, send payment link first
         await this.emailClient.sendPaymentLink(event, approvalId);
         this.logger.info(`Payment link email sent for paid event: ${event.title}`);
-        return { requiresPayment: true };
+        return { requiresPayment: true, autoRegistrationTriggered: false };
       } else {
-        await this.database.updateEventStatus(eventId, 'ready_for_registration');
-        this.logger.info(`Free event ready for registration: ${event.title}`);
-        return { requiresPayment: false };
+        // For free events, trigger automatic registration
+        this.logger.info(`Triggering auto-registration for free event: ${event.title}`);
+        
+        try {
+          // Trigger auto-registration in background (non-blocking)
+          this.registrationOrchestrator.processAutoRegistration(eventId, approvalId)
+            .then(result => {
+              this.logger.info(`Auto-registration completed for ${event.title}: ${result.success ? 'SUCCESS' : 'FALLBACK'}`);
+            })
+            .catch(error => {
+              this.logger.error(`Auto-registration failed for ${event.title}:`, error.message);
+            });
+          
+          return { 
+            requiresPayment: false, 
+            autoRegistrationTriggered: true,
+            message: 'Auto-registration initiated'
+          };
+          
+        } catch (error) {
+          this.logger.error(`Error triggering auto-registration for ${event.title}:`, error.message);
+          
+          // Fallback to old behavior if auto-registration fails to start
+          await this.database.updateEventStatus(eventId, 'ready_for_registration');
+          return { 
+            requiresPayment: false, 
+            autoRegistrationTriggered: false,
+            error: error.message
+          };
+        }
       }
       
     } catch (error) {
