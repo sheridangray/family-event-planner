@@ -1,10 +1,12 @@
 const express = require('express');
 const eventsRouter = require('./events');
+const dashboardRouter = require('./dashboard');
 const { authenticateAPI } = require('../middleware/auth');
 
 const router = express.Router();
 
 router.use('/events', eventsRouter);
+router.use('/dashboard', dashboardRouter);
 
 router.get('/status', (req, res) => {
   res.json({

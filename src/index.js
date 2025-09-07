@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const winston = require('winston');
 const path = require('path');
 
@@ -46,6 +47,20 @@ const app = express();
 const errorHandler = new ErrorHandler(logger);
 const paymentGuard = new PaymentGuard(logger);
 
+// CORS configuration for frontend
+const corsOptions = {
+  origin: [
+    'http://localhost:3002', // Frontend development
+    'http://localhost:3000', // Alternative frontend port
+    'https://family-event-planner.vercel.app', // Production frontend (if deployed)
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Global error handling middleware
