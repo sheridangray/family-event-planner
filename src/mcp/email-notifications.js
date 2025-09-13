@@ -59,33 +59,27 @@ class EmailNotificationClient {
         throw error;
       }
       
-      let approvalId;
+      let notificationId;
       try {
-        this.logger.debug('Saving SMS approval record to database...');
-        approvalId = await this.database.saveSMSApproval(
+        this.logger.debug('Saving email notification to database...');
+        notificationId = await this.database.saveNotification(
           event.id,
-          recipient, // Store email instead of phone for tracking
-          emailBody
+          'email',
+          recipient,
+          subject,
+          emailBody,
+          emailResult.messageId
         );
-        this.logger.debug(`SMS approval saved with ID: ${approvalId}`);
+        this.logger.debug(`Email notification saved with ID: ${notificationId}`);
       } catch (error) {
-        this.logger.error('Error saving SMS approval to database:', error.message, { stack: error.stack });
+        this.logger.error('Error saving email notification to database:', error.message, { stack: error.stack });
         throw error;
       }
       
-      try {
-        this.logger.debug(`Storing message ID for approval ${approvalId}...`);
-        await this.storeMessageId(approvalId, emailResult.messageId);
-        this.logger.debug('Message ID stored successfully');
-      } catch (error) {
-        this.logger.error('Error storing message ID:', error.message, { stack: error.stack });
-        throw error;
-      }
-      
-      this.logger.info(`Email approval request sent for ${event.title}, approval ID: ${approvalId}`);
+      this.logger.info(`Email notification sent for ${event.title}, notification ID: ${notificationId}`);
       
       return {
-        approvalId,
+        notificationId,
         messageId: emailResult.messageId,
         message: emailBody,
         sentAt: new Date(),
@@ -117,7 +111,7 @@ class EmailNotificationClient {
     
     if (weeksAway <= 2) {
       const timePhrase = weeksAway === 1 ? '1 week away' : `${weeksAway} weeks away`;
-      subject = `URGENT: ${subject} - ${timePhrase}!`;
+      subject = `${subject} - ${timePhrase}`;
     }
     
     return subject;
@@ -178,13 +172,18 @@ class EmailNotificationClient {
       emailBody += `• **YES** - I'll book it automatically\n`;
       emailBody += `• **NO** - Skip this event\n\n`;
     } else {
-      emailBody += `**This event requires payment. Should I proceed?**\n\n`;
-      emailBody += `Reply with:\n`;
-      emailBody += `• **YES** - Send me the payment link\n`;
-      emailBody += `• **NO** - Skip this event\n\n`;
+      emailBody += `**This event requires payment ($${event.cost})**\n\n`;
+      emailBody += `Since this is a paid event, please complete registration directly:\n`;
+      emailBody += `🔗 **Registration Link:** ${event.registrationUrl}\n\n`;
+      emailBody += `The registration form will handle payment securely. After you register, just reply "DONE" to let me know it's complete.\n\n`;
     }
     
-    emailBody += `💡 *Just reply to this email with YES or NO - I'll handle the rest!*\n\n`;
+    if (event.cost === 0) {
+      emailBody += `💡 *Just reply to this email with YES or NO - I'll handle the rest!*\n\n`;
+    } else {
+      emailBody += `💡 *Let me know when you've registered by replying "DONE" or if you want to skip it, reply "NO".*\n\n`;
+    }
+    
     emailBody += `Best,\n`;
     emailBody += `Your Family Event Assistant 🤖`;
     
@@ -196,10 +195,10 @@ class EmailNotificationClient {
     
     if (this.isUrgentEvent(event)) {
       if (event.registrationOpens) {
-        notes += `\n🔥 **URGENT:** Registration just opened!\n`;
+        notes += `\n📅 **Registration recently opened**\n`;
       } else if (event.currentCapacity && event.currentCapacity.available < event.currentCapacity.total * 0.3) {
         const available = event.currentCapacity.available;
-        notes += `\n⚡ **FILLING FAST:** Only ${available} spots remaining\n`;
+        notes += `\n📊 **Limited availability:** ${available} spots remaining\n`;
       }
     }
     
@@ -271,16 +270,42 @@ class EmailNotificationClient {
         return { unclear: true, eventId: latestApproval.event_id };
       }
       
-      // Update response in database (reusing SMS table structure)
-      await this.database.updateSMSResponse(
+      // Update response in database using new notifications system
+      await this.database.updateNotificationResponse(
         latestApproval.id,
         body.substring(0, 500), // Truncate long emails
         response.status
       );
       
       if (response.approved) {
-        await this.database.updateEventStatus(latestApproval.event_id, 'approved');
-        this.logger.info(`✅ Event ${latestApproval.event_id} (${latestApproval.event_title}) approved via email`);
+        // Check if this is a "DONE" response for a paid event
+        const isDoneResponse = ['done', 'completed', 'finished', 'registered'].some(keyword => 
+          response.originalText.toLowerCase().includes(keyword)
+        );
+        
+        if (isDoneResponse && latestApproval.event_cost > 0) {
+          // User completed registration for paid event
+          await this.database.updateEventStatus(latestApproval.event_id, 'registered');
+          this.logger.info(`✅ Paid event ${latestApproval.event_id} (${latestApproval.event_title}) registration completed`);
+          
+          await this.sendConfirmationEmail(from, {
+            type: 'registration_completed',
+            eventTitle: latestApproval.event_title,
+            message: `✅ Perfect! Registration confirmed for "${latestApproval.event_title}". Thanks for letting me know!`
+          });
+          
+          return {
+            approved: true,
+            eventId: latestApproval.event_id,
+            notificationId: latestApproval.id,
+            eventTitle: latestApproval.event_title,
+            registrationCompleted: true
+          };
+        } else {
+          // Regular approval
+          await this.database.updateEventStatus(latestApproval.event_id, 'approved');
+          this.logger.info(`✅ Event ${latestApproval.event_id} (${latestApproval.event_title}) approved via email`);
+        }
         
         // Send confirmation
         await this.sendConfirmationEmail(from, {
@@ -288,14 +313,14 @@ class EmailNotificationClient {
           eventTitle: latestApproval.event_title,
           eventCost: latestApproval.event_cost,
           message: latestApproval.event_cost > 0 
-            ? `✅ Great! "${latestApproval.event_title}" approved. I'll send the payment link next...`
+            ? `✅ Great! "${latestApproval.event_title}" approved. You can register using the link I provided above.`
             : `✅ Perfect! "${latestApproval.event_title}" approved and will be booked automatically. You'll get a calendar invite soon! 🎉`
         });
         
         return {
           approved: true,
           eventId: latestApproval.event_id,
-          approvalId: latestApproval.id,
+          notificationId: latestApproval.id,
           eventTitle: latestApproval.event_title,
           requiresPayment: latestApproval.event_cost > 0
         };
@@ -314,7 +339,7 @@ class EmailNotificationClient {
         return {
           approved: false,
           eventId: latestApproval.event_id,
-          approvalId: latestApproval.id,
+          notificationId: latestApproval.id,
           eventTitle: latestApproval.event_title
         };
         
@@ -333,7 +358,7 @@ class EmailNotificationClient {
         return {
           paymentConfirmed: true,
           eventId: latestApproval.event_id,
-          approvalId: latestApproval.id,
+          notificationId: latestApproval.id,
           eventTitle: latestApproval.event_title
         };
       }
@@ -406,6 +431,7 @@ class EmailNotificationClient {
     const exactApprovalKeywords = [
       'yes', 'y', 'yeah', 'yep', 'yup', 'yas', 'ya', 'yea', 'sure', 'ok', 'okay', 
       'good', 'great', 'perfect', 'awesome', 'approve', 'book', 'register', 'go',
+      'done', 'completed', 'finished', 'registered',
       '1', 'true', 'accept', '✓', '👍'
     ];
     
@@ -523,42 +549,9 @@ class EmailNotificationClient {
 
   async getPendingApprovals(emailAddress) {
     try {
-      // Get pending approvals from database, ordered by most recent first
-      const sql = `
-        SELECT sa.*, e.title as event_title, e.date as event_date, e.cost as event_cost
-        FROM sms_approvals sa
-        LEFT JOIN events e ON sa.event_id = e.id  
-        WHERE sa.phone_number = ? 
-        AND sa.status = 'sent'
-        AND datetime(sa.sent_at, '+24 hours') > datetime('now')
-        ORDER BY sa.sent_at DESC
-      `;
-      
-      // Use database connection through this.database
-      if (this.database.usePostgres) {
-        const pgSql = `
-          SELECT sa.*, e.title as event_title, e.date as event_date, e.cost as event_cost
-          FROM sms_approvals sa
-          LEFT JOIN events e ON sa.event_id = e.id  
-          WHERE sa.phone_number = $1 
-          AND sa.status = 'sent'
-          AND sa.sent_at + INTERVAL '24 hours' > NOW()
-          ORDER BY sa.sent_at DESC
-        `;
-        
-        const result = await this.database.postgres.query(pgSql, [emailAddress]);
-        return result.rows;
-      } else {
-        return new Promise((resolve, reject) => {
-          this.database.db.all(sql, [emailAddress], (err, rows) => {
-            if (err) {
-              reject(err);
-              return;
-            }
-            resolve(rows || []);
-          });
-        });
-      }
+      // Get pending notifications from the unified notifications table
+      const notifications = await this.database.getPendingNotifications(emailAddress, 'email');
+      return notifications;
     } catch (error) {
       this.logger.error(`Error getting pending approvals for ${emailAddress}:`, error.message);
       return [];
@@ -587,6 +580,8 @@ class EmailNotificationClient {
         return `👍 Event Skipped: ${confirmation.eventTitle}`;
       case 'payment_confirmed':
         return `💳 Payment Confirmed: ${confirmation.eventTitle}`;
+      case 'registration_completed':
+        return `🎉 Registration Confirmed: ${confirmation.eventTitle}`;
       case 'unclear':
         return `❓ Please clarify your response`;
       case 'no_pending':
@@ -669,31 +664,6 @@ class EmailNotificationClient {
     return emailBody;
   }
 
-  async storeMessageId(approvalId, messageId) {
-    try {
-      // Store Message-ID in approval record for reply detection
-      // We'll store it in the message_sent field as JSON with the messageId
-      const existingMessage = await this.database.query(
-        'SELECT message_sent FROM sms_approvals WHERE id = $1',
-        [approvalId]
-      );
-      
-      const messageData = {
-        messageId: messageId,
-        originalBody: existingMessage.rows?.[0]?.message_sent || ''
-      };
-      
-      await this.database.query(
-        'UPDATE sms_approvals SET message_sent = $1 WHERE id = $2',
-        [JSON.stringify(messageData), approvalId]
-      );
-      
-      this.logger.debug(`Stored Message-ID ${messageId} for approval ${approvalId}`);
-      
-    } catch (error) {
-      this.logger.warn('Could not store Message-ID for approval:', error.message);
-    }
-  }
 }
 
 class EmailApprovalManager {
@@ -701,7 +671,7 @@ class EmailApprovalManager {
     this.logger = logger;
     this.database = database;
     this.emailClient = new EmailNotificationClient(logger, database);
-    this.registrationOrchestrator = new RegistrationOrchestrator(logger, database);
+    this.registrationOrchestrator = new RegistrationOrchestrator(logger, database, this.emailClient);
     this.dailyEventCount = 0;
     this.lastResetDate = new Date().toDateString();
   }
@@ -764,9 +734,9 @@ class EmailApprovalManager {
       }
       
       if (event.cost > 0) {
-        // For paid events, send payment link first
-        await this.emailClient.sendPaymentLink(event, approvalId);
-        this.logger.info(`Payment link email sent for paid event: ${event.title}`);
+        // For paid events, user handles registration manually via provided link
+        await this.database.updateEventStatus(eventId, 'manual_registration_sent');
+        this.logger.info(`Paid event approved, user will register manually: ${event.title}`);
         return { requiresPayment: true, autoRegistrationTriggered: false };
       } else {
         // For free events, trigger automatic registration

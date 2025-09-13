@@ -11,6 +11,9 @@ const SFRecParksAdapter = require('./adapters/sf-recparks-adapter');
 const ExploraoriumAdapter = require('./adapters/exploratorium-adapter');
 const SFLibraryAdapter = require('./adapters/sf-library-adapter');
 const CommunityEventsAdapter = require('./adapters/community-events-adapter');
+const YBGFestivalAdapter = require('./adapters/ybg-festival-adapter');
+const FuncheapSFAdapter = require('./adapters/funcheap-sf-adapter');
+const ChaseCenterAdapter = require('./adapters/chase-center-adapter');
 
 class RegistrationAutomator {
   constructor(logger, database) {
@@ -127,24 +130,28 @@ class RegistrationAutomator {
     this.adapters['sfpl.org'] = new SFLibraryAdapter(this.logger, this.familyData);
     this.adapters['www.sfpl.org'] = new SFLibraryAdapter(this.logger, this.familyData);
     
-    // Community events adapter (handles multiple domains)
+    // YBG Festival dedicated adapter
+    this.adapters['ybgfestival.org'] = new YBGFestivalAdapter(this.logger, this.familyData);
+    this.adapters['www.ybgfestival.org'] = new YBGFestivalAdapter(this.logger, this.familyData);
+    
+    // Funcheap SF dedicated adapter
+    this.adapters['sf.funcheap.com'] = new FuncheapSFAdapter(this.logger, this.familyData);
+    this.adapters['funcheap.com'] = new FuncheapSFAdapter(this.logger, this.familyData);
+    
+    // Community events adapter (handles remaining domains)
     const communityAdapter = new CommunityEventsAdapter(this.logger, this.familyData);
     this.adapters['bayareakidfun.com'] = communityAdapter;
     this.adapters['www.bayareakidfun.com'] = communityAdapter;
-    this.adapters['sf.funcheap.com'] = communityAdapter;
-    this.adapters['funcheap.com'] = communityAdapter;
     this.adapters['kidsoutandabout.com'] = communityAdapter;
     this.adapters['sanfran.kidsoutandabout.com'] = communityAdapter;
-    this.adapters['ybgfestival.org'] = communityAdapter;
-    this.adapters['www.ybgfestival.org'] = communityAdapter;
     
-    // Chase Center - typically uses Ticketmaster (third-party)
-    this.adapters['chasecenter.com'] = communityAdapter; // Uses community adapter for third-party detection
-    this.adapters['www.chasecenter.com'] = communityAdapter;
+    // Chase Center dedicated adapter  
+    this.adapters['chasecenter.com'] = new ChaseCenterAdapter(this.logger, this.familyData);
+    this.adapters['www.chasecenter.com'] = new ChaseCenterAdapter(this.logger, this.familyData);
     
     const customAdapterCount = Object.keys(this.adapters).filter(k => k !== 'generic').length;
     this.logger.debug(`Initialized ${Object.keys(this.adapters).length} registration adapters (${customAdapterCount} custom domains, 1 generic)`);
-    this.logger.info(`Custom registration adapters active for: Cal Academy, SF Rec & Parks, Exploratorium, SF Library, and Community Events`);
+    this.logger.info(`Custom registration adapters active for: Cal Academy, SF Rec & Parks, Exploratorium, SF Library, YBG Festival, Funcheap SF, Chase Center, and Community Events`);
   }
 
   /**
