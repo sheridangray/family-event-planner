@@ -8,6 +8,7 @@ const SanFranKidsOutAndAboutScraper = require('./sanfran-kidsoutandabout');
 const YBGFestivalScraper = require('./ybgfestival');
 const ExploratoriumScraper = require('./exploratorium');
 const EventDeduplicator = require('../utils/event-deduplicator');
+const EventFilter = require('../filters');
 
 class ScraperManager {
   constructor(logger, database) {
@@ -15,6 +16,7 @@ class ScraperManager {
     this.database = database;
     this.scrapers = [];
     this.deduplicator = new EventDeduplicator(logger, database);
+    this.eventFilter = new EventFilter(logger, database);
     this.initScrapers();
   }
 
@@ -32,7 +34,7 @@ class ScraperManager {
     ];
   }
 
-  async scrapeAll() {
+  async scrapeAll(discoveryRunId = null) {
     const allRawEvents = [];
     
     // First, collect all events from all scrapers
@@ -53,18 +55,71 @@ class ScraperManager {
 
     this.logger.info(`Raw events collected: ${allRawEvents.length}`);
 
-    // Deduplicate all events
-    const uniqueEvents = await this.deduplicator.deduplicateEvents(allRawEvents);
+    // DEBUGGING: Deduplication disabled - commented out for debugging
+    // const deduplicationResult = await this.deduplicator.deduplicateEvents(allRawEvents);
+    // const { uniqueEvents, mergeInformation } = deduplicationResult;
     
-    // Save deduplicated events to database
+    // Use raw events directly (no deduplication for debugging)
+    const uniqueEvents = allRawEvents;
+    const mergeInformation = [];
+    
+    // Save all events to database (no deduplication during debugging)
     const savedEvents = [];
     for (const event of uniqueEvents) {
       try {
-        await this.database.saveEvent(event);
-        savedEvents.push(event);
-        this.logger.info(`Saved event: ${event.title} on ${event.date}${event.sources ? ` (sources: ${event.sources.join(', ')})` : ''}`);
+        // Assign discovery run ID if provided
+        if (discoveryRunId) {
+          event.discovery_run_id = discoveryRunId;
+        }
+        
+        const eventId = await this.database.saveEvent(event);
+        if (eventId) {
+          savedEvents.push(event);
+          this.logger.info(`Saved event: ${event.title} on ${event.date}${event.sources ? ` (sources: ${event.sources.join(', ')})` : ''} [ID: ${eventId}]${discoveryRunId ? ` [Run: ${discoveryRunId}]` : ''}`);
+        } else {
+          this.logger.warn(`Event save returned no ID: ${event.title} on ${event.date} [Source: ${event.source}]`);
+        }
       } catch (error) {
-        this.logger.error(`Error saving event ${event.title}:`, error.message);
+        this.logger.error(`Error saving event "${event.title}" from ${event.source}:`, {
+          error: error.message,
+          stack: error.stack,
+          eventId: event.id,
+          eventData: {
+            title: event.title,
+            date: event.date,
+            source: event.source,
+            location: event.location?.address || 'No address',
+            cost: event.cost,
+            ageRange: event.ageRange
+          }
+        });
+      }
+    }
+    
+    // Record merge information after successful event saves
+    for (const mergeInfo of mergeInformation) {
+      try {
+        const mergeId = await this.database.recordEventMerge(
+          mergeInfo.primaryEventId,
+          mergeInfo.mergedEvent,
+          mergeInfo.similarityScore,
+          mergeInfo.mergeType
+        );
+        
+        if (mergeId) {
+          this.logger.debug(`Recorded ${mergeInfo.mergeType} merge: "${mergeInfo.mergedEvent.title}" -> ${mergeInfo.primaryEventId} [Score: ${mergeInfo.similarityScore.toFixed(3)}, MergeID: ${mergeId}]`);
+        } else {
+          this.logger.debug(`Skipped recording ${mergeInfo.mergeType} merge for "${mergeInfo.mergedEvent.title}" - primary event ${mergeInfo.primaryEventId} not found in database`);
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to record event merge in database:`, {
+          error: error.message,
+          primaryEventId: mergeInfo.primaryEventId,
+          mergedEventTitle: mergeInfo.mergedEvent.title,
+          mergedEventSource: mergeInfo.mergedEvent.source,
+          similarityScore: mergeInfo.similarityScore,
+          mergeType: mergeInfo.mergeType
+        });
       }
     }
 
@@ -76,28 +131,136 @@ class ScraperManager {
     return savedEvents;
   }
 
-  async scrapeSource(sourceName) {
+  async scrapeSource(sourceName, discoveryRunId = null) {
     const scraper = this.scrapers.find(s => s.name === sourceName);
     if (!scraper) {
       throw new Error(`Scraper not found: ${sourceName}`);
     }
 
     try {
-      this.logger.info(`Starting targeted scrape for ${scraper.name}`);
+      this.logger.info(`Starting targeted scrape for ${scraper.name}${discoveryRunId ? ` (Discovery Run #${discoveryRunId})` : ''}`);
       const rawEvents = await scraper.scrape();
       
-      // Deduplicate events from this source against existing events
-      const uniqueEvents = await this.deduplicator.deduplicateEvents(rawEvents);
+      // Save all discovered events (including duplicates) if we have a discovery run ID
+      if (discoveryRunId && rawEvents.length > 0) {
+        // Run filtering to get filter results for each event
+        const eventsWithFilters = [];
+        for (const event of rawEvents) {
+          try {
+            // Apply filters to get detailed results
+            const filteredResult = await this.eventFilter.filterEvents([event]);
+            const filterResults = event.filterResults || { passed: false, reasons: ['No filter results'] };
+            
+            eventsWithFilters.push({
+              event,
+              filterResults
+            });
+          } catch (error) {
+            this.logger.warn(`Error filtering event for discovery log: ${event.title}:`, error.message);
+            eventsWithFilters.push({
+              event,
+              filterResults: { passed: false, reasons: [`Filter error: ${error.message}`] }
+            });
+          }
+        }
+        
+        // Save all discovered events to discovered_events table
+        for (const { event, filterResults } of eventsWithFilters) {
+          try {
+            await this.database.saveDiscoveredEvent(
+              discoveryRunId,
+              scraper.name,
+              event,
+              false, // We'll mark as duplicate later
+              null,
+              filterResults
+            );
+          } catch (error) {
+            this.logger.error(`Error saving discovered event "${event.title}":`, error.message);
+          }
+        }
+      }
       
-      // Save deduplicated events
+      // DEBUGGING: Deduplication disabled for single scraper - commented out for debugging
+      // const deduplicationResult = await this.deduplicator.deduplicateEvents(rawEvents);
+      // const { uniqueEvents, mergeInformation } = deduplicationResult;
+      
+      // Use raw events directly (no deduplication for debugging)
+      const uniqueEvents = rawEvents;
+      const mergeInformation = [];
+      
+      // Skip duplicate marking during debugging
+      // if (discoveryRunId && mergeInformation.length > 0) {
+      //   for (const mergeInfo of mergeInformation) {
+      //     try {
+      //       await this.database.query(`
+      //         UPDATE discovered_events 
+      //         SET is_duplicate = true, duplicate_of = $1 
+      //         WHERE discovery_run_id = $2 AND event_id = $3
+      //       `, [mergeInfo.primaryEventId, discoveryRunId, mergeInfo.mergedEvent.id]);
+      //     } catch (error) {
+      //       this.logger.warn(`Error marking event as duplicate in discovered_events: ${error.message}`);
+      //     }
+      //   }
+      // }
+      
+      // Save all events (no deduplication during debugging)
       const savedEvents = [];
       for (const event of uniqueEvents) {
         try {
-          await this.database.saveEvent(event);
-          savedEvents.push(event);
-          this.logger.info(`Saved event: ${event.title} on ${event.date}${event.sources ? ` (sources: ${event.sources.join(', ')})` : ''}`);
+          // Assign discovery run ID if provided
+          if (discoveryRunId) {
+            event.discovery_run_id = discoveryRunId;
+          }
+          
+          const eventId = await this.database.saveEvent(event);
+          if (eventId) {
+            savedEvents.push(event);
+            this.logger.info(`Saved event: ${event.title} on ${event.date}${event.sources ? ` (sources: ${event.sources.join(', ')})` : ''} [ID: ${eventId}]${discoveryRunId ? ` [Run: ${discoveryRunId}]` : ''}`);
+          } else {
+            this.logger.warn(`Event save returned no ID: ${event.title} on ${event.date} [Source: ${event.source}]`);
+          }
         } catch (error) {
-          this.logger.error(`Error saving event ${event.title}:`, error.message);
+          this.logger.error(`Error saving event "${event.title}" from ${event.source}:`, {
+            error: error.message,
+            stack: error.stack,
+            eventId: event.id,
+            eventData: {
+              title: event.title,
+              date: event.date,
+              source: event.source,
+              location: event.location?.address || 'No address',
+              cost: event.cost,
+              ageRange: event.ageRange
+            }
+          });
+        }
+      }
+      
+      // Record merge information after successful event saves
+      for (const mergeInfo of mergeInformation) {
+        try {
+          const mergeId = await this.database.recordEventMerge(
+            mergeInfo.primaryEventId,
+            mergeInfo.mergedEvent,
+            mergeInfo.similarityScore,
+            mergeInfo.mergeType
+          );
+          
+          if (mergeId) {
+            this.logger.debug(`Recorded ${mergeInfo.mergeType} merge: "${mergeInfo.mergedEvent.title}" -> ${mergeInfo.primaryEventId} [Score: ${mergeInfo.similarityScore.toFixed(3)}, MergeID: ${mergeId}]`);
+          } else {
+            this.logger.debug(`Skipped recording ${mergeInfo.mergeType} merge for "${mergeInfo.mergedEvent.title}" - primary event ${mergeInfo.primaryEventId} not found in database`);
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to record event merge in database:`, {
+            error: error.message,
+            primaryEventId: mergeInfo.primaryEventId,
+            mergedEventTitle: mergeInfo.mergedEvent.title,
+            mergedEventSource: mergeInfo.mergedEvent.source,
+            similarityScore: mergeInfo.similarityScore,
+            mergeType: mergeInfo.mergeType
+          });
         }
       }
       

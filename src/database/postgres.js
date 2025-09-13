@@ -147,6 +147,36 @@ class PostgresDatabase {
         FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS discovery_runs (
+        id SERIAL PRIMARY KEY,
+        trigger_type VARCHAR(20) NOT NULL CHECK(trigger_type IN ('manual', 'scheduled')),
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP,
+        scrapers_count INTEGER DEFAULT 0,
+        events_found INTEGER DEFAULT 0,
+        events_saved INTEGER DEFAULT 0,
+        events_duplicated INTEGER DEFAULT 0,
+        status VARCHAR(20) DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed')),
+        error_message TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS discovered_events (
+        id SERIAL PRIMARY KEY,
+        discovery_run_id INTEGER NOT NULL,
+        scraper_name VARCHAR(100) NOT NULL,
+        event_id VARCHAR(255) NOT NULL,
+        event_title TEXT NOT NULL,
+        event_date TIMESTAMP,
+        event_cost DECIMAL(10, 2) DEFAULT 0,
+        venue_name TEXT,
+        event_data JSONB NOT NULL,
+        is_duplicate BOOLEAN DEFAULT FALSE,
+        duplicate_of VARCHAR(255),
+        filter_results JSONB,
+        discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (discovery_run_id) REFERENCES discovery_runs(id) ON DELETE CASCADE
+      );
+
       CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
       CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
       CREATE INDEX IF NOT EXISTS idx_family_members_role ON family_members(role);
@@ -161,16 +191,193 @@ class PostgresDatabase {
 
     await this.pool.query(createTablesSQL);
     console.log('Database tables created successfully');
+    
+    // Run migrations for existing databases to add missing columns
+    await this.runMigrations();
+  }
+
+  async runMigrations() {
+    try {
+      // Add missing columns to events table if they don't exist
+      const addColumnsSQL = `
+        -- Add sources field to track multiple sources for merged events
+        ALTER TABLE events ADD COLUMN IF NOT EXISTS sources TEXT;
+        
+        -- Add alternate URLs for events that were merged
+        ALTER TABLE events ADD COLUMN IF NOT EXISTS alternate_urls TEXT;
+        
+        -- Add merge tracking fields
+        ALTER TABLE events ADD COLUMN IF NOT EXISTS merge_count INTEGER DEFAULT 1;
+        ALTER TABLE events ADD COLUMN IF NOT EXISTS last_merged TIMESTAMP;
+        
+        -- Add fingerprint field for exact duplicate detection
+        ALTER TABLE events ADD COLUMN IF NOT EXISTS fingerprint TEXT;
+        
+        -- Add discovery run tracking field
+        ALTER TABLE events ADD COLUMN IF NOT EXISTS discovery_run_id INTEGER;
+      `;
+      
+      await this.pool.query(addColumnsSQL);
+      
+      // Add indexes after columns are created
+      const addIndexesSQL = `
+        -- Create indexes for new columns
+        CREATE INDEX IF NOT EXISTS idx_events_fingerprint ON events(fingerprint);
+        CREATE INDEX IF NOT EXISTS idx_events_sources ON events(sources);
+        CREATE INDEX IF NOT EXISTS idx_events_merge_count ON events(merge_count);
+        CREATE INDEX IF NOT EXISTS idx_events_discovery_run_id ON events(discovery_run_id);
+      `;
+      
+      await this.pool.query(addIndexesSQL);
+      
+      // Update existing events to have default values for new columns
+      const updateDefaultsSQL = `
+        UPDATE events SET 
+          sources = jsonb_build_array(source),
+          merge_count = 1,
+          fingerprint = id
+        WHERE sources IS NULL;
+      `;
+      
+      await this.pool.query(updateDefaultsSQL);
+      
+      console.log('Database migrations completed successfully');
+    } catch (error) {
+      console.warn('Migration warning (may be expected if columns already exist):', error.message);
+    }
+  }
+
+  /**
+   * Validate and sanitize event data before database insertion
+   * @param {Object} event - The event to validate
+   * @returns {Object} Validated and sanitized event
+   */
+  validateEventData(event) {
+    const validated = { ...event };
+    
+    // Required fields validation
+    if (!validated.id || typeof validated.id !== 'string') {
+      throw new Error('Event ID is required and must be a string');
+    }
+    if (!validated.source || typeof validated.source !== 'string') {
+      throw new Error('Event source is required and must be a string');
+    }
+    if (!validated.title || typeof validated.title !== 'string') {
+      throw new Error('Event title is required and must be a string');
+    }
+    if (!validated.date) {
+      throw new Error('Event date is required');
+    }
+    
+    // String field length limits based on database schema
+    validated.id = String(validated.id).substring(0, 255);
+    validated.source = String(validated.source).substring(0, 100);
+    validated.title = String(validated.title).substring(0, 2000); // TEXT field, reasonable limit
+    
+    // Optional string fields with truncation
+    if (validated.location?.address) {
+      validated.location.address = String(validated.location.address).substring(0, 2000);
+    }
+    if (validated.registrationUrl || validated.registration_url) {
+      const url = validated.registrationUrl || validated.registration_url;
+      validated.registrationUrl = String(url).substring(0, 2000);
+    }
+    if (validated.description) {
+      validated.description = String(validated.description).substring(0, 5000); // Reasonable limit for TEXT
+    }
+    if (validated.imageUrl) {
+      validated.imageUrl = String(validated.imageUrl).substring(0, 2000);
+    }
+    
+    // Numeric field validation
+    if (validated.location?.lat !== null && validated.location?.lat !== undefined) {
+      const lat = parseFloat(validated.location.lat);
+      if (isNaN(lat) || lat < -90 || lat > 90) {
+        validated.location.lat = null; // Invalid latitude
+      } else {
+        validated.location.lat = lat;
+      }
+    }
+    
+    if (validated.location?.lng !== null && validated.location?.lng !== undefined) {
+      const lng = parseFloat(validated.location.lng);
+      if (isNaN(lng) || lng < -180 || lng > 180) {
+        validated.location.lng = null; // Invalid longitude
+      } else {
+        validated.location.lng = lng;
+      }
+    }
+    
+    // Age range validation
+    if (validated.ageRange?.min !== null && validated.ageRange?.min !== undefined) {
+      const ageMin = parseInt(validated.ageRange.min);
+      validated.ageRange.min = isNaN(ageMin) || ageMin < 0 ? 0 : Math.min(ageMin, 100);
+    }
+    
+    if (validated.ageRange?.max !== null && validated.ageRange?.max !== undefined) {
+      const ageMax = parseInt(validated.ageRange.max);
+      validated.ageRange.max = isNaN(ageMax) || ageMax < 0 ? 18 : Math.min(ageMax, 100);
+    }
+    
+    // Cost validation
+    if (validated.cost !== null && validated.cost !== undefined) {
+      const cost = parseFloat(validated.cost);
+      validated.cost = isNaN(cost) || cost < 0 ? 0 : Math.min(cost, 99999999.99); // DECIMAL(10,2) limit
+    }
+    
+    // Capacity validation
+    if (validated.currentCapacity?.available !== null && validated.currentCapacity?.available !== undefined) {
+      const available = parseInt(validated.currentCapacity.available);
+      validated.currentCapacity.available = isNaN(available) || available < 0 ? null : Math.min(available, 2147483647); // INTEGER limit
+    }
+    
+    if (validated.currentCapacity?.total !== null && validated.currentCapacity?.total !== undefined) {
+      const total = parseInt(validated.currentCapacity.total);
+      validated.currentCapacity.total = isNaN(total) || total < 0 ? null : Math.min(total, 2147483647); // INTEGER limit
+    }
+    
+    // Date validation
+    try {
+      validated.date = new Date(validated.date);
+      if (isNaN(validated.date.getTime())) {
+        throw new Error('Invalid event date');
+      }
+    } catch (error) {
+      throw new Error(`Invalid event date: ${error.message}`);
+    }
+    
+    // Registration opens date validation
+    if (validated.registrationOpens) {
+      try {
+        validated.registrationOpens = new Date(validated.registrationOpens);
+        if (isNaN(validated.registrationOpens.getTime())) {
+          validated.registrationOpens = null; // Optional field, set to null if invalid
+        }
+      } catch (error) {
+        validated.registrationOpens = null;
+      }
+    }
+    
+    // Status validation
+    const validStatuses = ['discovered', 'proposed', 'approved', 'registering', 'registered', 'manual_registration_sent', 'registration_failed', 'rejected', 'cancelled'];
+    if (validated.status && !validStatuses.includes(validated.status)) {
+      validated.status = 'discovered'; // Default to discovered if invalid
+    }
+    
+    return validated;
   }
 
   async saveEvent(event) {
+    // Validate and sanitize event data
+    const validatedEvent = this.validateEventData(event);
+    
     const sql = `
       INSERT INTO events (
         id, source, title, date, location_address, location_lat, location_lng,
         age_range_min, age_range_max, cost, registration_url, registration_opens,
         capacity_available, capacity_total, description, image_url, status,
-        is_recurring, previously_attended, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
+        is_recurring, previously_attended, discovery_run_id, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP)
       ON CONFLICT (id) DO UPDATE SET
         title = EXCLUDED.title,
         date = EXCLUDED.date,
@@ -183,12 +390,12 @@ class PostgresDatabase {
     `;
     
     const params = [
-      event.id, event.source, event.title, event.date, event.location?.address,
-      event.location?.lat, event.location?.lng, event.ageRange?.min, event.ageRange?.max,
-      event.cost, event.registrationUrl || event.registration_url, event.registrationOpens,
-      event.currentCapacity?.available, event.currentCapacity?.total,
-      event.description, event.imageUrl, event.status || 'discovered',
-      event.isRecurring || false, event.previouslyAttended || false
+      validatedEvent.id, validatedEvent.source, validatedEvent.title, validatedEvent.date, validatedEvent.location?.address,
+      validatedEvent.location?.lat, validatedEvent.location?.lng, validatedEvent.ageRange?.min, validatedEvent.ageRange?.max,
+      validatedEvent.cost, validatedEvent.registrationUrl || validatedEvent.registration_url, validatedEvent.registrationOpens,
+      validatedEvent.currentCapacity?.available, validatedEvent.currentCapacity?.total,
+      validatedEvent.description, validatedEvent.imageUrl, validatedEvent.status || 'discovered',
+      validatedEvent.isRecurring || false, validatedEvent.previouslyAttended || false, validatedEvent.discovery_run_id || null
     ];
 
     const result = await this.pool.query(sql, params);
@@ -256,6 +463,94 @@ class PostgresDatabase {
     `;
 
     const result = await this.pool.query(sql, [response, status, approvalId]);
+    return result.rowCount;
+  }
+
+  // NEW UNIFIED NOTIFICATIONS METHODS
+
+  /**
+   * Save a notification (email or SMS) to the unified notifications table
+   */
+  async saveNotification(eventId, notificationType, recipient, subject, messageContent, messageId = null) {
+    const sql = `
+      INSERT INTO notifications (
+        event_id, notification_type, recipient, subject, 
+        message_content, message_id, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'sent')
+      RETURNING id
+    `;
+
+    const params = [eventId, notificationType, recipient, subject, messageContent, messageId];
+    const result = await this.pool.query(sql, params);
+    return result.rows[0]?.id;
+  }
+
+  /**
+   * Update notification response
+   */
+  async updateNotificationResponse(notificationId, response, responseStatus) {
+    const sql = `
+      UPDATE notifications 
+      SET response_received = $1, response_at = CURRENT_TIMESTAMP, 
+          response_status = $2, status = $3, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+    `;
+
+    const result = await this.pool.query(sql, [response, responseStatus, responseStatus, notificationId]);
+    return result.rowCount;
+  }
+
+  /**
+   * Get pending notifications for a recipient
+   */
+  async getPendingNotifications(recipient, notificationType = null) {
+    let sql = `
+      SELECT n.*, e.title as event_title, e.date as event_date, e.cost as event_cost
+      FROM notifications n
+      LEFT JOIN events e ON n.event_id = e.id  
+      WHERE n.recipient = $1 
+      AND n.status IN ('sent', 'pending')
+      AND n.created_at + INTERVAL '24 hours' > NOW()
+    `;
+    
+    const params = [recipient];
+    
+    if (notificationType) {
+      sql += ` AND n.notification_type = $2`;
+      params.push(notificationType);
+    }
+    
+    sql += ` ORDER BY n.created_at DESC`;
+
+    const result = await this.pool.query(sql, params);
+    return result.rows;
+  }
+
+  /**
+   * Get notifications by event ID
+   */
+  async getNotificationsByEventId(eventId) {
+    const sql = `
+      SELECT * FROM notifications 
+      WHERE event_id = $1 
+      ORDER BY created_at DESC
+    `;
+    
+    const result = await this.pool.query(sql, [eventId]);
+    return result.rows;
+  }
+
+  /**
+   * Update notification status
+   */
+  async updateNotificationStatus(notificationId, status) {
+    const sql = `
+      UPDATE notifications 
+      SET status = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+
+    const result = await this.pool.query(sql, [status, notificationId]);
     return result.rowCount;
   }
 
@@ -376,6 +671,15 @@ class PostgresDatabase {
   }
 
   async recordEventMerge(primaryEventId, mergedEvent, similarityScore, mergeType) {
+    // First check if the primary event exists to avoid foreign key constraint violations
+    const checkEventSql = `SELECT id FROM events WHERE id = $1`;
+    const eventExists = await this.pool.query(checkEventSql, [primaryEventId]);
+    
+    if (eventExists.rows.length === 0) {
+      this.logger.warn(`Cannot record merge: primary event ${primaryEventId} does not exist in database`);
+      return null; // Return null instead of failing
+    }
+
     const sql = `
       INSERT INTO event_merges (
         primary_event_id, merged_event_id, merged_event_data, 
@@ -392,8 +696,17 @@ class PostgresDatabase {
       mergeType
     ];
 
-    const result = await this.pool.query(sql, params);
-    return result.rows[0].id;
+    try {
+      const result = await this.pool.query(sql, params);
+      return result.rows[0].id;
+    } catch (error) {
+      this.logger.warn(`Failed to record event merge: ${error.message}`, {
+        primaryEventId,
+        mergedEventId: mergedEvent.id,
+        mergeType
+      });
+      return null; // Return null instead of throwing
+    }
   }
 
   async getEventMergeHistory(eventId, limit = 10) {
@@ -591,6 +904,105 @@ class PostgresDatabase {
       await this.pool.end();
       console.log('Database connection closed');
     }
+  }
+
+  // Discovery Runs methods
+  async createDiscoveryRun(triggerType = 'manual') {
+    const sql = `
+      INSERT INTO discovery_runs (trigger_type, started_at, status)
+      VALUES ($1, CURRENT_TIMESTAMP, 'running')
+      RETURNING id
+    `;
+    const result = await this.pool.query(sql, [triggerType]);
+    return result.rows[0].id;
+  }
+
+  async updateDiscoveryRun(runId, updates) {
+    const updateFields = [];
+    const values = [];
+    let paramCounter = 1;
+
+    Object.entries(updates).forEach(([key, value]) => {
+      updateFields.push(`${key} = $${paramCounter}`);
+      values.push(value);
+      paramCounter++;
+    });
+
+    if (updateFields.length === 0) return;
+
+    const sql = `
+      UPDATE discovery_runs 
+      SET ${updateFields.join(', ')}, completed_at = CURRENT_TIMESTAMP
+      WHERE id = $${paramCounter}
+    `;
+    values.push(runId);
+
+    await this.pool.query(sql, values);
+  }
+
+  async getDiscoveryRuns(limit = 10) {
+    const sql = `
+      SELECT * FROM discovery_runs 
+      ORDER BY started_at DESC 
+      LIMIT $1
+    `;
+    const result = await this.pool.query(sql, [limit]);
+    return result.rows;
+  }
+
+  async getLatestDiscoveryRunId() {
+    const sql = `
+      SELECT id FROM discovery_runs 
+      ORDER BY started_at DESC 
+      LIMIT 1
+    `;
+    const result = await this.pool.query(sql);
+    return result.rows[0]?.id || 0;
+  }
+
+  // Discovered Events methods
+  async saveDiscoveredEvent(discoveryRunId, scraperName, event, isDuplicate = false, duplicateOf = null, filterResults = null) {
+    const sql = `
+      INSERT INTO discovered_events (
+        discovery_run_id, scraper_name, event_id, event_title, event_date, 
+        event_cost, venue_name, event_data, is_duplicate, duplicate_of, filter_results
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id
+    `;
+    const result = await this.pool.query(sql, [
+      discoveryRunId,
+      scraperName,
+      event.id,
+      event.title,
+      event.date,
+      event.cost || 0,
+      event.venue_name || event.location?.name,
+      JSON.stringify(event),
+      isDuplicate,
+      duplicateOf,
+      filterResults ? JSON.stringify(filterResults) : null
+    ]);
+    return result.rows[0].id;
+  }
+
+  async getDiscoveredEventsByRun(discoveryRunId) {
+    const sql = `
+      SELECT * FROM discovered_events 
+      WHERE discovery_run_id = $1 
+      ORDER BY discovered_at DESC
+    `;
+    const result = await this.pool.query(sql, [discoveryRunId]);
+    return result.rows;
+  }
+
+  async getDiscoveredEventsByRunAndScraper(discoveryRunId, scraperName) {
+    const sql = `
+      SELECT * FROM discovered_events 
+      WHERE discovery_run_id = $1 AND scraper_name = $2
+      ORDER BY discovered_at DESC
+    `;
+    const result = await this.pool.query(sql, [discoveryRunId, scraperName]);
+    return result.rows;
   }
 }
 
