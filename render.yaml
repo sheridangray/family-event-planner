@@ -14,6 +14,8 @@ services:
         value: sheridan.gray@gmail.com
       - key: MCP_GMAIL_CREDENTIALS
         sync: false
+      - key: GOOGLE_OAUTH_TOKEN
+        sync: false
       
       # Twilio MCP Configuration  
       - key: TWILIO_PHONE_TO

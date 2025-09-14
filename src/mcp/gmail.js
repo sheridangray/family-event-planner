@@ -80,6 +80,18 @@ class GmailMCPClient {
         }
       }
       
+      // If still no token, try environment variable (production fallback)
+      if (!tokenLoaded && process.env.GOOGLE_OAUTH_TOKEN) {
+        try {
+          const token = JSON.parse(process.env.GOOGLE_OAUTH_TOKEN);
+          this.auth.setCredentials(token);
+          this.logger.info('Gmail MCP client initialized with environment variable token');
+          tokenLoaded = true;
+        } catch (error) {
+          this.logger.warn('Error parsing GOOGLE_OAUTH_TOKEN environment variable:', error.message);
+        }
+      }
+      
       if (!tokenLoaded) {
         this.logger.warn('No OAuth token found. Calendar access will require authentication.');
       }
