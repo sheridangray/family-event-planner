@@ -568,6 +568,11 @@ class TaskScheduler {
       if (results.length > 0) {
         this.logger.info(`Registration processing: ${successCount} successful, ${failureCount} failed`);
         
+        // Clear LLM cache periodically to prevent memory buildup
+        if (this.eventFilter && this.eventFilter.llmEvaluator) {
+          this.eventFilter.llmEvaluator.clearCache();
+        }
+        
         for (const result of results) {
           if (result.success) {
             try {

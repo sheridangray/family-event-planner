@@ -5,6 +5,7 @@ class LLMAgeEvaluator {
     this.logger = logger;
     this.apiKey = process.env.TOGETHER_AI_API_KEY;
     this.baseUrl = 'https://api.together.xyz/v1/chat/completions';
+    this.evaluationCache = new Map(); // Add in-memory cache to prevent duplicate API calls
     
     if (!this.apiKey) {
       throw new Error('TOGETHER_AI_API_KEY environment variable is required');
@@ -13,6 +14,13 @@ class LLMAgeEvaluator {
 
   async evaluateEventForChildren(event, childAges, rawContent = null) {
     try {
+      // Check cache first to avoid duplicate API calls
+      const cacheKey = this.getCacheKey(event.id || event.title, childAges);
+      if (this.evaluationCache.has(cacheKey)) {
+        this.logger.debug(`Using cached evaluation for "${event.title}"`);
+        return this.evaluationCache.get(cacheKey);
+      }
+      
       this.logger.debug(`Evaluating event "${event.title}" for children ages ${childAges.join(', ')}`);
       
       const prompt = this.buildEvaluationPrompt(event, childAges, rawContent);
@@ -41,7 +49,12 @@ class LLMAgeEvaluator {
       });
 
       const completion = response.data.choices[0].message.content;
-      return this.parseEvaluation(completion, event, childAges);
+      const evaluation = this.parseEvaluation(completion, event, childAges);
+      
+      // Cache the result to prevent duplicate API calls
+      this.evaluationCache.set(cacheKey, evaluation);
+      
+      return evaluation;
       
     } catch (error) {
       // Log detailed error information
@@ -209,6 +222,21 @@ Example responses:
   // Cache evaluation results to avoid re-evaluating the same events
   getCacheKey(eventId, childAges) {
     return `llm_eval_${eventId}_${childAges.sort().join('_')}`;
+  }
+
+  // Clear cache to prevent memory buildup
+  clearCache() {
+    const cacheSize = this.evaluationCache.size;
+    this.evaluationCache.clear();
+    this.logger.debug(`Cleared LLM evaluation cache (${cacheSize} entries)`);
+  }
+
+  // Get cache stats for monitoring
+  getCacheStats() {
+    return {
+      size: this.evaluationCache.size,
+      memoryUsage: `${(JSON.stringify([...this.evaluationCache.entries()]).length / 1024).toFixed(2)} KB`
+    };
   }
 }
 
