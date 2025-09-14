@@ -153,6 +153,10 @@ services:
         value: 584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      
+      # Allowed email addresses for family access
+      - key: ALLOWED_EMAILS
+        value: "joyce.yan.zhang@gmail.com,sheridan.gray@gmail.com"
 
       - key: NODE_ENV
         value: production
