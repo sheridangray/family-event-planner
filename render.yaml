@@ -141,6 +141,8 @@ services:
       # NextAuth Configuration  
       - key: NEXTAUTH_URL
         value: https://family-event-planner-frontend.onrender.com
+      # When ready to switch to custom domain, change NEXTAUTH_URL to:
+      # value: https://sheridangray.com
       - key: NEXTAUTH_SECRET
         value: 2LZ2uGJMDSEYZtg1tThFl+ayEyQv9CBtnGZc0YniS64=
       - key: AUTH_TRUST_HOST
