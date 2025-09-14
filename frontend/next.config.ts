@@ -14,9 +14,12 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false, // Keep TypeScript checking but allow warnings
   },
-  // Fix workspace root detection in monorepo deployments
-  output: 'standalone',
-  outputFileTracingRoot: undefined, // Let Next.js handle this automatically
+  // Fix workspace root detection for Turbopack in monorepo
+  turbopack: {
+    root: './',
+  },
+  // Set proper root for output file tracing
+  outputFileTracingRoot: process.cwd(),
 };
 
 export default nextConfig;

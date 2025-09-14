@@ -9,6 +9,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   trustHost: true,
+  basePath: "/api/auth",
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error',

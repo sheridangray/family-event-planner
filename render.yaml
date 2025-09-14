@@ -143,6 +143,8 @@ services:
         value: https://family-event-planner-frontend.onrender.com
       - key: NEXTAUTH_SECRET
         value: 2LZ2uGJMDSEYZtg1tThFl+ayEyQv9CBtnGZc0YniS64=
+      - key: AUTH_TRUST_HOST
+        value: "true"
 
       # Google OAuth for NextAuth
       - key: GOOGLE_CLIENT_ID
