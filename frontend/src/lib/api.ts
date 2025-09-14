@@ -1,6 +1,6 @@
 // API client for Family Event Planner backend
-const API_BASE_URL = 'http://localhost:3000/api';
-const API_KEY = 'fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api';
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || 'fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA';
 
 class ApiError extends Error {
   constructor(

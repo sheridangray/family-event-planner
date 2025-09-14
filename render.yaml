@@ -1,0 +1,160 @@
+services:
+  # Backend Service
+  - type: web
+    name: family-event-planner-backend
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # Gmail MCP Configuration
+      - key: PARENT1_EMAIL
+        value: joyce.yan.zhang@gmail.com
+      - key: PARENT2_EMAIL
+        value: sheridan.gray@gmail.com
+      - key: MCP_GMAIL_CREDENTIALS
+        sync: false
+      
+      # Twilio MCP Configuration  
+      - key: TWILIO_PHONE_TO
+        value: +12063909727
+      - key: MCP_TWILIO_CREDENTIALS
+        sync: false
+
+      # GitHub MCP Configuration
+      - key: GITHUB_PERSONAL_ACCESS_TOKEN
+        sync: false
+
+      # Render MCP Configuration
+      - key: RENDER_API_KEY
+        sync: false
+
+      # Location Settings
+      - key: HOME_ADDRESS
+        value: San Francisco, CA
+      - key: MAX_DISTANCE_MILES
+        value: 30
+
+      # Schedule Settings
+      - key: WEEKDAY_EARLIEST_TIME
+        value: "16:30"
+      - key: WEEKEND_EARLIEST_TIME
+        value: "08:00"
+      - key: WEEKEND_NAP_START
+        value: "12:00"
+      - key: WEEKEND_NAP_END
+        value: "14:00"
+
+      # Event Preferences
+      - key: MIN_CHILD_AGE
+        value: 2
+      - key: MAX_CHILD_AGE
+        value: 4
+      - key: MAX_COST_PER_EVENT
+        value: 200
+      - key: MIN_ADVANCE_DAYS
+        value: 2
+      - key: MAX_ADVANCE_MONTHS
+        value: 6
+
+      # Registration Info
+      - key: PARENT1_NAME
+        value: Joyce Zhang
+      - key: PARENT2_NAME
+        value: Sheridan Gray
+      - key: CHILD1_NAME
+        value: Apollo Gray
+      - key: CHILD1_AGE
+        value: 4
+      - key: CHILD2_NAME
+        value: Athena Gray
+      - key: CHILD2_AGE
+        value: 2
+      - key: EMERGENCY_CONTACT
+        value: +12063909727
+
+      # Application Settings
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: API_KEY
+        value: fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA
+
+      # Event Discovery Settings
+      - key: EVENTS_PER_WEEK_MIN
+        value: 8
+      - key: EVENTS_PER_WEEK_MAX
+        value: 20
+      - key: EVENTS_PER_DAY_MAX
+        value: 3
+      - key: SCAN_FREQUENCY_HOURS
+        value: 6
+      - key: URGENT_SCAN_FREQUENCY_HOURS
+        value: 1
+
+      # Google OAuth (temporary - used only for initial setup)
+      - key: GOOGLE_CLIENT_ID
+        value: 584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: WEBHOOK_BASE_URL
+        value: https://family-event-planner-backend.onrender.com
+      - key: GOOGLE_CLOUD_PROJECT_ID
+        value: family-event-planner-469218
+      - key: PUBSUB_TOPIC_NAME
+        value: gmail-notifications
+
+      # Together.ai API for LLM Age Evaluation
+      - key: TOGETHER_AI_API_KEY
+        sync: false
+
+      # OpenWeatherMap API for Weather Filtering
+      - key: WEATHER_API_KEY
+        sync: false
+      - key: GMAIL_WEBHOOK_JWT_SECRET
+        sync: false
+
+      # Database Configuration (will be auto-populated by Render)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: family-event-planner-db
+          property: connectionString
+
+  # Frontend Service  
+  - type: web
+    name: family-event-planner-frontend
+    env: node
+    plan: starter
+    rootDir: ./frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      # Frontend API Configuration
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: https://family-event-planner-backend.onrender.com/api
+      - key: NEXT_PUBLIC_API_KEY
+        value: fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA
+
+      # NextAuth Configuration  
+      - key: NEXTAUTH_URL
+        value: https://family-event-planner-frontend.onrender.com
+      - key: NEXTAUTH_SECRET
+        value: 2LZ2uGJMDSEYZtg1tThFl+ayEyQv9CBtnGZc0YniS64=
+
+      # Google OAuth for NextAuth
+      - key: GOOGLE_CLIENT_ID
+        value: 584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      - key: NODE_ENV
+        value: production
+
+# Database
+databases:
+  - name: family-event-planner-db
+    databaseName: family_event_planner
+    user: family_event_planner
