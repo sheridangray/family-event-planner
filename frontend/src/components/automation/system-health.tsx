@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 interface SystemHealth {
   systemStatus: string;
@@ -28,11 +29,7 @@ export function SystemHealth() {
   useEffect(() => {
     const fetchHealth = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/automation/health');
-        if (!response.ok) {
-          throw new Error('Failed to fetch system health');
-        }
-        const data = await response.json();
+        const data = await api.getSystemHealth();
         setHealthMetrics(data);
       } catch (error) {
         console.error('Error fetching system health:', error);

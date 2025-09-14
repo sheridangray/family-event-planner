@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { api } from "@/lib/api";
 
 interface ScraperRun {
   discovery_run_id: number;
@@ -52,11 +53,7 @@ export function RecentActivity() {
   useEffect(() => {
     const fetchDiscoveryRuns = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/automation/scraper-runs?limit=5');
-        if (!response.ok) {
-          throw new Error('Failed to fetch scraper runs');
-        }
-        const data = await response.json();
+        const data = await api.getScraperRuns(5);
         setDiscoveryRuns(data);
       } catch (error) {
         console.error('Error fetching scraper runs:', error);
@@ -97,18 +94,15 @@ export function RecentActivity() {
         setLoadingEvents(prev => new Set(prev).add(scraperKey));
         
         try {
-          const response = await fetch(`http://localhost:3000/api/automation/discovery-run/${runId}/events`);
-          if (response.ok) {
-            const events = await response.json();
-            // Filter events by scraper (based on source)
-            const scraperSpecificEvents = events.filter((event: DiscoveredEvent) => 
-              event.source === scraperName
-            );
-            setScraperEvents(prev => ({
-              ...prev,
-              [scraperKey]: scraperSpecificEvents
-            }));
-          }
+          const events = await api.getDiscoveryRunEvents(runId);
+          // Filter events by scraper (based on source)
+          const scraperSpecificEvents = events.filter((event: DiscoveredEvent) => 
+            event.source === scraperName
+          );
+          setScraperEvents(prev => ({
+            ...prev,
+            [scraperKey]: scraperSpecificEvents
+          }));
         } catch (error) {
           console.error(`Failed to load events for ${scraperKey}:`, error);
         } finally {

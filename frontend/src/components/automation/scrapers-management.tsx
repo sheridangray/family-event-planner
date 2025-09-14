@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { api } from "@/lib/api";
 
 interface Scraper {
   id: number;
@@ -65,11 +66,7 @@ export function ScrapersManagement() {
   const fetchScrapers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3000/api/automation/scrapers?timeRange=${timeRange}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch scrapers');
-      }
-      const data = await response.json();
+      const data = await api.getScrapers(timeRange);
       setScrapers(data);
     } catch (error) {
       console.error('Error fetching scrapers:', error);
@@ -81,16 +78,7 @@ export function ScrapersManagement() {
 
   const toggleScraper = async (scraperId: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/automation/scrapers/${scraperId}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to toggle scraper');
-      }
-      
-      const result = await response.json();
+      const result = await api.toggleScraper(scraperId);
       
       // Update the scraper in the state
       setScrapers(prev => prev.map(scraper => 
@@ -105,16 +93,7 @@ export function ScrapersManagement() {
 
   const runScraper = async (scraperId: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/automation/scrapers/${scraperId}/run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to run scraper');
-      }
-      
-      const result = await response.json();
+      const result = await api.runScraper(scraperId);
       alert(`✅ ${result.message}`);
       
     } catch (error) {
@@ -137,13 +116,7 @@ export function ScrapersManagement() {
     setDeleteModal(prev => ({ ...prev, isDeleting: true }));
     
     try {
-      const response = await fetch(`http://localhost:3000/api/automation/scrapers/${deleteModal.scraper.id}`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete scraper');
-      }
+      await api.deleteScraper(deleteModal.scraper.id);
       
       // Remove scraper from state
       setScrapers(prev => prev.filter(s => s.id !== deleteModal.scraper!.id));
@@ -165,18 +138,10 @@ export function ScrapersManagement() {
     setRequestModal(prev => ({ ...prev, isSubmitting: true }));
 
     try {
-      const response = await fetch('http://localhost:3000/api/automation/scraper-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: requestModal.domain.trim(),
-          description: requestModal.description.trim() || undefined
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to submit scraper request');
-      }
+      await api.submitScraperRequest(
+        requestModal.domain.trim(),
+        requestModal.description.trim() || undefined
+      );
 
       alert('✅ Scraper request submitted successfully! Sheridan has been notified via email.');
       setRequestModal({

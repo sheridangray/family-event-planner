@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { PlusIcon, PlayIcon, PauseIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { api } from "@/lib/api";
 
 interface AutomationRule {
   id: string;
@@ -23,11 +24,7 @@ export function RulesList() {
   useEffect(() => {
     const fetchRules = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/automation/rules');
-        if (!response.ok) {
-          throw new Error('Failed to fetch automation rules');
-        }
-        const data = await response.json();
+        const data = await api.getAutomationRules();
         setRules(data);
       } catch (error) {
         console.error('Error fetching automation rules:', error);

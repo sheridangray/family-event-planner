@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 interface AutomationStats {
   eventsDiscoveredLatest: number;
@@ -57,11 +58,7 @@ export function AutomationStatus() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/automation/status');
-        if (!response.ok) {
-          throw new Error('Failed to fetch automation status');
-        }
-        const data = await response.json();
+        const data = await api.getAutomationStatus();
         setStats(data);
       } catch (error) {
         console.error('Error fetching automation status:', error);
@@ -86,39 +83,33 @@ export function AutomationStatus() {
 
   const fetchDiscoveryProgress = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/automation/discovery-progress');
-      if (response.ok) {
-        const progress = await response.json();
-        setDiscoveryProgress(progress);
+      const progress = await api.getDiscoveryProgress();
+      setDiscoveryProgress(progress);
+      
+      // If discovery finished, clear the progress
+      if (!progress.running && progressInterval) {
+        clearInterval(progressInterval);
+        setProgressInterval(null);
+        setDiscoveryRunning(false);
         
-        // If discovery finished, clear the progress
-        if (!progress.running && progressInterval) {
-          clearInterval(progressInterval);
-          setProgressInterval(null);
-          setDiscoveryRunning(false);
-          
-          // Show completion message
-          const totalEvents = progress.scraperResults.reduce((sum: number, result: any) => sum + result.eventsFound, 0);
-          setDiscoveryMessage(`✅ Discovery completed! Found ${totalEvents} events from ${progress.completedScrapers} scrapers.`);
-          
-          // Refresh stats
-          setTimeout(async () => {
-            try {
-              const statsResponse = await fetch('http://localhost:3000/api/automation/status');
-              if (statsResponse.ok) {
-                const statsData = await statsResponse.json();
-                setStats(statsData);
-              }
-            } catch (error) {
-              console.error('Error refreshing stats:', error);
-            }
-          }, 1000);
-          
-          // Clear completion message after 8 seconds
-          setTimeout(() => {
-            setDiscoveryMessage(null);
-          }, 8000);
-        }
+        // Show completion message
+        const totalEvents = progress.scraperResults.reduce((sum: number, result: any) => sum + result.eventsFound, 0);
+        setDiscoveryMessage(`✅ Discovery completed! Found ${totalEvents} events from ${progress.completedScrapers} scrapers.`);
+        
+        // Refresh stats
+        setTimeout(async () => {
+          try {
+            const statsData = await api.getAutomationStatus();
+            setStats(statsData);
+          } catch (error) {
+            console.error('Error refreshing stats:', error);
+          }
+        }, 1000);
+        
+        // Clear completion message after 8 seconds
+        setTimeout(() => {
+          setDiscoveryMessage(null);
+        }, 8000);
       }
     } catch (error) {
       console.error('Error fetching discovery progress:', error);
@@ -130,16 +121,9 @@ export function AutomationStatus() {
     setDiscoveryMessage(null);
     
     try {
-      const response = await fetch('http://localhost:3000/api/automation/run-discovery', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const data = await api.runDiscovery();
       
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
+      if (data.success) {
         setDiscoveryMessage('🚀 Discovery started! Monitoring scraper progress...');
         setDiscoveryProgress(null); // Reset progress
         
@@ -150,9 +134,9 @@ export function AutomationStatus() {
         // Initial progress fetch
         setTimeout(fetchDiscoveryProgress, 500);
       } else {
-        throw new Error(data.error || 'Failed to start discovery');
+        throw new Error('Failed to start discovery');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error running discovery:', error);
       setDiscoveryMessage('❌ Failed to start discovery. Please try again.');
       setDiscoveryRunning(false);
