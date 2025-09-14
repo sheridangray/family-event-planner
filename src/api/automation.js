@@ -497,7 +497,13 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
 
     } catch (error) {
       console.error('Error getting scraper runs:', error);
-      res.status(500).json({ error: 'Failed to get scraper runs' });
+      console.error('Error stack:', error.stack);
+      console.error('Error message:', error.message);
+      res.status(500).json({ 
+        error: 'Failed to get scraper runs',
+        details: error.message,
+        type: error.name
+      });
     }
   });
 
