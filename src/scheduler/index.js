@@ -238,33 +238,55 @@ class TaskScheduler {
         const maxEventsToSend = isManual ? topEvents.length : config.discovery.eventsPerDayMax;
         
         this.logger.info(`${isManual ? 'Manual' : 'Scheduled'} discovery: sending up to ${maxEventsToSend} events for approval`);
+        this.logger.info(`📊 Notification service status: unifiedNotifications=${!!this.unifiedNotifications}, smsManager=${!!this.smsManager}`);
         
-        for (const event of topEvents) {
-          // Always prefer email-only unified notification service over SMS
-          if (this.unifiedNotifications) {
-            // Email-only mode - use unified notification service
-            this.logger.info(`Using email-only notification service for: ${event.title}`);
-            if (isManual || await this.unifiedNotifications.shouldSendEvent()) {
-              await this.unifiedNotifications.sendEventForApproval(event);
-              sentCount++;
-            }
-          } else if (this.smsManager) {
-            // Fallback to SMS only if email notifications unavailable
-            this.logger.warn(`Falling back to SMS for: ${event.title} (email notifications unavailable)`);
-            if (isManual || await this.smsManager.shouldSendEvent()) {
-              await this.smsManager.sendEventForApproval(event);
-              sentCount++;
-            }
-          } else {
-            this.logger.error('No notification service available - cannot send approval requests (smsManager and unifiedNotifications are both null)');
-            break;
-          }
+        for (let i = 0; i < topEvents.length; i++) {
+          const event = topEvents[i];
+          this.logger.info(`📧 Processing event ${i+1}/${topEvents.length}: "${event.title}" (${event.date})`);
           
-          if (sentCount >= maxEventsToSend) {
-            break;
+          try {
+            // Always prefer email-only unified notification service over SMS
+            if (this.unifiedNotifications) {
+              // Email-only mode - use unified notification service
+              this.logger.info(`✅ Using unified notification service for: ${event.title}`);
+              
+              const shouldSend = isManual || await this.unifiedNotifications.shouldSendEvent();
+              this.logger.info(`🔍 Should send event? ${shouldSend} (isManual=${isManual})`);
+              
+              if (shouldSend) {
+                this.logger.info(`📤 Sending approval request for: ${event.title}`);
+                await this.unifiedNotifications.sendEventForApproval(event);
+                sentCount++;
+                this.logger.info(`✅ Successfully sent email for: ${event.title} (count: ${sentCount}/${maxEventsToSend})`);
+              } else {
+                this.logger.info(`⏭️ Skipping event due to rate limiting: ${event.title}`);
+              }
+            } else if (this.smsManager) {
+              // Fallback to SMS only if email notifications unavailable
+              this.logger.warn(`📱 Falling back to SMS for: ${event.title} (email notifications unavailable)`);
+              if (isManual || await this.smsManager.shouldSendEvent()) {
+                await this.smsManager.sendEventForApproval(event);
+                sentCount++;
+                this.logger.info(`✅ Successfully sent SMS for: ${event.title} (count: ${sentCount}/${maxEventsToSend})`);
+              }
+            } else {
+              this.logger.error('❌ No notification service available - cannot send approval requests (smsManager and unifiedNotifications are both null)');
+              break;
+            }
+            
+            if (sentCount >= maxEventsToSend) {
+              this.logger.info(`🛑 Reached maximum events to send (${maxEventsToSend}), stopping`);
+              break;
+            }
+            
+            this.logger.info(`⏰ Waiting 2 seconds before next event...`);
+            await this.delay(2000);
+            
+          } catch (emailError) {
+            this.logger.error(`❌ Failed to send notification for "${event.title}":`, emailError.message);
+            this.logger.error(`📍 Error stack:`, emailError.stack);
+            // Continue with next event rather than failing entire discovery
           }
-          
-          await this.delay(2000);
         }
         
         this.logger.info(`Event discovery completed: ${allEvents.length} discovered, ${filteredEvents.length} filtered, ${sentCount} sent for approval`);

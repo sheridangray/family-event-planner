@@ -83,17 +83,26 @@ class GmailMCPClient {
       // If still no token, try environment variable (production fallback)
       if (!tokenLoaded && process.env.GOOGLE_OAUTH_TOKEN) {
         try {
+          this.logger.info('🔍 Found GOOGLE_OAUTH_TOKEN environment variable, attempting to parse...');
           const token = JSON.parse(process.env.GOOGLE_OAUTH_TOKEN);
           this.auth.setCredentials(token);
-          this.logger.info('Gmail MCP client initialized with environment variable token');
+          this.logger.info('✅ Gmail MCP client initialized with environment variable token');
+          this.logger.info(`📊 Token expiry: ${token.expiry_date ? new Date(token.expiry_date) : 'No expiry'}`);
           tokenLoaded = true;
         } catch (error) {
-          this.logger.warn('Error parsing GOOGLE_OAUTH_TOKEN environment variable:', error.message);
+          this.logger.error('❌ Error parsing GOOGLE_OAUTH_TOKEN environment variable:', error.message);
+          this.logger.error('📍 Token content preview:', process.env.GOOGLE_OAUTH_TOKEN?.substring(0, 100) + '...');
         }
       }
       
       if (!tokenLoaded) {
-        this.logger.warn('No OAuth token found. Calendar access will require authentication.');
+        this.logger.warn('⚠️ No OAuth token found. Gmail/Calendar access will require authentication.');
+        this.logger.warn('📍 Token search locations checked:');
+        this.logger.warn(`   - Local token file: ${tokenPath} (exists: ${fs.existsSync(tokenPath)})`);
+        if (process.env.NODE_ENV === 'production') {
+          this.logger.warn(`   - Render secret file: /etc/secrets/google-oauth-token.json`);
+        }
+        this.logger.warn(`   - Environment variable: GOOGLE_OAUTH_TOKEN (exists: ${!!process.env.GOOGLE_OAUTH_TOKEN})`);
       }
       
       return true;

@@ -683,20 +683,31 @@ class EmailApprovalManager {
 
   async sendEventForApproval(event) {
     try {
-      if (!this.shouldSendEvent()) {
-        this.logger.info(`Daily event limit reached, queuing event: ${event.title}`);
+      this.logger.info(`📧 EmailApprovalManager: Processing approval request for: ${event.title}`);
+      
+      const shouldSend = this.shouldSendEvent();
+      this.logger.info(`🔍 Should send check: ${shouldSend} (dailyEventCount: ${this.dailyEventCount}/${config.discovery.eventsPerDayMax})`);
+      
+      if (!shouldSend) {
+        this.logger.info(`⏭️ Daily event limit reached (${this.dailyEventCount}/${config.discovery.eventsPerDayMax}), queuing event: ${event.title}`);
         return null;
       }
       
+      this.logger.info(`📤 Calling emailClient.sendApprovalRequest for: ${event.title}`);
       const result = await this.emailClient.sendApprovalRequest(event);
+      this.logger.info(`✅ Email client returned result for: ${event.title}`, result);
+      
+      this.logger.info(`💾 Updating event status to 'proposed' for: ${event.title}`);
       await this.database.updateEventStatus(event.id, 'proposed');
       
       this.incrementDailyCount();
+      this.logger.info(`📊 Daily count incremented to: ${this.dailyEventCount}/${config.discovery.eventsPerDayMax}`);
       
       return result;
       
     } catch (error) {
-      this.logger.error(`Error sending event for email approval: ${event.title}`, error.message);
+      this.logger.error(`❌ EmailApprovalManager error sending event for approval: ${event.title}`, error.message);
+      this.logger.error(`📍 Error stack:`, error.stack);
       throw error;
     }
   }

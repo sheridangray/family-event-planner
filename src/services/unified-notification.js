@@ -32,18 +32,23 @@ class UnifiedNotificationService {
 
   async sendEventForApproval(event) {
     try {
-      this.logger.info(`Sending approval request for event: ${event.title}`);
+      this.logger.info(`📧 UnifiedNotificationService: Sending approval request for event: ${event.title}`);
+      this.logger.info(`📧 Email service available: ${this.emailAvailable}`);
       
       if (!this.emailAvailable) {
+        this.logger.error(`❌ Email notifications not available for: ${event.title}`);
         throw new Error('Email notifications not available');
       }
       
+      this.logger.info(`📤 Calling emailManager.sendEventForApproval for: ${event.title}`);
       const result = await this.emailManager.sendEventForApproval(event);
-      this.logger.info(`✅ Email notification sent for: ${event.title}`);
+      this.logger.info(`✅ Email notification sent successfully for: ${event.title}`);
+      this.logger.info(`📊 Email result:`, result);
       return { ...result, method: 'email' };
       
     } catch (error) {
-      this.logger.error(`Error sending approval request for ${event.title}:`, error.message);
+      this.logger.error(`❌ UnifiedNotificationService error sending approval request for ${event.title}:`, error.message);
+      this.logger.error(`📍 Error stack:`, error.stack);
       throw error;
     }
   }
