@@ -130,7 +130,7 @@ services:
     plan: starter
     rootDir: ./frontend
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: npm start -- --port $PORT
     envVars:
       # Frontend API Configuration
       - key: NEXT_PUBLIC_API_BASE_URL
