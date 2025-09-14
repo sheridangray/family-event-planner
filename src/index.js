@@ -52,12 +52,13 @@ const corsOptions = {
   origin: [
     'http://localhost:3002', // Frontend development
     'http://localhost:3000', // Alternative frontend port
-    'https://family-event-planner.vercel.app', // Production frontend (if deployed)
+    'https://family-event-planner-frontend.onrender.com', // Production frontend on Render
+    'https://sheridangray.com', // Custom domain (future)
   ],
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'],
 };
 
 app.use(cors(corsOptions));
