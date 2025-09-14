@@ -18,13 +18,28 @@ class GmailMCPClient {
         throw new Error('Gmail MCP credentials not configured');
       }
       
-      // Load credentials from file
-      const credentialsPath = config.gmail.mcpCredentials;
-      if (!fs.existsSync(credentialsPath)) {
-        throw new Error(`Gmail credentials file not found: ${credentialsPath}`);
-      }
+      let credentials;
       
-      const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+      // Check if mcpCredentials is already a JSON object (from environment variable)
+      if (typeof config.gmail.mcpCredentials === 'object') {
+        credentials = config.gmail.mcpCredentials;
+        this.logger.debug('Using Gmail credentials from environment variable');
+      } else {
+        // Load credentials from file path
+        const credentialsPath = config.gmail.mcpCredentials;
+        if (!fs.existsSync(credentialsPath)) {
+          // Try to parse as JSON string if file doesn't exist
+          try {
+            credentials = JSON.parse(credentialsPath);
+            this.logger.debug('Parsed Gmail credentials from JSON string');
+          } catch (parseError) {
+            throw new Error(`Gmail credentials file not found: ${credentialsPath}`);
+          }
+        } else {
+          credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+          this.logger.debug('Loaded Gmail credentials from file');
+        }
+      }
       
       // Create OAuth2 client
       const { client_secret, client_id, redirect_uris } = credentials.installed;
