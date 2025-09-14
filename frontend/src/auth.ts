@@ -2,10 +2,18 @@ import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  debug: process.env.NODE_ENV === 'production', // Enable debug in production temporarily
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code"
+        }
+      }
     }),
   ],
   trustHost: true,
@@ -16,11 +24,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async signIn({ user, account }) {
+      console.log('🔍 SignIn callback triggered:', {
+        userEmail: user.email,
+        provider: account?.provider,
+        clientId: process.env.GOOGLE_CLIENT_ID?.slice(0, 10) + '...',
+        hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET
+      });
+      
       // Only allow specific email addresses
       const allowedEmails = process.env.ALLOWED_EMAILS?.split(',') || [
         'joyce.yan.zhang@gmail.com',
         'sheridan.gray@gmail.com'
       ];
+      
+      console.log('📧 Allowed emails:', allowedEmails);
+      console.log('✅ Access granted:', allowedEmails.includes(user.email || ''));
       
       return allowedEmails.includes(user.email || '');
     },
