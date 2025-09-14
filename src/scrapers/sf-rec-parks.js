@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 class SFRecParksScraper extends BaseScraper {
   constructor(logger) {
-    super('SF Recreation & Parks', 'https://sfrecpark.org/calendar.aspx', logger);
+    super('sf-rec-parks', 'https://sfrecpark.org/calendar.aspx', logger);
   }
 
   async scrape() {

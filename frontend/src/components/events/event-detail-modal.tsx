@@ -14,7 +14,9 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 
-interface Event {
+import { Event } from "@/lib/api";
+
+/*interface Event {
   id: string;
   title: string;
   date: Date;
@@ -41,7 +43,7 @@ interface Event {
   };
   source: string;
   autoRegistration: string | null;
-}
+}*/
 
 interface EventDetailModalProps {
   event: Event;
@@ -51,7 +53,7 @@ interface EventDetailModalProps {
 }
 
 export function EventDetailModal({ event, onClose, onApprove, onReject }: EventDetailModalProps) {
-  const formattedDate = format(event.date, 'EEEE, MMMM d, yyyy');
+  const formattedDate = format(new Date(event.date), 'EEEE, MMMM d, yyyy');
 
   return (
     <Transition appear show={true} as={Fragment}>
@@ -131,7 +133,7 @@ export function EventDetailModal({ event, onClose, onApprove, onReject }: EventD
                         <CurrencyDollarIcon className="h-5 w-5 text-gray-400 mr-3" />
                         <div>
                           <div className="font-medium text-gray-900">
-                            {event.cost === 0 ? 'FREE' : `$${event.cost} per family`}
+                            {event.cost === "0.00" || event.cost === "0" ? 'FREE' : `$${event.cost} per family`}
                           </div>
                           <div className="text-gray-600">
                             Recommended for ages {event.ageRange.min}-{event.ageRange.max}
@@ -142,53 +144,55 @@ export function EventDetailModal({ event, onClose, onApprove, onReject }: EventD
 
                     {/* Right Column - Social Proof & Context */}
                     <div className="space-y-4">
-                      <div>
-                        <h3 className="font-medium text-gray-900 mb-2">🌟 REVIEWS & RATINGS</h3>
-                        <div className="flex items-center mb-2">
-                          <div className="flex">
-                            {[...Array(5)].map((_, i) => (
-                              <StarIcon 
-                                key={i} 
-                                className={`h-4 w-4 ${
-                                  i < Math.floor(event.socialProof.rating) 
-                                    ? 'text-yellow-400 fill-current' 
-                                    : 'text-gray-300'
-                                }`} 
-                              />
+                      {event.socialProof && (
+                        <div>
+                          <h3 className="font-medium text-gray-900 mb-2">🌟 REVIEWS & RATINGS</h3>
+                          <div className="flex items-center mb-2">
+                            <div className="flex">
+                              {[...Array(5)].map((_, i) => (
+                                <StarIcon 
+                                  key={i} 
+                                  className={`h-4 w-4 ${
+                                    i < Math.floor(parseFloat(event.socialProof!.rating))
+                                      ? 'text-yellow-400 fill-current' 
+                                      : 'text-gray-300'
+                                  }`} 
+                                />
+                              ))}
+                            </div>
+                            <span className="ml-2 text-sm text-gray-600">
+                              {event.socialProof.rating}/5 ({event.socialProof.reviewCount} reviews)
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {event.socialProof.tags.map((tag, index) => (
+                              <span 
+                                key={index}
+                                className="inline-block px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full"
+                              >
+                                {tag}
+                              </span>
                             ))}
                           </div>
-                          <span className="ml-2 text-sm text-gray-600">
-                            {event.socialProof.rating}/5 ({event.socialProof.reviewCount} reviews)
-                          </span>
                         </div>
-                        <div className="flex flex-wrap gap-1">
-                          {event.socialProof.tags.map((tag, index) => (
-                            <span 
-                              key={index}
-                              className="inline-block px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                      )}
 
                       {/* Context Information */}
-                      {(event.context.weather || event.context.preferences || event.context.urgency) && (
+                      {(event.context?.weather || event.context?.preferences || event.context?.urgency) && (
                         <div>
                           <h3 className="font-medium text-gray-900 mb-2">💡 INSIGHTS</h3>
                           <div className="space-y-2">
-                            {event.context.weather && (
+                            {event.context?.weather && (
                               <div className="text-sm text-blue-700 bg-blue-50 px-2 py-1 rounded">
                                 🌤️ {event.context.weather}
                               </div>
                             )}
-                            {event.context.preferences && (
+                            {event.context?.preferences && (
                               <div className="text-sm text-green-700 bg-green-50 px-2 py-1 rounded">
                                 💡 {event.context.preferences}
                               </div>
                             )}
-                            {event.context.urgency && (
+                            {event.context?.urgency && (
                               <div className="text-sm text-orange-700 bg-orange-50 px-2 py-1 rounded">
                                 ⚠️ {event.context.urgency}
                               </div>

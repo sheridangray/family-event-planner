@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 class ExploratoriumScraper extends BaseScraper {
   constructor(logger) {
-    super('Exploratorium', 'https://www.exploratorium.edu/', logger);
+    super('exploratorium', 'https://www.exploratorium.edu/', logger);
     this.eventUrls = [
       'https://www.exploratorium.edu/events',
       'https://www.exploratorium.edu/programs',

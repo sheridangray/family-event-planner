@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PlusIcon, PlayIcon, PauseIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 interface AutomationRule {
@@ -16,41 +16,29 @@ interface AutomationRule {
 }
 
 export function RulesList() {
-  const [rules, setRules] = useState<AutomationRule[]>([
-    {
-      id: '1',
-      name: 'Auto-approve free SF Library events',
-      description: 'Automatically approve all free events at SF Library locations',
-      enabled: true,
-      trigger: 'New event discovered',
-      conditions: ['Venue: SF Library', 'Cost: Free', 'Age appropriate'],
-      actions: ['Auto-approve', 'Set reminder', 'Send email'],
-      successCount: 12,
-      lastTriggered: '2 hours ago',
-    },
-    {
-      id: '2',
-      name: 'Auto-register for Cal Academy events under $25',
-      description: 'Auto-register for California Academy events under $25 for kids',
-      enabled: true,
-      trigger: 'Event auto-approved',
-      conditions: ['Venue: Cal Academy', 'Cost: < $25', 'Science category'],
-      actions: ['Auto-register', 'Add to calendar', 'Send confirmation'],
-      successCount: 5,
-      lastTriggered: '1 day ago',
-    },
-    {
-      id: '3',
-      name: 'Weekend art events priority',
-      description: 'Prioritize art events on weekends for family time',
-      enabled: false,
-      trigger: 'New weekend event',
-      conditions: ['Category: Art', 'Time: Weekend', 'Family friendly'],
-      actions: ['High priority approval', 'Send immediate notification'],
-      successCount: 3,
-      lastTriggered: '3 days ago',
-    },
-  ]);
+  const [rules, setRules] = useState<AutomationRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchRules = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/automation/rules');
+        if (!response.ok) {
+          throw new Error('Failed to fetch automation rules');
+        }
+        const data = await response.json();
+        setRules(data);
+      } catch (error) {
+        console.error('Error fetching automation rules:', error);
+        setError('Failed to load automation rules');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRules();
+  }, []);
 
   const toggleRule = (ruleId: string) => {
     setRules(prev => prev.map(rule => 
@@ -73,14 +61,39 @@ export function RulesList() {
           </button>
         </div>
 
-        <div className="space-y-4">
-          {rules.map((rule) => (
-            <div 
-              key={rule.id} 
-              className={`border rounded-lg p-4 transition-colors ${
-                rule.enabled ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
-              }`}
+        {loading ? (
+          <div className="animate-pulse space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="border rounded-lg p-4">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2 mb-4"></div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="h-3 bg-gray-200 rounded"></div>
+                  <div className="h-3 bg-gray-200 rounded"></div>
+                  <div className="h-3 bg-gray-200 rounded"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-600">
+            <p>{error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-2 text-sm underline"
             >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {rules.map((rule) => (
+              <div 
+                key={rule.id} 
+                className={`border rounded-lg p-4 transition-colors ${
+                  rule.enabled ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
+                }`}
+              >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <div className="flex items-center mb-2">
@@ -152,9 +165,10 @@ export function RulesList() {
                   </div>
                 )}
               </div>
-            </div>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {rules.length === 0 && (
           <div className="text-center py-12">

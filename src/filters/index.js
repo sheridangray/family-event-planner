@@ -63,13 +63,25 @@ class EventFilter {
     const filtered = [];
 
     for (const event of events) {
+      // Initialize filter tracking
+      event.filterResults = {
+        passed: false,
+        reasons: []
+      };
+
       // Check age appropriateness using LLM if available, otherwise use rules
       let ageAppropriate = true;
+      let ageReason = null;
       let llmExtractedTime = null;
+      
       if (ageEvaluations.has(event.id)) {
         const evaluation = ageEvaluations.get(event.id);
         ageAppropriate = evaluation.suitable;
         llmExtractedTime = evaluation.extractedTime;
+        
+        if (!ageAppropriate) {
+          ageReason = `Age inappropriate: ${evaluation.reason}`;
+        }
 
         // Update event date if LLM extracted more specific time
         if (llmExtractedTime && llmExtractedTime !== "ALL_DAY") {
@@ -89,17 +101,13 @@ class EventFilter {
             );
           }
         }
-
-        if (!ageAppropriate) {
-          this.logger.debug(
-            `Event filtered by LLM - age inappropriate: ${event.title} (${evaluation.reason})`
-          );
-        }
       } else {
-        ageAppropriate = this.isAgeAppropriate(event, familyDemographics);
+        const ageResult = this.isAgeAppropriate(event, familyDemographics);
+        ageAppropriate = ageResult.passed;
+        ageReason = ageResult.reason;
       }
 
-      // Debug each filter step
+      // Check each filter and capture detailed reasons
       const timeRange = this.isWithinTimeRange(event);
       const schedule = this.isScheduleCompatible(event);
       const budget = this.isWithinBudget(event);
@@ -107,34 +115,38 @@ class EventFilter {
       const notAttended = this.isNotPreviouslyAttended(event);
       const weather = await this.isWeatherSuitable(event);
 
-      if (
-        ageAppropriate &&
-        timeRange &&
-        schedule &&
-        budget &&
-        capacity &&
-        notAttended &&
-        weather
-      ) {
+      // Store nap time information for scoring
+      event.isDuringNapTime = schedule.isDuringNapTime || false;
+
+      // Collect all filter reasons
+      if (!ageAppropriate) event.filterResults.reasons.push(ageReason);
+      if (!timeRange.passed) event.filterResults.reasons.push(timeRange.reason);
+      if (!schedule.passed) event.filterResults.reasons.push(schedule.reason);
+      if (!budget.passed) event.filterResults.reasons.push(budget.reason);
+      if (!capacity.passed) event.filterResults.reasons.push(capacity.reason);
+      if (!notAttended.passed) event.filterResults.reasons.push(notAttended.reason);
+      if (!weather.passed) event.filterResults.reasons.push(weather.reason);
+
+      const allFiltersPassed = ageAppropriate && 
+        timeRange.passed && 
+        schedule.passed && 
+        budget.passed && 
+        capacity.passed && 
+        notAttended.passed && 
+        weather.passed;
+
+      if (allFiltersPassed) {
         // Add LLM evaluation metadata to event
         if (ageEvaluations.has(event.id)) {
           event.llmEvaluation = ageEvaluations.get(event.id);
         }
-
+        
+        event.filterResults.passed = true;
+        event.filterResults.reasons = ["Passed all filters"];
         filtered.push(event);
-      } else if (ageAppropriate) {
-        // Log which filter eliminated this LLM-approved event
-        const reasons = [];
-        if (!timeRange) reasons.push("time-range");
-        if (!schedule) reasons.push("schedule");
-        if (!budget) reasons.push("budget");
-        if (!capacity) reasons.push("capacity");
-        if (!notAttended) reasons.push("previously-attended");
-        if (!weather) reasons.push("weather");
-
-        // this.logger.info(
-        //   `Event "${event.title}" eliminated by filters: ${reasons.join(", ")}`
-        // );
+      } else {
+        event.filterResults.passed = false;
+        // Reasons are already populated above
       }
     }
 
@@ -151,7 +163,7 @@ class EventFilter {
 
   isAgeAppropriate(event, familyDemographics) {
     if (!event.ageRange || (!event.ageRange.min && !event.ageRange.max)) {
-      return true; // No age restrictions
+      return { passed: true, reason: "No age restrictions" };
     }
 
     const eventMinAge = event.ageRange.min || 0;
@@ -164,12 +176,13 @@ class EventFilter {
 
     if (!isAppropriate) {
       const childAges = familyDemographics.childAges.join(", ");
-      // this.logger.debug(
-      //   `Event filtered - age range: ${event.title} (${eventMinAge}-${eventMaxAge} vs children ages ${childAges})`
-      // );
+      return {
+        passed: false,
+        reason: `Age inappropriate (${eventMinAge}-${eventMaxAge} years vs family: ${childAges} years)`
+      };
     }
 
-    return isAppropriate;
+    return { passed: true, reason: "Age appropriate" };
   }
 
   isWithinTimeRange(event) {
@@ -178,72 +191,56 @@ class EventFilter {
 
     // Validate event date
     if (isNaN(eventDate.getTime())) {
-      // this.logger.info(
-      //   `TIME RANGE: Event "${event.title}" rejected - invalid date: ${event.date}`
-      // );
-      return false;
+      return {
+        passed: false,
+        reason: `Invalid date: ${event.date}`
+      };
     }
 
     // Check for obviously invalid dates
     const currentYear = new Date().getFullYear();
     const eventYear = eventDate.getFullYear();
     if (eventYear < currentYear || eventYear > currentYear + 2) {
-      // this.logger.info(
-      //   `TIME RANGE: Event "${event.title}" rejected - invalid year ${eventYear}: ${event.date}`
-      // );
-      return false;
+      return {
+        passed: false,
+        reason: `Invalid year (${eventYear})`
+      };
     }
 
     // Check if event is in the past (with 1-hour grace period for today's events)
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     if (eventDate < oneHourAgo) {
-      // this.logger.info(
-      //   `TIME RANGE: Event "${event.title}" rejected - event is in the past: ${event.date}`
-      // );
-      return false;
+      return {
+        passed: false,
+        reason: "Event is in the past"
+      };
     }
 
-    const minAdvanceMs =
-      config.preferences.minAdvanceDays * 24 * 60 * 60 * 1000;
-    const maxAdvanceMs =
-      config.preferences.maxAdvanceMonths * 30 * 24 * 60 * 60 * 1000;
+    const minAdvanceMs = config.preferences.minAdvanceDays * 24 * 60 * 60 * 1000;
+    const maxAdvanceMs = config.preferences.maxAdvanceMonths * 30 * 24 * 60 * 60 * 1000;
 
     const timeDiff = eventDate.getTime() - now.getTime();
-    const daysAway = Math.ceil(timeDiff / (24 * 60 * 60 * 1000)); // Use ceil for more inclusive calculation
+    const daysAway = Math.ceil(timeDiff / (24 * 60 * 60 * 1000));
 
     // Add small buffer (1 hour) to handle boundary conditions
     const bufferedTimeDiff = timeDiff + 60 * 60 * 1000;
-    const isInRange =
-      bufferedTimeDiff >= minAdvanceMs && timeDiff <= maxAdvanceMs;
+    const isInRange = bufferedTimeDiff >= minAdvanceMs && timeDiff <= maxAdvanceMs;
 
-    // DETAILED DEBUG LOGGING
-    // this.logger.info(`TIME RANGE DEBUG: Event "${event.title}"`);
-    // this.logger.info(`  - Event Date: ${eventDate.toISOString()} (${event.date})`);
-    // this.logger.info(`  - Current Time: ${now.toISOString()}`);
-    // this.logger.info(`  - Days Away: ${daysAway}`);
-    // this.logger.info(`  - Min Advance Days: ${config.preferences.minAdvanceDays}`);
-    // this.logger.info(`  - Max Advance Months: ${config.preferences.maxAdvanceMonths}`);
-    // this.logger.info(`  - Time Diff (ms): ${timeDiff}`);
-    // this.logger.info(`  - Buffered Time Diff (ms): ${bufferedTimeDiff}`);
-    // this.logger.info(`  - Min Required (ms): ${minAdvanceMs}`);
-    // this.logger.info(`  - Max Allowed (ms): ${maxAdvanceMs}`);
-    // this.logger.info(`  - Passes Time Filter: ${isInRange}`);
+    if (!isInRange) {
+      if (bufferedTimeDiff < minAdvanceMs) {
+        return {
+          passed: false,
+          reason: `Too soon (${daysAway} days away, minimum ${config.preferences.minAdvanceDays} days required)`
+        };
+      } else if (timeDiff > maxAdvanceMs) {
+        return {
+          passed: false,
+          reason: `Too far (${daysAway} days away, maximum ${config.preferences.maxAdvanceMonths * 30} days allowed)`
+        };
+      }
+    }
 
-    // if (!isInRange) {
-    //   if (bufferedTimeDiff < minAdvanceMs) {
-    //     this.logger.info(
-    //       `  - REJECTED: Event is ${daysAway} days away, minimum ${config.preferences.minAdvanceDays} days required`
-    //     );
-    //   } else if (timeDiff > maxAdvanceMs) {
-    //     this.logger.info(
-    //       `  - REJECTED: Event is ${daysAway} days away, maximum ${
-    //         config.preferences.maxAdvanceMonths * 30
-    //       } days allowed`
-    //     );
-    //   }
-    // }
-
-    return isInRange;
+    return { passed: true, reason: "Within time range" };
   }
 
   isScheduleCompatible(event) {
@@ -260,64 +257,40 @@ class EventFilter {
     }
 
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const dayNames = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ];
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-    // DETAILED DEBUG LOGGING
-    // this.logger.info(`SCHEDULE DEBUG: Event "${event.title}"`);
-    // this.logger.info(`  - Event Date: ${eventDate.toISOString()}`);
-    // this.logger.info(`  - Day of Week: ${dayNames[dayOfWeek]} (${dayOfWeek})`);
-    // this.logger.info(
-    //   `  - Original Event Time: ${eventDate.toTimeString().substr(0, 5)}`
-    // );
-    // this.logger.info(`  - Is All-Day Event: ${isAllDayEvent}`);
-    // this.logger.info(`  - Effective Event Time: ${eventTime}`);
-    // this.logger.info(`  - Is Weekend: ${isWeekend}`);
-
-    let compatible;
+    let result;
     if (isWeekend) {
-      compatible = this.isWeekendCompatible(
-        eventDate,
-        eventTime,
-        isAllDayEvent
-      );
-      // this.logger.info(`  - Weekend Compatibility: ${compatible}`);
+      result = this.isWeekendCompatible(eventDate, eventTime, isAllDayEvent);
     } else {
-      compatible = this.isWeekdayCompatible(eventTime, isAllDayEvent);
-      // this.logger.info(`  - Weekday Compatibility: ${compatible}`);
+      result = this.isWeekdayCompatible(eventTime, isAllDayEvent);
     }
 
-    return compatible;
+    // Add day context to the reason
+    if (!result.passed) {
+      result.reason = `Schedule conflict on ${dayNames[dayOfWeek]}: ${result.reason}`;
+    } else if (result.isDuringNapTime) {
+      result.reason = `${dayNames[dayOfWeek]} ${result.reason}`;
+    }
+
+    return result;
   }
 
   isWeekdayCompatible(eventTime, isAllDayEvent = false) {
     const earliestTime = config.schedule.weekdayEarliestTime;
     const isCompatible = eventTime >= earliestTime;
 
-    // this.logger.info(`    - WEEKDAY CHECK:`);
-    // this.logger.info(`      - Event Time: ${eventTime}`);
-    // this.logger.info(`      - Earliest Allowed: ${earliestTime}`);
-    // this.logger.info(`      - Is All-Day Event: ${isAllDayEvent}`);
-    // this.logger.info(`      - Compatible: ${isCompatible}`);
-
-    if (!isCompatible && !isAllDayEvent) {
-      // this.logger.info(
-      //   `      - REJECTED: Event at ${eventTime} is before earliest weekday time ${earliestTime}`
-      // );
-    } else if (isAllDayEvent) {
-      // this.logger.info(
-      //   `      - ACCEPTED: All-day event with assumed time ${eventTime}`
-      // );
+    if (!isCompatible) {
+      return {
+        passed: false,
+        reason: `${eventTime} is before earliest weekday time ${earliestTime}`
+      };
     }
 
-    return isCompatible;
+    return { 
+      passed: true, 
+      reason: isAllDayEvent ? `All-day event (assumed ${eventTime})` : "Schedule compatible"
+    };
   }
 
   isWeekendCompatible(eventDate, eventTime, isAllDayEvent = false) {
@@ -325,34 +298,23 @@ class EventFilter {
     const napEnd = config.schedule.weekendNapEnd;
     const earliestTime = config.schedule.weekendEarliestTime;
 
-    // this.logger.info(`    - WEEKEND CHECK:`);
-    // this.logger.info(`      - Event Time: ${eventTime}`);
-    // this.logger.info(`      - Earliest Allowed: ${earliestTime}`);
-    // this.logger.info(`      - Nap Time: ${napStart} - ${napEnd}`);
-    // this.logger.info(`      - Is All-Day Event: ${isAllDayEvent}`);
-
     if (eventTime < earliestTime) {
-      // this.logger.info(
-      //   `      - REJECTED: Event at ${eventTime} is before earliest weekend time ${earliestTime}`
-      // );
-      return false;
+      return {
+        passed: false,
+        reason: `${eventTime} is before earliest weekend time ${earliestTime}`
+      };
     }
 
-    if (eventTime >= napStart && eventTime <= napEnd) {
-      // this.logger.info(
-      //   `      - REJECTED: Event at ${eventTime} conflicts with nap time (${napStart}-${napEnd})`
-      // );
-      return false;
-    }
+    // Nap time events are allowed but will be scored lower
+    const isDuringNapTime = eventTime >= napStart && eventTime <= napEnd;
 
-    // if (isAllDayEvent) {
-    //   // this.logger.info(
-    //   //   `      - ACCEPTED: All-day weekend event with assumed time ${eventTime}`
-    //   // );
-    // } else {
-    //   this.logger.info(`      - ACCEPTED: Weekend schedule compatible`);
-    // }
-    return true;
+    return { 
+      passed: true, 
+      reason: isAllDayEvent ? `All-day weekend event (assumed ${eventTime})` : 
+              isDuringNapTime ? `During nap time (${napStart}-${napEnd}) - ranked lower` : 
+              "Weekend schedule compatible",
+      isDuringNapTime: isDuringNapTime
+    };
   }
 
   isWithinBudget(event) {
@@ -360,13 +322,17 @@ class EventFilter {
     const eventCost = event.cost || 0;
     const isAffordable = eventCost <= maxCost;
 
-    // if (!isAffordable) {
-    // this.logger.info(
-    //   `BUDGET: Event "${event.title}" rejected - costs $${eventCost}, exceeds max budget $${maxCost}`
-    // );
-    // }
+    if (!isAffordable) {
+      return {
+        passed: false,
+        reason: `Too expensive ($${eventCost} > $${maxCost} budget)`
+      };
+    }
 
-    return isAffordable;
+    return { 
+      passed: true, 
+      reason: eventCost === 0 ? "Free event" : `Within budget ($${eventCost} ≤ $${maxCost})`
+    };
   }
 
   hasAvailableCapacity(event) {
@@ -374,31 +340,37 @@ class EventFilter {
       !event.currentCapacity ||
       typeof event.currentCapacity.available !== "number"
     ) {
-      return true;
+      return { passed: true, reason: "No capacity restrictions" };
     }
 
     const available = event.currentCapacity.available;
+    const total = event.currentCapacity.total || "unknown";
     const hasCapacity = available > 0;
 
-    // if (!hasCapacity) {
-    // this.logger.info(
-    //   `CAPACITY: Event "${event.title}" rejected - no available spots (${available} available)`
-    // );
-    // }
+    if (!hasCapacity) {
+      return {
+        passed: false,
+        reason: `No available spots (${available}/${total} available)`
+      };
+    }
 
-    return hasCapacity;
+    return { 
+      passed: true, 
+      reason: `Capacity available (${available}/${total} spots)`
+    };
   }
 
   isNotPreviouslyAttended(event) {
     const notAttended = !event.previouslyAttended;
 
-    // if (!notAttended) {
-    // this.logger.info(
-    //   `ATTENDANCE: Event "${event.title}" rejected - previously attended`
-    // );
-    // }
+    if (!notAttended) {
+      return {
+        passed: false,
+        reason: "Previously attended"
+      };
+    }
 
-    return notAttended;
+    return { passed: true, reason: "New experience" };
   }
 
   async filterByCalendarConflicts(events, calendarChecker) {
@@ -520,7 +492,7 @@ class EventFilter {
 
       // Only check weather for outdoor events
       if (!isOutdoor) {
-        return true;
+        return { passed: true, reason: "Indoor event" };
       }
 
       const eventDate = new Date(event.date);
@@ -544,15 +516,19 @@ class EventFilter {
       const isSuitable = weather.isOutdoorFriendly;
 
       if (!isSuitable) {
-        // this.logger.info(
-        //   `WEATHER: Event "${event.title}" rejected - weather unsuitable (${weather.condition}, ${weather.temperature}°F, precipitation: ${weather.precipitation})`
-        // );
+        return {
+          passed: false,
+          reason: `Weather unsuitable for outdoor event (${weather.condition}, ${weather.temperature}°F, precipitation: ${weather.precipitation}%)`
+        };
       }
 
-      return isSuitable;
+      return { 
+        passed: true, 
+        reason: `Good weather for outdoor event (${weather.condition}, ${weather.temperature}°F)`
+      };
     } catch (error) {
       this.logger.error(`WEATHER ERROR for "${event.title}": ${error.message}`);
-      return true; // Default to allowing the event if weather check fails
+      return { passed: true, reason: "Weather check failed - defaulting to allow" };
     }
   }
 
@@ -561,20 +537,32 @@ class EventFilter {
 
     for (const event of events) {
       try {
-        const preferenceScore =
+        const basePreferenceScore =
           await this.preferenceLearning.getEventPreferenceScore(event);
-        event.preferenceScore = preferenceScore;
+        
+        // Apply nap time penalty: reduce score by 20 points for nap time events
+        let finalScore = basePreferenceScore;
+        if (event.isDuringNapTime) {
+          finalScore = Math.max(0, basePreferenceScore - 20); // Don't go below 0
+          this.logger.debug(
+            `Applied nap time penalty to "${event.title}": ${basePreferenceScore} -> ${finalScore}`
+          );
+        }
+        
+        event.preferenceScore = finalScore;
         scoredEvents.push(event);
 
         // this.logger.debug(
-        //   `Event preference score: ${event.title} = ${preferenceScore}`
+        //   `Event preference score: ${event.title} = ${finalScore}`
         // );
       } catch (error) {
         this.logger.warn(
           `Error calculating preference score for ${event.title}:`,
           error.message
         );
-        event.preferenceScore = 50; // Neutral score
+        // Apply nap time penalty to neutral score too
+        const neutralScore = event.isDuringNapTime ? 30 : 50;
+        event.preferenceScore = neutralScore;
         scoredEvents.push(event);
       }
     }

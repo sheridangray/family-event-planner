@@ -96,6 +96,13 @@ ${truncatedContent}`;
 
 **Children's Ages:** ${childAgeList} years old
 
+**Important Guidelines:**
+- Family events are often suitable for a wider age range than specified
+- Consider that siblings of different ages often attend together
+- Events for "babies/toddlers 0-3" can work for 4-year-olds when they have younger siblings
+- Focus on whether the content would engage and be safe for the children, not strict age boundaries
+- Events should only be rejected if clearly inappropriate (requires reading, complex motor skills, mature themes)
+
 Please respond in this exact format:
 SUITABLE: [YES/NO]
 CONFIDENCE: [0.0-1.0]
@@ -116,7 +123,7 @@ Example responses:
       // Extract structured response
       const suitableMatch = completion.match(/SUITABLE:\s*(YES|NO)/i);
       const confidenceMatch = completion.match(/CONFIDENCE:\s*([\d.]+)/i);
-      const reasonMatch = completion.match(/REASON:\s*(.+?)(?:,\s*EVENT_TIME|$)/i);
+      const reasonMatch = completion.match(/REASON:\s*(.+?)(?:\s*EVENT_TIME|$)/is);
       const timeMatch = completion.match(/EVENT_TIME:\s*(.+?)(?:\n|$)/i);
       
       const suitable = suitableMatch ? suitableMatch[1].toUpperCase() === 'YES' : true;

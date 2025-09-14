@@ -22,7 +22,7 @@ const ErrorHandler = require('./safety/error-handler');
 const PaymentGuard = require('./safety/payment-guard');
 
 // API routes
-const apiRouter = require('./api');
+const createApiRouter = require('./api');
 const { authenticateAPI } = require('./middleware/auth');
 
 const logger = winston.createLogger({
@@ -101,8 +101,7 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// API routes
-app.use('/api', apiRouter);
+// API routes - will be initialized after components are ready
 
 // Emergency shutdown endpoint (for safety)
 app.post('/emergency-shutdown', authenticateAPI, (req, res) => {
@@ -196,6 +195,10 @@ async function initializeComponents() {
     app.locals.scheduler = scheduler;
     app.locals.errorHandler = errorHandler;
     app.locals.paymentGuard = paymentGuard;
+    
+    // Initialize API router now that all components are ready
+    const apiRouter = createApiRouter(database, scheduler, registrationAutomator, logger);
+    app.use('/api', apiRouter);
     
     return {
       database, scraperManager, eventFilter, eventScorer, familyService,

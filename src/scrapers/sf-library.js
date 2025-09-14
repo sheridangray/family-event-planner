@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 class SFLibraryScraper extends BaseScraper {
   constructor(logger) {
-    super('SF Public Library', 'https://sfpl.org/events', logger);
+    super('sf-library', 'https://sfpl.org/events', logger);
   }
 
   async scrape() {

@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 class FunCheapSFScraper extends BaseScraper {
   constructor(logger) {
-    super('FunCheapSF', 'https://sf.funcheap.com/city/san-francisco', logger);
+    super('funcheapsf', 'https://sf.funcheap.com/city/san-francisco', logger);
     this.familyEventsUrl = 'https://sf.funcheap.com/city/san-francisco';
   }
 

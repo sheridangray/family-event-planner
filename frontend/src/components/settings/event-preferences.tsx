@@ -16,12 +16,19 @@ interface EventPreferences {
     earlyBird: boolean; // before 10am
     noLateNight: boolean; // after 7pm
   };
-  autoApproval: {
+  emailApprovalSettings: {
     enabled: boolean;
-    freeEventsOnly: boolean;
-    maxCost: number;
-    trustedVenues: boolean;
-    familiarEventTypes: boolean;
+    maxEmailsPerDay: number;
+    approvalTimeoutHours: number;
+    sendReminders: boolean;
+    preferredSendTime: string;
+  };
+  
+  discoverySettings: {
+    prioritizeUrgent: boolean;
+    maxCostToConsider: number;
+    includeWeekends: boolean;
+    trustedVenuesOnly: boolean;
   };
   discoveryRadius: number;
 }
@@ -41,12 +48,19 @@ export function EventPreferences() {
       earlyBird: false,
       noLateNight: true,
     },
-    autoApproval: {
+    emailApprovalSettings: {
       enabled: true,
-      freeEventsOnly: true,
-      maxCost: 25,
-      trustedVenues: true,
-      familiarEventTypes: true,
+      maxEmailsPerDay: 3,
+      approvalTimeoutHours: 24,
+      sendReminders: true,
+      preferredSendTime: '9:00 AM',
+    },
+    
+    discoverySettings: {
+      prioritizeUrgent: true,
+      maxCostToConsider: 100,
+      includeWeekends: true,
+      trustedVenuesOnly: false,
     },
     discoveryRadius: 20,
   });
@@ -60,7 +74,7 @@ export function EventPreferences() {
     setPreferences(prev => ({
       ...prev,
       [section]: {
-        ...prev[section],
+        ...(prev[section] as any || {}),
         [key]: value,
       }
     }));
@@ -216,75 +230,141 @@ export function EventPreferences() {
             </p>
           </div>
 
-          {/* Auto-Approval Settings */}
+          {/* Email Approval Settings */}
           <div className="border-t border-gray-200 pt-6">
-            <h4 className="text-md font-medium text-gray-900 mb-3">🤖 Auto-Approval Settings</h4>
+            <h4 className="text-md font-medium text-gray-900 mb-3">📧 Email Approval Settings</h4>
             
             <div className="mb-4">
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={preferences.autoApproval.enabled}
-                  onChange={(e) => handlePreferenceChange('autoApproval', 'enabled', e.target.checked)}
+                  checked={preferences.emailApprovalSettings.enabled}
+                  onChange={(e) => handlePreferenceChange('emailApprovalSettings', 'enabled', e.target.checked)}
                   className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
                 />
                 <div>
-                  <span className="text-sm font-medium text-gray-900">Enable auto-approval for qualifying events</span>
-                  <p className="text-xs text-gray-500">Events meeting your criteria will be automatically approved</p>
+                  <span className="text-sm font-medium text-gray-900">Enable email approval notifications</span>
+                  <p className="text-xs text-gray-500">Receive emails when new events are found for your approval</p>
                 </div>
               </label>
             </div>
 
-            {preferences.autoApproval.enabled && (
-              <div className="ml-6 space-y-3 bg-gray-50 rounded-lg p-4">
+            {preferences.emailApprovalSettings.enabled && (
+              <div className="ml-6 space-y-4 bg-gray-50 rounded-lg p-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Maximum emails per day
+                  </label>
+                  <select
+                    value={preferences.emailApprovalSettings.maxEmailsPerDay}
+                    onChange={(e) => handlePreferenceChange('emailApprovalSettings', 'maxEmailsPerDay', parseInt(e.target.value))}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value={1}>1 email</option>
+                    <option value={2}>2 emails</option>
+                    <option value={3}>3 emails</option>
+                    <option value={5}>5 emails</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Approval timeout (hours)
+                  </label>
+                  <select
+                    value={preferences.emailApprovalSettings.approvalTimeoutHours}
+                    onChange={(e) => handlePreferenceChange('emailApprovalSettings', 'approvalTimeoutHours', parseInt(e.target.value))}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value={6}>6 hours</option>
+                    <option value={12}>12 hours</option>
+                    <option value={24}>24 hours</option>
+                    <option value={48}>48 hours</option>
+                  </select>
+                </div>
+                
                 <label className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={preferences.autoApproval.freeEventsOnly}
-                    onChange={(e) => handlePreferenceChange('autoApproval', 'freeEventsOnly', e.target.checked)}
+                    checked={preferences.emailApprovalSettings.sendReminders}
+                    onChange={(e) => handlePreferenceChange('emailApprovalSettings', 'sendReminders', e.target.checked)}
                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-2"
                   />
-                  <span className="text-sm text-gray-700">Free events only</span>
+                  <span className="text-sm text-gray-700">Send reminder emails before timeout</span>
                 </label>
                 
-                {!preferences.autoApproval.freeEventsOnly && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Maximum cost for auto-approval
-                    </label>
-                    <select
-                      value={preferences.autoApproval.maxCost}
-                      onChange={(e) => handlePreferenceChange('autoApproval', 'maxCost', parseInt(e.target.value))}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value={10}>$10</option>
-                      <option value={25}>$25</option>
-                      <option value={50}>$50</option>
-                    </select>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Preferred send time
+                  </label>
+                  <select
+                    value={preferences.emailApprovalSettings.preferredSendTime}
+                    onChange={(e) => handlePreferenceChange('emailApprovalSettings', 'preferredSendTime', e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="8:00 AM">8:00 AM</option>
+                    <option value="9:00 AM">9:00 AM</option>
+                    <option value="10:00 AM">10:00 AM</option>
+                    <option value="12:00 PM">12:00 PM</option>
+                    <option value="6:00 PM">6:00 PM</option>
+                  </select>
+                </div>
+              </div>
+            )}
+            
+            {/* Discovery Settings */}
+            <div className="border-t border-gray-200 pt-6 mt-6">
+              <h4 className="text-md font-medium text-gray-900 mb-3">🔍 Discovery Preferences</h4>
+              
+              <div className="space-y-3 bg-gray-50 rounded-lg p-4">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={preferences.discoverySettings.prioritizeUrgent}
+                    onChange={(e) => handlePreferenceChange('discoverySettings', 'prioritizeUrgent', e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-2"
+                  />
+                  <span className="text-sm text-gray-700">Prioritize events with limited availability</span>
+                </label>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Maximum cost to consider
+                  </label>
+                  <select
+                    value={preferences.discoverySettings.maxCostToConsider}
+                    onChange={(e) => handlePreferenceChange('discoverySettings', 'maxCostToConsider', parseInt(e.target.value))}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value={25}>$25</option>
+                    <option value={50}>$50</option>
+                    <option value={100}>$100</option>
+                    <option value={200}>$200</option>
+                    <option value={999}>No limit</option>
+                  </select>
+                </div>
                 
                 <label className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={preferences.autoApproval.trustedVenues}
-                    onChange={(e) => handlePreferenceChange('autoApproval', 'trustedVenues', e.target.checked)}
+                    checked={preferences.discoverySettings.includeWeekends}
+                    onChange={(e) => handlePreferenceChange('discoverySettings', 'includeWeekends', e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-2"
+                  />
+                  <span className="text-sm text-gray-700">Include weekend events</span>
+                </label>
+                
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={preferences.discoverySettings.trustedVenuesOnly}
+                    onChange={(e) => handlePreferenceChange('discoverySettings', 'trustedVenuesOnly', e.target.checked)}
                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-2"
                   />
                   <span className="text-sm text-gray-700">Trusted venues only (Cal Academy, SF Library, etc.)</span>
                 </label>
-                
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={preferences.autoApproval.familiarEventTypes}
-                    onChange={(e) => handlePreferenceChange('autoApproval', 'familiarEventTypes', e.target.checked)}
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-2"
-                  />
-                  <span className="text-sm text-gray-700">Familiar event types only</span>
-                </label>
               </div>
-            )}
+            </div>
           </div>
         </div>
 

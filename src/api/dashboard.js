@@ -20,16 +20,25 @@ router.get('/', authenticateAPI, async (req, res) => {
     
     // Get recent events requiring attention
     const pendingEvents = await database.query(`
-      SELECT id, title, date, time, status, cost, source
-      FROM events 
-      WHERE status = 'discovered'
-      ORDER BY score DESC, created_at DESC
+      SELECT 
+        e.id, e.title, e.date, 
+        COALESCE(e.time, TO_CHAR(e.date, 'HH24:MI')) as time,
+        e.status, e.cost, e.source
+      FROM events e
+      LEFT JOIN event_scores es ON e.id = es.event_id
+      WHERE e.status = 'discovered'
+      ORDER BY COALESCE(es.total_score, 0) DESC, e.created_at DESC
       LIMIT 5
     `);
     
     // Get upcoming registered events
     const upcomingEvents = await database.query(`
-      SELECT id, title, date, time, location_name as venue, status, confirmation_number
+      SELECT 
+        id, title, date, 
+        COALESCE(time, TO_CHAR(date, 'HH24:MI')) as time,
+        COALESCE(location_name, 'TBD') as venue, 
+        status, 
+        (SELECT confirmation_number FROM registrations r WHERE r.event_id = events.id AND r.success = true LIMIT 1) as confirmation_number
       FROM events 
       WHERE status IN ('approved', 'registered') 
       AND date >= CURRENT_DATE
@@ -125,11 +134,12 @@ router.get('/quick-actions', authenticateAPI, async (req, res) => {
     // Get high-priority events that need attention
     const urgentEvents = await database.query(`
       SELECT COUNT(*) as count
-      FROM events 
-      WHERE status = 'discovered' 
+      FROM events e
+      LEFT JOIN event_scores es ON e.id = es.event_id
+      WHERE e.status = 'discovered' 
       AND (
-        date <= CURRENT_DATE + INTERVAL '3 days'
-        OR score >= 0.8
+        e.date <= CURRENT_DATE + INTERVAL '3 days'
+        OR COALESCE(es.total_score, 0) >= 0.8
       )
     `);
     

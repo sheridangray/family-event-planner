@@ -15,6 +15,17 @@ class TaskScheduler {
     this.unifiedNotifications = unifiedNotifications;
     this.reportingService = new ReportingService(logger);
     this.tasks = [];
+    
+    // Discovery progress tracking
+    this.discoveryProgress = {
+      running: false,
+      discoveryRunId: null,
+      totalScrapers: 0,
+      completedScrapers: 0,
+      currentScraper: null,
+      scraperResults: [],
+      startTime: null
+    };
   }
 
   start() {
@@ -131,11 +142,205 @@ class TaskScheduler {
     this.logger.debug('Scheduled health checks: every 15 minutes');
   }
 
-  async runEventDiscovery() {
+  async runEventDiscovery(isManual = false) {
     const startTime = Date.now();
+    let discoveryRunId;
+    let enabledScrapers = [];
     
     try {
-      const events = await this.scraperManager.scrapeAll();
+      // Create a new discovery run record
+      discoveryRunId = await this.database.createDiscoveryRun(isManual ? 'manual' : 'scheduled');
+      
+      // Get enabled scrapers from database with their IDs
+      const enabledScrapersResult = await this.database.query(`
+        SELECT id, name, display_name FROM scrapers WHERE enabled = true ORDER BY name
+      `);
+      enabledScrapers = enabledScrapersResult.rows;
+      
+      // Initialize progress tracking
+      this.discoveryProgress = {
+        running: true,
+        discoveryRunId: discoveryRunId,
+        totalScrapers: enabledScrapers.length,
+        completedScrapers: 0,
+        currentScraper: null,
+        scraperResults: [],
+        startTime: new Date()
+      };
+      
+      this.logger.info(`Running discovery #${discoveryRunId} with ${enabledScrapers.length} enabled scrapers: ${enabledScrapers.map(s => s.name).join(', ')}`);
+      
+      // Scrape all enabled sources and track performance
+      const allEvents = [];
+      for (const scraper of enabledScrapers) {
+        const scraperStartTime = Date.now();
+        let success = false;
+        let errorMessage = null;
+        let eventsFound = 0;
+        
+        // Update progress - scraper starting
+        this.discoveryProgress.currentScraper = {
+          name: scraper.name,
+          displayName: scraper.display_name,
+          status: 'running',
+          startedAt: new Date()
+        };
+        
+        try {
+          const events = await this.scraperManager.scrapeSource(scraper.name, discoveryRunId);
+          allEvents.push(...events);
+          eventsFound = events.length;
+          success = true;
+          this.logger.info(`${scraper.name}: ${events.length} events found`);
+        } catch (error) {
+          errorMessage = error.message;
+          this.logger.error(`Error with scraper ${scraper.name}:`, error.message);
+          this.logger.error(`Full error details for ${scraper.name}:`, error);
+          this.logger.error(`Error stack for ${scraper.name}:`, error.stack);
+        }
+        
+        const executionTime = Date.now() - scraperStartTime;
+        
+        // Update progress - scraper completed
+        this.discoveryProgress.completedScrapers++;
+        this.discoveryProgress.scraperResults.push({
+          name: scraper.name,
+          displayName: scraper.display_name,
+          success: success,
+          eventsFound: eventsFound,
+          executionTime: executionTime,
+          errorMessage: errorMessage
+        });
+        this.discoveryProgress.currentScraper = null;
+        
+        // Record scraper statistics
+        try {
+          await this.database.query(`
+            INSERT INTO scraper_stats (scraper_id, discovery_run_id, events_found, success, error_message, execution_time_ms, started_at, completed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `, [scraper.id, discoveryRunId, eventsFound, success, errorMessage, executionTime, new Date(scraperStartTime), new Date()]);
+        } catch (statsError) {
+          this.logger.error(`Failed to record stats for ${scraper.name}:`, statsError.message);
+        }
+      }
+      
+      if (allEvents.length > 0) {
+        const filteredEvents = await this.eventFilter.filterAndSort(allEvents, {
+          calendarChecker: this.calendarManager,
+          database: this.database,
+          prioritizeUrgent: true
+        });
+        
+        const scoredEvents = await this.eventScorer.scoreEvents(filteredEvents);
+        
+        const topEvents = scoredEvents.slice(0, 10);
+        let sentCount = 0;
+        const maxEventsToSend = isManual ? topEvents.length : config.discovery.eventsPerDayMax;
+        
+        this.logger.info(`${isManual ? 'Manual' : 'Scheduled'} discovery: sending up to ${maxEventsToSend} events for approval`);
+        
+        for (const event of topEvents) {
+          // Always prefer email-only unified notification service over SMS
+          if (this.unifiedNotifications) {
+            // Email-only mode - use unified notification service
+            this.logger.info(`Using email-only notification service for: ${event.title}`);
+            if (isManual || await this.unifiedNotifications.shouldSendEvent()) {
+              await this.unifiedNotifications.sendEventForApproval(event);
+              sentCount++;
+            }
+          } else if (this.smsManager) {
+            // Fallback to SMS only if email notifications unavailable
+            this.logger.warn(`Falling back to SMS for: ${event.title} (email notifications unavailable)`);
+            if (isManual || await this.smsManager.shouldSendEvent()) {
+              await this.smsManager.sendEventForApproval(event);
+              sentCount++;
+            }
+          } else {
+            this.logger.error('No notification service available - cannot send approval requests (smsManager and unifiedNotifications are both null)');
+            break;
+          }
+          
+          if (sentCount >= maxEventsToSend) {
+            break;
+          }
+          
+          await this.delay(2000);
+        }
+        
+        this.logger.info(`Event discovery completed: ${allEvents.length} discovered, ${filteredEvents.length} filtered, ${sentCount} sent for approval`);
+        
+        // Update discovery run with final stats
+        await this.database.updateDiscoveryRun(discoveryRunId, {
+          status: 'completed',
+          scrapers_count: enabledScrapers.length,
+          events_found: allEvents.length,
+          events_saved: filteredEvents.length,
+          events_duplicated: allEvents.length - filteredEvents.length
+        });
+      } else {
+        this.logger.info('Event discovery completed: no new events found');
+        
+        // Update discovery run with zero stats
+        await this.database.updateDiscoveryRun(discoveryRunId, {
+          status: 'completed',
+          scrapers_count: enabledScrapers.length,
+          events_found: 0,
+          events_saved: 0,
+          events_duplicated: 0
+        });
+      }
+      
+      // Mark discovery as completed
+      this.discoveryProgress.running = false;
+      
+    } catch (error) {
+      this.logger.error('Event discovery failed:', error.message);
+      
+      // Mark discovery run as failed
+      try {
+        await this.database.updateDiscoveryRun(discoveryRunId, {
+          status: 'failed',
+          error_message: error.message
+        });
+      } catch (updateError) {
+        this.logger.error('Failed to update discovery run status:', updateError.message);
+      }
+      
+      // Mark discovery as failed
+      this.discoveryProgress.running = false;
+    }
+    
+    const duration = Date.now() - startTime;
+    this.logger.info(`Event discovery took ${duration}ms`);
+  }
+
+  async runSingleScraper(scraperName, isManual = true) {
+    const startTime = Date.now();
+    let discoveryRunId;
+    let success = false;
+    let eventsFound = 0;
+    let errorMessage = null;
+    
+    try {
+      // Get scraper ID from database
+      const scraperResult = await this.database.query(`
+        SELECT id FROM scrapers WHERE name = $1
+      `, [scraperName]);
+      
+      if (scraperResult.rows.length === 0) {
+        throw new Error(`Scraper ${scraperName} not found in database`);
+      }
+      
+      const scraperId = scraperResult.rows[0].id;
+      
+      // Create a discovery run for this individual scraper
+      discoveryRunId = await this.database.createDiscoveryRun('manual');
+      this.logger.info(`Running individual scraper discovery #${discoveryRunId} for ${scraperName}`);
+      
+      // Run the scraper with discovery run tracking
+      const events = await this.scraperManager.scrapeSource(scraperName, discoveryRunId);
+      eventsFound = events.length;
+      success = true;
       
       if (events.length > 0) {
         const filteredEvents = await this.eventFilter.filterAndSort(events, {
@@ -146,48 +351,140 @@ class TaskScheduler {
         
         const scoredEvents = await this.eventScorer.scoreEvents(filteredEvents);
         
-        const topEvents = scoredEvents.slice(0, 10);
+        const topEvents = scoredEvents.slice(0, 5);
         let sentCount = 0;
+        const maxEventsToSend = isManual ? topEvents.length : Math.min(5, config.discovery.eventsPerDayMax);
+        
+        this.logger.info(`${isManual ? 'Manual' : 'Scheduled'} single scraper: sending up to ${maxEventsToSend} events for approval`);
         
         for (const event of topEvents) {
-          // Always prefer email-only unified notification service over SMS
           if (this.unifiedNotifications) {
-            // Email-only mode - use unified notification service
             this.logger.info(`Using email-only notification service for: ${event.title}`);
-            if (await this.unifiedNotifications.shouldSendEvent()) {
+            if (isManual || await this.unifiedNotifications.shouldSendEvent()) {
               await this.unifiedNotifications.sendEventForApproval(event);
               sentCount++;
             }
           } else if (this.smsManager) {
-            // Fallback to SMS only if email notifications unavailable
             this.logger.warn(`Falling back to SMS for: ${event.title} (email notifications unavailable)`);
-            if (await this.smsManager.shouldSendEvent()) {
+            if (isManual || await this.smsManager.shouldSendEvent()) {
               await this.smsManager.sendEventForApproval(event);
               sentCount++;
             }
           } else {
-            this.logger.error('No notification service available - cannot send approval requests (smsManager and unifiedNotifications are both null)');
+            this.logger.error('No notification service available - cannot send approval requests');
             break;
           }
           
-          if (sentCount >= config.discovery.eventsPerDayMax) {
+          if (sentCount >= maxEventsToSend) {
             break;
           }
           
           await this.delay(2000);
         }
         
-        this.logger.info(`Event discovery completed: ${events.length} discovered, ${filteredEvents.length} filtered, ${sentCount} sent for approval`);
+        this.logger.info(`Single scraper discovery completed for ${scraperName}: ${events.length} discovered, ${filteredEvents.length} filtered, ${sentCount} sent for approval`);
+        
+        // Record scraper statistics with discovery run ID
+        const executionTime = Date.now() - startTime;
+        try {
+          await this.database.query(`
+            INSERT INTO scraper_stats (scraper_id, discovery_run_id, events_found, success, error_message, execution_time_ms, started_at, completed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `, [scraperId, discoveryRunId, eventsFound, success, errorMessage, executionTime, new Date(startTime), new Date()]);
+        } catch (statsError) {
+          this.logger.error(`Failed to record stats for ${scraperName}:`, statsError.message);
+        }
+        
+        // Complete the discovery run with success
+        await this.database.updateDiscoveryRun(discoveryRunId, {
+          status: 'completed',
+          scrapers_count: 1,
+          events_found: events.length,
+          events_saved: filteredEvents.length,
+          events_duplicated: events.length - filteredEvents.length
+        });
+        
+        return {
+          success: true,
+          scraperName,
+          eventsFound: events.length,
+          eventsFiltered: filteredEvents.length,
+          eventsSent: sentCount,
+          discoveryRunId: discoveryRunId
+        };
+        
       } else {
-        this.logger.info('Event discovery completed: no new events found');
+        this.logger.info(`Single scraper discovery completed for ${scraperName}: no new events found`);
+        
+        // Record scraper statistics with discovery run ID
+        const executionTime = Date.now() - startTime;
+        try {
+          await this.database.query(`
+            INSERT INTO scraper_stats (scraper_id, discovery_run_id, events_found, success, error_message, execution_time_ms, started_at, completed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `, [scraperId, discoveryRunId, eventsFound, success, errorMessage, executionTime, new Date(startTime), new Date()]);
+        } catch (statsError) {
+          this.logger.error(`Failed to record stats for ${scraperName}:`, statsError.message);
+        }
+        
+        // Complete the discovery run with zero results
+        await this.database.updateDiscoveryRun(discoveryRunId, {
+          status: 'completed',
+          scrapers_count: 1,
+          events_found: 0,
+          events_saved: 0,
+          events_duplicated: 0
+        });
+        
+        return {
+          success: true,
+          scraperName,
+          eventsFound: 0,
+          eventsFiltered: 0,
+          eventsSent: 0,
+          discoveryRunId: discoveryRunId
+        };
       }
       
     } catch (error) {
-      this.logger.error('Event discovery failed:', error.message);
+      errorMessage = error.message;
+      this.logger.error(`Single scraper discovery failed for ${scraperName}:`, error.message);
+      
+      // Record failed scraper statistics
+      const executionTime = Date.now() - startTime;
+      try {
+        if (discoveryRunId) {
+          await this.database.query(`
+            INSERT INTO scraper_stats (scraper_id, discovery_run_id, events_found, success, error_message, execution_time_ms, started_at, completed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `, [scraperId, discoveryRunId, eventsFound, success, errorMessage, executionTime, new Date(startTime), new Date()]);
+        }
+      } catch (statsError) {
+        this.logger.error(`Failed to record failed stats for ${scraperName}:`, statsError.message);
+      }
+      
+      // Mark discovery run as failed
+      try {
+        if (discoveryRunId) {
+          await this.database.updateDiscoveryRun(discoveryRunId, {
+            status: 'failed',
+            error_message: error.message
+          });
+        }
+      } catch (updateError) {
+        this.logger.error('Failed to update discovery run status:', updateError.message);
+      }
+      
+      return {
+        success: false,
+        scraperName,
+        error: error.message,
+        discoveryRunId: discoveryRunId
+      };
     }
     
     const duration = Date.now() - startTime;
-    this.logger.info(`Event discovery took ${duration}ms`);
+    this.logger.info(`Single scraper discovery for ${scraperName} took ${duration}ms`);
   }
 
   async runEventProcessing() {
@@ -573,6 +870,16 @@ Date: ${new Date().toDateString()}
         frequency: t.frequency,
         running: t.task.running
       }))
+    };
+  }
+  
+  getDiscoveryProgress() {
+    return {
+      ...this.discoveryProgress,
+      // Calculate completion percentage
+      progress: this.discoveryProgress.totalScrapers > 0 
+        ? Math.round((this.discoveryProgress.completedScrapers / this.discoveryProgress.totalScrapers) * 100)
+        : 0
     };
   }
 }

@@ -1,20 +1,22 @@
 const RegistrationAutomator = require('../automation/registration');
-const { EmailNotificationClient } = require('../mcp/email-notifications');
 const CalendarManager = require('./calendar-manager');
 const { config } = require('../config');
 
 class RegistrationOrchestrator {
-  constructor(logger, database) {
+  constructor(logger, database, emailClient = null) {
     this.logger = logger;
     this.database = database;
     this.registrationAutomator = new RegistrationAutomator(logger, database);
-    this.emailClient = new EmailNotificationClient(logger, database);
+    this.emailClient = emailClient; // Accept injected email client to avoid circular dependency
     this.calendarManager = new CalendarManager(logger);
   }
 
   async init() {
     await this.registrationAutomator.init();
-    await this.emailClient.init();
+    // Only initialize email client if it was provided
+    if (this.emailClient && this.emailClient.init) {
+      await this.emailClient.init();
+    }
     await this.calendarManager.init();
     this.logger.info('Registration orchestrator initialized');
   }

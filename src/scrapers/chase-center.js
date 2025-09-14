@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 class ChaseCenterScraper extends BaseScraper {
   constructor(logger) {
-    super('Chase Center', 'https://www.chasecenter.com/events', logger);
+    super('chase-center', 'https://www.chasecenter.com/events', logger);
   }
 
   async scrape() {

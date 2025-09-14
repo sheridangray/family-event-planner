@@ -3,8 +3,13 @@ const cheerio = require('cheerio');
 
 class SanFranKidsOutAndAboutScraper extends BaseScraper {
   constructor(logger) {
-    super('San Francisco Kids Out and About', 'https://sanfran.kidsoutandabout.com/', logger);
-    this.eventListUrl = 'https://sanfran.kidsoutandabout.com/event-list';
+    super('sanfran-kidsoutandabout', 'https://sanfran.kidsoutandabout.com/', logger);
+    // Generate current date event list URL
+    const today = new Date();
+    const dateStr = today.getFullYear() + '-' + 
+                   String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                   String(today.getDate()).padStart(2, '0');
+    this.eventListUrl = `https://sanfran.kidsoutandabout.com/event-list/${dateStr}`;
   }
 
   async scrape() {
@@ -13,11 +18,24 @@ class SanFranKidsOutAndAboutScraper extends BaseScraper {
       
       const events = [];
       
-      // Scrape both the homepage featured events and event list page
+      // Generate URLs for today and next 7 days since events might be spread across dates
       const pagesToScrape = [
-        { url: this.url, name: 'Homepage Featured Events' },
-        { url: this.eventListUrl, name: 'Event List Page' }
+        { url: this.url, name: 'Homepage Featured Events' }
       ];
+      
+      // Add date-specific event list pages for the next week
+      for (let i = 0; i < 7; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() + i);
+        const dateStr = date.getFullYear() + '-' + 
+                       String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                       String(date.getDate()).padStart(2, '0');
+        const eventListUrl = `https://sanfran.kidsoutandabout.com/event-list/${dateStr}`;
+        pagesToScrape.push({ 
+          url: eventListUrl, 
+          name: `Event List Page (${dateStr})` 
+        });
+      }
       
       for (const page of pagesToScrape) {
         try {

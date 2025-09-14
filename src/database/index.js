@@ -27,6 +27,27 @@ class Database {
     return await this.postgres.updateSMSApproval(approvalId, response, status);
   }
 
+  // New unified notification methods
+  async saveNotification(eventId, notificationType, recipient, subject, messageContent, messageId = null) {
+    return await this.postgres.saveNotification(eventId, notificationType, recipient, subject, messageContent, messageId);
+  }
+
+  async updateNotificationResponse(notificationId, response, responseStatus) {
+    return await this.postgres.updateNotificationResponse(notificationId, response, responseStatus);
+  }
+
+  async getPendingNotifications(recipient, notificationType = null) {
+    return await this.postgres.getPendingNotifications(recipient, notificationType);
+  }
+
+  async getNotificationsByEventId(eventId) {
+    return await this.postgres.getNotificationsByEventId(eventId);
+  }
+
+  async updateNotificationStatus(notificationId, status) {
+    return await this.postgres.updateNotificationStatus(notificationId, status);
+  }
+
   async saveRegistration(eventId, success, confirmationNumber, errorMessage, screenshotPath, paymentInfo) {
     return await this.postgres.saveRegistration(eventId, success, confirmationNumber, errorMessage, screenshotPath, paymentInfo);
   }
@@ -129,6 +150,35 @@ class Database {
 
   async isVenueVisited(venueName) {
     return await this.postgres.isVenueVisited(venueName);
+  }
+
+  // Discovery runs methods
+  async createDiscoveryRun(triggerType = 'manual') {
+    return await this.postgres.createDiscoveryRun(triggerType);
+  }
+
+  async updateDiscoveryRun(runId, updates) {
+    return await this.postgres.updateDiscoveryRun(runId, updates);
+  }
+
+  async getDiscoveryRuns(limit = 10) {
+    return await this.postgres.getDiscoveryRuns(limit);
+  }
+
+  async getLatestDiscoveryRunId() {
+    return await this.postgres.getLatestDiscoveryRunId();
+  }
+
+  async saveDiscoveredEvent(discoveryRunId, scraperName, event, isDuplicate = false, duplicateOf = null, filterResults = null) {
+    return await this.postgres.saveDiscoveredEvent(discoveryRunId, scraperName, event, isDuplicate, duplicateOf, filterResults);
+  }
+
+  async getDiscoveredEventsByRun(discoveryRunId) {
+    return await this.postgres.getDiscoveredEventsByRun(discoveryRunId);
+  }
+
+  async getDiscoveredEventsByRunAndScraper(discoveryRunId, scraperName) {
+    return await this.postgres.getDiscoveredEventsByRunAndScraper(discoveryRunId, scraperName);
   }
 
   async query(sql, params = []) {

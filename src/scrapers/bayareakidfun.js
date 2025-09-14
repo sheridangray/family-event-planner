@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 class BayAreaKidFunScraper extends BaseScraper {
   constructor(logger) {
-    super('Bay Area Kid Fun', 'https://www.bayareakidfun.com/family-friendly-events-in-the-bay-area/', logger);
+    super('bayareakidfun', 'https://www.bayareakidfun.com/family-friendly-events-in-the-bay-area/', logger);
     this.weekendHighlightsUrl = 'https://www.bayareakidfun.com/weekend-highlights/';
   }
 

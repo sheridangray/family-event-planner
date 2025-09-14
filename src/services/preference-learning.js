@@ -399,7 +399,13 @@ class FamilyPreferenceLearning {
         averageAcceptedCost: 0,
         maxAcceptedCost: 25
       },
-      positiveKeywords: ['family', 'kids', 'fun', 'educational', 'interactive'],
+      positiveKeywords: [
+        {keyword: 'family', score: 10},
+        {keyword: 'kids', score: 10},
+        {keyword: 'fun', score: 8},
+        {keyword: 'educational', score: 8},
+        {keyword: 'interactive', score: 6}
+      ],
       negativeKeywords: [],
       learningConfidence: 0,
       lastUpdated: new Date()
@@ -542,6 +548,124 @@ class FamilyPreferenceLearning {
     } catch (error) {
       this.logger.error('Failed to get event recommendations:', error.message);
       return events.slice(0, limit);
+    }
+  }
+
+  /**
+   * Calculate preference score for a specific event (0-100 scale)
+   * This is the main method called by the event filter
+   */
+  async getEventPreferenceScore(event) {
+    try {
+      const preferences = await this.analyzeFamilyPreferences();
+      let score = 50; // Base score
+      
+      // Category preference scoring (25% weight)
+      const eventCategories = this.categorizeEvent(event);
+      let categoryScore = 0;
+      let categoryCount = 0;
+      
+      eventCategories.forEach(category => {
+        if (preferences.categoryPreferences[category] !== undefined) {
+          categoryScore += preferences.categoryPreferences[category];
+          categoryCount++;
+        }
+      });
+      
+      if (categoryCount > 0) {
+        score += (categoryScore / categoryCount - 0.5) * 50; // Scale from -25 to +25
+      }
+      
+      // Time preference scoring (20% weight)
+      const eventDate = new Date(event.date);
+      const hour = eventDate.getHours();
+      const day = eventDate.getDay();
+      
+      const hourPrefs = preferences.timePreferences.preferredHours;
+      const dayPrefs = preferences.timePreferences.preferredDays;
+      
+      if (hourPrefs[hour] && Object.keys(hourPrefs).length > 0) {
+        const maxHourScore = Math.max(...Object.values(hourPrefs));
+        if (maxHourScore > 0) {
+          score += (hourPrefs[hour] / maxHourScore) * 20 - 10; // Scale from -10 to +10
+        }
+      }
+      
+      if (dayPrefs[day] && Object.keys(dayPrefs).length > 0) {
+        const maxDayScore = Math.max(...Object.values(dayPrefs));
+        if (maxDayScore > 0) {
+          score += (dayPrefs[day] / maxDayScore) * 10 - 5; // Scale from -5 to +5
+        }
+      }
+      
+      // Source preference scoring (15% weight)
+      const sourcePrefs = preferences.sourcePreferences;
+      if (sourcePrefs[event.source]) {
+        score += (sourcePrefs[event.source] - 0.5) * 30; // Scale from -15 to +15
+      }
+      
+      // Cost preference scoring (10% weight)
+      const eventCost = event.cost || 0;
+      const costPrefs = preferences.costPreferences;
+      
+      if (eventCost === 0 && costPrefs.freeEventPreference > 0.6) {
+        score += 10; // Bonus for free events if family prefers them
+      } else if (eventCost > 0) {
+        // Penalty for paid events if family prefers free
+        const paidEventTolerance = costPrefs.paidEventTolerance || costPrefs.paidEventPreference || 0.3;
+        score -= (1 - paidEventTolerance) * 10;
+        
+        // Additional penalty if over budget
+        if (eventCost > costPrefs.maxAcceptedCost) {
+          score -= 15; // Heavy penalty for over-budget events
+        }
+      }
+      
+      // Keyword matching (30% weight)
+      const eventText = `${event.title} ${event.description || ''}`.toLowerCase();
+      const eventKeywords = this.extractEventKeywords(event);
+      
+      // Positive keywords boost
+      let keywordBonus = 0;
+      preferences.positiveKeywords.forEach(keywordObj => {
+        const keyword = typeof keywordObj === 'string' ? keywordObj : keywordObj.keyword;
+        const keywordScore = typeof keywordObj === 'string' ? 5 : keywordObj.score;
+        
+        if (eventText.includes(keyword.toLowerCase())) {
+          keywordBonus += keywordScore; // Direct score addition
+        }
+      });
+      
+      // Negative keywords penalty
+      let keywordPenalty = 0;
+      preferences.negativeKeywords.forEach(keywordObj => {
+        const keyword = typeof keywordObj === 'string' ? keywordObj : keywordObj.keyword;
+        const keywordScore = typeof keywordObj === 'string' ? 5 : Math.abs(keywordObj.score);
+        
+        if (eventText.includes(keyword.toLowerCase())) {
+          keywordPenalty += keywordScore; // Direct penalty
+        }
+      });
+      
+      score += keywordBonus - keywordPenalty;
+      
+      // Apply learning confidence as a factor
+      const confidence = preferences.learningConfidence;
+      if (confidence < 0.3) {
+        // Low confidence: use more conservative scoring, closer to baseline
+        score = 50 + (score - 50) * confidence * 2;
+      }
+      
+      // Ensure score is within bounds
+      score = Math.max(0, Math.min(100, score));
+      
+      this.logger.debug(`Event preference score for "${event.title}": ${score.toFixed(1)} (confidence: ${(confidence * 100).toFixed(1)}%)`);
+      
+      return score;
+      
+    } catch (error) {
+      this.logger.error(`Error calculating preference score for "${event.title}":`, error.message);
+      return 50; // Default neutral score
     }
   }
 

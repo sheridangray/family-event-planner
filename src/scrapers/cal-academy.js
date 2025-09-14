@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 class CalAcademyScraper extends BaseScraper {
   constructor(logger) {
-    super('California Academy of Sciences', 'https://www.calacademy.org/daily-calendar', logger);
+    super('cal-academy', 'https://www.calacademy.org/daily-calendar', logger);
   }
 
   async scrape() {

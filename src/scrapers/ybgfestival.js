@@ -3,8 +3,8 @@ const cheerio = require('cheerio');
 
 class YBGFestivalScraper extends BaseScraper {
   constructor(logger) {
-    super('YBG Festival', 'https://ybgfestival.org/', logger);
-    this.eventsUrl = 'https://ybgfestival.org/';
+    super('ybgfestival', 'https://ybgfestival.org/events/', logger);
+    this.eventsUrl = 'https://ybgfestival.org/events/';
   }
 
   async scrape() {
@@ -92,17 +92,22 @@ class YBGFestivalScraper extends BaseScraper {
         }
       });
 
-      // If no JSON-LD events found, fall back to HTML parsing
-      if (events.length === 0) {
-        this.logger.debug('No JSON-LD events found, trying HTML parsing...');
+      // Always also try HTML parsing to catch events not in JSON-LD
+      // (JSON-LD often only contains featured/first event)
+      if (true) {
+        this.logger.debug('Also trying HTML parsing to catch additional events...');
         
-        // Look for event listings using common selectors
+        // Look for event listings using YBG-specific and common selectors
         const eventSelectors = [
+          '.tribe-events-calendar-list__event',  // The Events Calendar plugin
+          '.tribe-events-list-event-row',
+          '.tribe-common-g-row',
           '.event-card',
           '.event-item', 
           '.event-listing',
           '.event',
           '[class*="event"]',
+          '[class*="tribe"]',
           '.listing',
           '.card',
           'article',
@@ -113,8 +118,9 @@ class YBGFestivalScraper extends BaseScraper {
         let eventItems = $();
         for (const selector of eventSelectors) {
           const items = $(selector);
+          this.logger.debug(`Trying selector ${selector}: found ${items.length} items`);
           if (items.length > 0) {
-            this.logger.debug(`Found ${items.length} events using selector: ${selector}`);
+            this.logger.info(`Found ${items.length} events using selector: ${selector}`);
             eventItems = items;
             break;
           }

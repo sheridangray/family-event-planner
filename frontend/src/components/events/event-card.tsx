@@ -16,36 +16,7 @@ import {
   CheckCircleIcon as CheckCircleSolid,
 } from "@heroicons/react/24/solid";
 
-interface Event {
-  id: string;
-  title: string;
-  date: Date;
-  time: string;
-  location: {
-    name: string;
-    address: string;
-    distance: string;
-  };
-  cost: number;
-  ageRange: { min: number; max: number };
-  status: 'pending' | 'approved' | 'registered' | 'rejected' | 'manual_required';
-  description: string;
-  socialProof: {
-    rating: number;
-    reviewCount: number;
-    tags: string[];
-  };
-  context: {
-    weather?: string | null;
-    preferences?: string | null;
-    urgency?: string | null;
-  };
-  source: string;
-  autoRegistration: string | null;
-  confirmationNumber?: string;
-  rejectionReason?: string;
-  failureReason?: string;
-}
+import { Event } from "@/lib/api";
 
 interface EventCardProps {
   event: Event;
@@ -104,7 +75,7 @@ export function EventCard({
   const getContextAlerts = () => {
     const alerts = [];
     
-    if (event.context.urgency) {
+    if (event.context?.urgency) {
       alerts.push(
         <div key="urgency" className="flex items-center text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
           <ExclamationTriangleIcon className="h-3 w-3 mr-1" />
@@ -113,7 +84,7 @@ export function EventCard({
       );
     }
     
-    if (event.context.weather) {
+    if (event.context?.weather) {
       alerts.push(
         <div key="weather" className="text-xs text-blue-600">
           {event.context.weather}
@@ -121,7 +92,7 @@ export function EventCard({
       );
     }
 
-    if (event.context.preferences) {
+    if (event.context?.preferences) {
       alerts.push(
         <div key="preferences" className="text-xs text-green-600">
           💡 {event.context.preferences}
@@ -161,7 +132,7 @@ export function EventCard({
               <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
                 <span className="flex items-center">
                   <ClockIcon className="h-4 w-4 mr-1" />
-                  {format(event.date, 'EEE, MMM d')} • {event.time}
+                  {format(new Date(event.date), 'EEE, MMM d')} • {event.time}
                 </span>
               </div>
             </div>
@@ -175,7 +146,7 @@ export function EventCard({
             <MapPinIcon className="h-4 w-4 text-gray-400 mt-0.5 mr-2 flex-shrink-0" />
             <div>
               <div className="text-sm font-medium text-gray-900">{event.location.name}</div>
-              <div className="text-xs text-gray-600">{event.location.distance}</div>
+              {event.location.distance && <div className="text-xs text-gray-600">{event.location.distance}</div>}
             </div>
           </div>
           
@@ -183,7 +154,7 @@ export function EventCard({
             <CurrencyDollarIcon className="h-4 w-4 text-gray-400 mr-2" />
             <div>
               <div className="text-sm font-medium text-gray-900">
-                {event.cost === 0 ? 'FREE' : `$${event.cost}`}
+                {event.cost === '0' || event.cost === '' ? 'FREE' : `$${event.cost}`}
               </div>
               <div className="text-xs text-gray-600">
                 Ages {event.ageRange.min}-{event.ageRange.max}
@@ -193,24 +164,26 @@ export function EventCard({
         </div>
 
         {/* Social Proof */}
-        <div className="flex items-center space-x-4 mb-3">
-          <div className="flex items-center">
-            <StarIcon className="h-4 w-4 text-yellow-400 fill-current" />
-            <span className="text-sm text-gray-600 ml-1">
-              {event.socialProof.rating} ({event.socialProof.reviewCount})
-            </span>
-          </div>
-          <div className="flex space-x-1">
-            {event.socialProof.tags.map((tag, index) => (
-              <span 
-                key={index}
-                className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded"
-              >
-                {tag}
+        {event.socialProof && (
+          <div className="flex items-center space-x-4 mb-3">
+            <div className="flex items-center">
+              <StarIcon className="h-4 w-4 text-yellow-400 fill-current" />
+              <span className="text-sm text-gray-600 ml-1">
+                {event.socialProof.rating} ({event.socialProof.reviewCount})
               </span>
-            ))}
+            </div>
+            <div className="flex space-x-1">
+              {event.socialProof.tags.map((tag, index) => (
+                <span 
+                  key={index}
+                  className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Context Alerts */}
         {getContextAlerts().length > 0 && (

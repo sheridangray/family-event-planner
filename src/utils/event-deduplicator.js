@@ -188,9 +188,10 @@ class EventDeduplicator {
    * @param {Object} primaryEvent - The event to merge into
    * @param {Object} duplicateEvent - The duplicate event data
    * @param {number} similarityScore - The similarity score that triggered the merge
+   * @param {boolean} recordInDatabase - Whether to record the merge in database (default true)
    * @returns {Object} Updated primary event
    */
-  async mergeEventData(primaryEvent, duplicateEvent, similarityScore = null) {
+  async mergeEventData(primaryEvent, duplicateEvent, similarityScore = null, recordInDatabase = true) {
     // Track multiple sources
     if (!primaryEvent.sources) {
       primaryEvent.sources = [primaryEvent.source];
@@ -248,8 +249,8 @@ class EventDeduplicator {
     primaryEvent.lastMerged = new Date();
     primaryEvent.mergeCount = (primaryEvent.mergeCount || 1) + 1;
     
-    // Record the merge in database if available
-    if (this.database && similarityScore !== null) {
+    // Record the merge in database if available and requested
+    if (this.database && similarityScore !== null && recordInDatabase) {
       try {
         const mergeType = similarityScore >= 0.95 ? 'exact' : 'fuzzy';
         await this.database.recordEventMerge(
@@ -271,10 +272,11 @@ class EventDeduplicator {
   /**
    * Process and deduplicate a batch of events
    * @param {Array} newEvents - Array of events to deduplicate
-   * @returns {Array} Deduplicated events
+   * @returns {Object} { uniqueEvents: Array, mergeInformation: Array }
    */
   async deduplicateEvents(newEvents) {
     const uniqueEvents = [];
+    const mergeInformation = [];
     let exactDuplicates = 0;
     let fuzzyDuplicates = 0;
     
@@ -285,7 +287,13 @@ class EventDeduplicator {
         // Check for exact duplicates first
         if (this.seenEvents.has(fingerprint)) {
           const existingEvent = this.seenEvents.get(fingerprint);
-          await this.mergeEventData(existingEvent, event, 1.0);
+          await this.mergeEventData(existingEvent, event, 1.0, false); // Don't record to DB
+          mergeInformation.push({
+            primaryEventId: existingEvent.id,
+            mergedEvent: event,
+            similarityScore: 1.0,
+            mergeType: 'exact'
+          });
           exactDuplicates++;
           continue;
         }
@@ -293,7 +301,13 @@ class EventDeduplicator {
         // Check for fuzzy duplicates
         const similarMatch = this.findMostSimilarEvent(event);
         if (similarMatch) {
-          await this.mergeEventData(similarMatch.event, event, similarMatch.score);
+          await this.mergeEventData(similarMatch.event, event, similarMatch.score, false); // Don't record to DB
+          mergeInformation.push({
+            primaryEventId: similarMatch.event.id,
+            mergedEvent: event,
+            similarityScore: similarMatch.score,
+            mergeType: 'fuzzy'
+          });
           fuzzyDuplicates++;
           this.logger.debug(`Fuzzy duplicate detected: similarity=${similarMatch.score.toFixed(3)}`);
           continue;
@@ -318,7 +332,7 @@ class EventDeduplicator {
     
     this.logger.info(`Deduplication results: ${newEvents.length} input events -> ${uniqueEvents.length} unique events (${exactDuplicates} exact, ${fuzzyDuplicates} fuzzy duplicates removed)`);
     
-    return uniqueEvents;
+    return { uniqueEvents, mergeInformation };
   }
 
   /**

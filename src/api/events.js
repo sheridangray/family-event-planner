@@ -69,17 +69,38 @@ router.get('/', authenticateAPI, async (req, res) => {
     const countResult = await database.query(countQuery, queryParams);
     const totalEvents = parseInt(countResult.rows[0].total);
     
-    // Get paginated results
+    // Get paginated results with computed fields and social proof
     const offset = (parseInt(page) - 1) * parseInt(limit);
     const eventsQuery = `
       SELECT 
-        id, title, date, time, location_name, location_address, location_distance,
-        cost, age_min, age_max, status, description, registration_url,
-        social_proof_rating, social_proof_review_count, social_proof_tags,
-        weather_context, preferences_context, urgency_context,
-        source, auto_registration, confirmation_number, rejection_reason,
-        failure_reason, score, created_at, updated_at
-      FROM events 
+        e.id, e.title, e.date, 
+        COALESCE(e.time, TO_CHAR(e.date, 'HH24:MI')) as time,
+        COALESCE(e.location_name, 'TBD') as location_name, 
+        e.location_address, 
+        COALESCE(e.location_distance, 'TBD') as location_distance,
+        e.cost, e.age_range_min as age_min, e.age_range_max as age_max, 
+        e.status, e.description, e.registration_url,
+        COALESCE(sp.rating, 0) as social_proof_rating,
+        COALESCE(sp.review_count, 0) as social_proof_review_count,
+        COALESCE(sp.tags, '[]'::jsonb) as social_proof_tags,
+        w.condition as weather_context,
+        ei.user_feedback as preferences_context,
+        CASE 
+          WHEN e.date <= CURRENT_DATE + INTERVAL '3 days' THEN 'high'
+          WHEN e.date <= CURRENT_DATE + INTERVAL '7 days' THEN 'medium'
+          ELSE 'low'
+        END as urgency_context,
+        e.source, e.registration_url as auto_registration, 
+        r.confirmation_number, e.status as rejection_reason,
+        r.error_message as failure_reason, 
+        COALESCE(es.total_score, 0) as score, 
+        e.created_at, e.updated_at
+      FROM events e
+      LEFT JOIN event_social_proof sp ON e.id = sp.event_id
+      LEFT JOIN weather_cache w ON e.location_address = w.location AND DATE(e.date) = w.date::date
+      LEFT JOIN event_interactions ei ON e.id = ei.event_id AND ei.interaction_type = 'approved'
+      LEFT JOIN registrations r ON e.id = r.event_id AND r.success = true
+      LEFT JOIN event_scores es ON e.id = es.event_id
       ${whereClause}
       ORDER BY ${sortBy} ${sortOrder}
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
@@ -110,7 +131,9 @@ router.get('/', authenticateAPI, async (req, res) => {
       socialProof: {
         rating: event.social_proof_rating || 0,
         reviewCount: event.social_proof_review_count || 0,
-        tags: event.social_proof_tags ? event.social_proof_tags.split(',') : [],
+        tags: typeof event.social_proof_tags === 'string' 
+          ? JSON.parse(event.social_proof_tags || '[]')
+          : (event.social_proof_tags || []),
       },
       context: {
         weather: event.weather_context,
@@ -287,14 +310,35 @@ router.get('/:id', authenticateAPI, async (req, res) => {
     
     const result = await database.query(`
       SELECT 
-        id, title, date, time, location_name, location_address, location_distance,
-        cost, age_min, age_max, status, description, registration_url,
-        social_proof_rating, social_proof_review_count, social_proof_tags,
-        weather_context, preferences_context, urgency_context,
-        source, auto_registration, confirmation_number, rejection_reason,
-        failure_reason, score, created_at, updated_at
-      FROM events 
-      WHERE id = $1
+        e.id, e.title, e.date, 
+        COALESCE(e.time, TO_CHAR(e.date, 'HH24:MI')) as time,
+        COALESCE(e.location_name, 'TBD') as location_name, 
+        e.location_address, 
+        COALESCE(e.location_distance, 'TBD') as location_distance,
+        e.cost, e.age_range_min as age_min, e.age_range_max as age_max, 
+        e.status, e.description, e.registration_url,
+        COALESCE(sp.rating, 0) as social_proof_rating,
+        COALESCE(sp.review_count, 0) as social_proof_review_count,
+        COALESCE(sp.tags, '[]'::jsonb) as social_proof_tags,
+        w.condition as weather_context,
+        ei.user_feedback as preferences_context,
+        CASE 
+          WHEN e.date <= CURRENT_DATE + INTERVAL '3 days' THEN 'high'
+          WHEN e.date <= CURRENT_DATE + INTERVAL '7 days' THEN 'medium'
+          ELSE 'low'
+        END as urgency_context,
+        e.source, e.registration_url as auto_registration, 
+        r.confirmation_number, e.status as rejection_reason,
+        r.error_message as failure_reason, 
+        COALESCE(es.total_score, 0) as score, 
+        e.created_at, e.updated_at
+      FROM events e
+      LEFT JOIN event_social_proof sp ON e.id = sp.event_id
+      LEFT JOIN weather_cache w ON e.location_address = w.location AND DATE(e.date) = w.date::date
+      LEFT JOIN event_interactions ei ON e.id = ei.event_id AND ei.interaction_type = 'approved'
+      LEFT JOIN registrations r ON e.id = r.event_id AND r.success = true
+      LEFT JOIN event_scores es ON e.id = es.event_id
+      WHERE e.id = $1
     `, [eventId]);
     
     if (result.rows.length === 0) {
@@ -326,7 +370,9 @@ router.get('/:id', authenticateAPI, async (req, res) => {
       socialProof: {
         rating: event.social_proof_rating || 0,
         reviewCount: event.social_proof_review_count || 0,
-        tags: event.social_proof_tags ? event.social_proof_tags.split(',') : [],
+        tags: typeof event.social_proof_tags === 'string' 
+          ? JSON.parse(event.social_proof_tags || '[]')
+          : (event.social_proof_tags || []),
       },
       context: {
         weather: event.weather_context,
