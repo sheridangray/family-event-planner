@@ -6,10 +6,10 @@ const { EmailApprovalManager } = require('../mcp/email-notifications');
  * SMS support removed while waiting for Twilio verification
  */
 class UnifiedNotificationService {
-  constructor(logger, database) {
+  constructor(logger, database, calendarManager = null) {
     this.logger = logger;
     this.database = database;
-    this.emailManager = new EmailApprovalManager(logger, database);
+    this.emailManager = new EmailApprovalManager(logger, database, calendarManager);
     this.emailAvailable = false;
   }
 

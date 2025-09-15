@@ -345,6 +345,109 @@ class CalendarManager {
   }
 
   /**
+   * Create placeholder calendar event for manual registration
+   */
+  async createPlaceholderEvent(event) {
+    if (!this.calendar) {
+      this.logger.debug('Calendar integration not available - skipping placeholder creation');
+      return { success: false, reason: 'calendar_not_available' };
+    }
+
+    try {
+      this.logger.info(`Creating placeholder calendar event for: ${event.title}`);
+      
+      const calendarEvent = this.buildPlaceholderCalendarEvent(event);
+      
+      const response = await this.calendar.events.insert({
+        calendarId: this.calendarId,
+        resource: calendarEvent
+      });
+
+      this.logger.info(`Placeholder calendar event created with ID: ${response.data.id}`);
+      
+      return {
+        success: true,
+        calendarEventId: response.data.id,
+        eventLink: response.data.htmlLink
+      };
+
+    } catch (error) {
+      this.logger.error('Failed to create placeholder calendar event:', error.message);
+      return { 
+        success: false, 
+        error: error.message,
+        reason: 'creation_failed'
+      };
+    }
+  }
+
+  /**
+   * Build placeholder calendar event object
+   */
+  buildPlaceholderCalendarEvent(event) {
+    const eventDate = new Date(event.date);
+    const eventEndDate = this.calculateEventEndTime(eventDate, event);
+    
+    const calendarEvent = {
+      summary: `📋 PLACEHOLDER: ${event.title}`,
+      location: event.location_address,
+      description: this.buildPlaceholderDescription(event),
+      start: {
+        dateTime: eventDate.toISOString(),
+        timeZone: 'America/Los_Angeles'
+      },
+      end: {
+        dateTime: eventEndDate.toISOString(),
+        timeZone: 'America/Los_Angeles'
+      },
+      attendees: this.getAttendees(),
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 24 * 60 }, // 1 day before
+          { method: 'popup', minutes: 2 * 60 }   // 2 hours before
+        ]
+      },
+      colorId: '8', // Gray color for placeholders
+      visibility: 'private',
+      transparency: 'transparent', // Shows as "free" time
+      extendedProperties: {
+        private: {
+          isPlaceholder: 'true',
+          originalEventId: event.id.toString(),
+          monitoringEnabled: 'true',
+          createdBy: 'family-event-planner'
+        }
+      }
+    };
+
+    return calendarEvent;
+  }
+
+  /**
+   * Build placeholder event description
+   */
+  buildPlaceholderDescription(event) {
+    return `🔄 MANUAL REGISTRATION REQUIRED
+
+📋 TO-DO: Register at: ${event.registrationUrl || event.registration_url || 'Check event website'}
+
+REGISTRATION CHECKLIST:
+☐ Visit registration website
+☐ Complete registration form  
+☐ Receive confirmation email
+
+📍 Event Details:
+• ${event.description || 'No description provided'}
+• Cost: ${event.cost === 0 ? 'FREE' : `$${event.cost}`}
+• Source: ${event.source}
+
+ℹ️ This placeholder will be automatically removed when you complete registration and a duplicate event is detected in your calendar.
+
+🤖 Created by Family Event Planner`;
+  }
+
+  /**
    * Generate calendar statistics
    */
   async getCalendarStats() {

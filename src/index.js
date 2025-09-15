@@ -11,6 +11,7 @@ const ScraperManager = require('./scrapers');
 const EventFilter = require('./filters');
 const EventScorer = require('./scoring');
 const FamilyDemographicsService = require('./services/family-demographics');
+const CalendarManager = require('./services/calendar-manager');
 const { CalendarConflictChecker } = require('./mcp/gmail');
 const { SMSApprovalManager } = require('./mcp/twilio');
 const UnifiedNotificationService = require('./services/unified-notification');
@@ -138,9 +139,13 @@ async function initializeComponents() {
     const eventScorer = new EventScorer(logger, database);
     logger.info('Event processing systems initialized');
     
-    // Initialize MCP clients
-    const calendarManager = new CalendarConflictChecker(logger);
+    // Initialize calendar service
+    const calendarManager = new CalendarManager(logger);
     await calendarManager.init();
+    
+    // Initialize conflict checker
+    const calendarConflictChecker = new CalendarConflictChecker(logger);
+    await calendarConflictChecker.init();
     
     // Initialize notification services - SMS Manager is optional  
     let smsManager = null;
@@ -151,7 +156,7 @@ async function initializeComponents() {
     
     try {
       logger.info('Initializing UnifiedNotificationService (email-only)...');
-      unifiedNotifications = new UnifiedNotificationService(logger, database);
+      unifiedNotifications = new UnifiedNotificationService(logger, database, calendarManager);
       await unifiedNotifications.init();
       logger.info('Email-only notification service initialized');
     } catch (emailError) {
@@ -180,7 +185,7 @@ async function initializeComponents() {
     // Initialize scheduler with notification services
     const scheduler = new TaskScheduler(
       logger, database, scraperManager, eventScorer, eventFilter,
-      smsManager, registrationAutomator, calendarManager, unifiedNotifications
+      smsManager, registrationAutomator, calendarConflictChecker, unifiedNotifications
     );
     
     // Store components in app locals for API access
@@ -191,6 +196,7 @@ async function initializeComponents() {
     app.locals.eventScorer = eventScorer;
     app.locals.familyService = familyService;
     app.locals.calendarManager = calendarManager;
+    app.locals.calendarConflictChecker = calendarConflictChecker;
     app.locals.smsManager = smsManager;
     app.locals.registrationAutomator = registrationAutomator;
     app.locals.scheduler = scheduler;
@@ -203,7 +209,7 @@ async function initializeComponents() {
     
     return {
       database, scraperManager, eventFilter, eventScorer, familyService,
-      calendarManager, smsManager, registrationAutomator, scheduler
+      calendarManager, calendarConflictChecker, smsManager, registrationAutomator, scheduler
     };
     
   } catch (error) {

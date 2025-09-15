@@ -166,28 +166,47 @@ class EmailNotificationClient {
     
     emailBody += `\n---\n\n`;
     
-    if (event.cost === 0) {
-      emailBody += `**Should I book this event for the family?**\n\n`;
-      emailBody += `Reply with:\n`;
-      emailBody += `• **YES** - I'll book it automatically\n`;
-      emailBody += `• **NO** - Skip this event\n\n`;
-    } else {
-      emailBody += `**This event requires payment ($${event.cost})**\n\n`;
-      emailBody += `Since this is a paid event, please complete registration directly:\n`;
-      emailBody += `🔗 **Registration Link:** ${event.registrationUrl}\n\n`;
-      emailBody += `The registration form will handle payment securely. After you register, just reply "DONE" to let me know it's complete.\n\n`;
-    }
+    emailBody += `📋 **NEXT STEP - MANUAL REGISTRATION:**\n\n`;
+    emailBody += `Please reply with Yes or No if you want to register. If so, I'll create a placeholder calendar event. If not, I'll update my preferences to improve my recommendations for the future.\n\n`;
+    emailBody += `Please register at: ${event.registrationUrl || event.registration_url || 'Check event website'}\n`;
+    emailBody += `${event.cost === 0 ? '(This is a FREE event! 🎉)' : `(Cost: $${event.cost})`}\n\n`;
+    emailBody += `After you register and receive confirmation, the system will automatically detect the official event in your calendar and remove the placeholder.\n\n`;
     
-    if (event.cost === 0) {
-      emailBody += `💡 *Just reply to this email with YES or NO - I'll handle the rest!*\n\n`;
-    } else {
-      emailBody += `💡 *Let me know when you've registered by replying "DONE" or if you want to skip it, reply "NO".*\n\n`;
-    }
+    emailBody += `💡 *Just reply to this email with YES or NO - I'll handle the calendar management!*\n\n`;
     
     emailBody += `Best,\n`;
     emailBody += `Your Family Event Assistant 🤖`;
     
     return emailBody;
+  }
+
+  async sendManualRegistrationConfirmation(event, placeholderResult) {
+    const subject = `✅ Calendar Updated: ${event.title}`;
+    
+    const emailBody = `Great! I've added "${event.title}" to your calendar as requested.
+
+📅 **Calendar Event:** ${placeholderResult.eventLink}
+
+The placeholder will be automatically removed once you complete registration and I detect the official event.
+
+🤖 Your Family Event Planner`;
+
+    const recipient = this.getRecipientEmail();
+    
+    const emailResult = await this.gmailClient.sendEmail({
+      to: recipient,
+      subject: subject,
+      body: emailBody
+    });
+
+    this.logger.info(`Manual registration confirmation email sent for: ${event.title} to ${recipient}`);
+    
+    return {
+      messageId: emailResult.messageId,
+      message: emailBody,
+      sentAt: new Date(),
+      recipient
+    };
   }
 
   addSpecialNotesEmail(event) {
@@ -667,13 +686,15 @@ class EmailNotificationClient {
 }
 
 class EmailApprovalManager {
-  constructor(logger, database) {
+  constructor(logger, database, calendarManager = null) {
     this.logger = logger;
     this.database = database;
+    this.calendarManager = calendarManager;
     this.emailClient = new EmailNotificationClient(logger, database);
     this.registrationOrchestrator = new RegistrationOrchestrator(logger, database, this.emailClient);
     this.dailyEventCount = 0;
     this.lastResetDate = new Date().toDateString();
+    this.calendarMonitor = null; // Will be set later if monitoring is available
   }
 
   async init() {
@@ -744,43 +765,33 @@ class EmailApprovalManager {
         throw new Error(`Approved event not found: ${eventId}`);
       }
       
-      if (event.cost > 0) {
-        // For paid events, user handles registration manually via provided link
-        await this.database.updateEventStatus(eventId, 'manual_registration_sent');
-        this.logger.info(`Paid event approved, user will register manually: ${event.title}`);
-        return { requiresPayment: true, autoRegistrationTriggered: false };
-      } else {
-        // For free events, trigger automatic registration
-        this.logger.info(`Triggering auto-registration for free event: ${event.title}`);
-        
-        try {
-          // Trigger auto-registration in background (non-blocking)
-          this.registrationOrchestrator.processAutoRegistration(eventId, approvalId)
-            .then(result => {
-              this.logger.info(`Auto-registration completed for ${event.title}: ${result.success ? 'SUCCESS' : 'FALLBACK'}`);
-            })
-            .catch(error => {
-              this.logger.error(`Auto-registration failed for ${event.title}:`, error.message);
-            });
-          
-          return { 
-            requiresPayment: false, 
-            autoRegistrationTriggered: true,
-            message: 'Auto-registration initiated'
-          };
-          
-        } catch (error) {
-          this.logger.error(`Error triggering auto-registration for ${event.title}:`, error.message);
-          
-          // Fallback to old behavior if auto-registration fails to start
-          await this.database.updateEventStatus(eventId, 'ready_for_registration');
-          return { 
-            requiresPayment: false, 
-            autoRegistrationTriggered: false,
-            error: error.message
-          };
-        }
+      this.logger.info(`Processing approved event for manual registration: ${event.title}`);
+      
+      // Create placeholder calendar event immediately after "Yes" response
+      const placeholderResult = await this.calendarManager.createPlaceholderEvent(event);
+      
+      // Update database with placeholder info
+      await this.database.updateEventStatus(eventId, 'approved_manual', {
+        placeholder_calendar_id: placeholderResult.calendarEventId,
+        manual_registration_pending: true,
+        placeholder_created_at: new Date()
+      });
+      
+      // Send manual registration confirmation email
+      await this.sendManualRegistrationConfirmation(event, placeholderResult);
+      
+      // Start monitoring for duplicate calendar events (if we have the monitoring service)
+      if (this.calendarMonitor) {
+        await this.calendarMonitor.scheduleEventMonitoring(eventId, event.date, placeholderResult.calendarEventId);
       }
+      
+      return { 
+        success: true, 
+        method: 'manual', 
+        placeholderCreated: true,
+        calendarEventId: placeholderResult.calendarEventId,
+        requiresPayment: event.cost > 0
+      };
       
     } catch (error) {
       this.logger.error(`Error processing approved event ${eventId}:`, error.message);
