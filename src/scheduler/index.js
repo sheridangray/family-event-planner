@@ -36,7 +36,7 @@ class TaskScheduler {
     this.scheduleApprovalTimeouts();
     this.scheduleRegistrationProcessing();
     this.scheduleCalendarSync();
-    this.scheduleDailyReports();
+    // this.scheduleDailyReports(); // Disabled - daily report emails removed
     this.scheduleHealthChecks();
     
     this.logger.info(`Task scheduler started with ${this.tasks.length} scheduled tasks`);
@@ -115,19 +115,19 @@ class TaskScheduler {
     this.logger.info('Scheduled calendar sync: daily at 10:00 AM');
   }
 
-  scheduleDailyReports() {
-    const task = cron.schedule('0 18 * * *', async () => {
-      try {
-        this.logger.info('Generating daily report...');
-        await this.generateDailyReport();
-      } catch (error) {
-        this.logger.error('Error generating daily report:', error.message);
-      }
-    });
-    
-    this.tasks.push({ name: 'Daily Reports', task, frequency: 'Daily at 6:00 PM' });
-    this.logger.info('Scheduled daily reports: daily at 6:00 PM');
-  }
+  // scheduleDailyReports() {
+  //   const task = cron.schedule('0 18 * * *', async () => {
+  //     try {
+  //       this.logger.info('Generating daily report...');
+  //       await this.generateDailyReport();
+  //     } catch (error) {
+  //       this.logger.error('Error generating daily report:', error.message);
+  //     }
+  //   });
+  //   
+  //   this.tasks.push({ name: 'Daily Reports', task, frequency: 'Daily at 6:00 PM' });
+  //   this.logger.info('Scheduled daily reports: daily at 6:00 PM');
+  // }
 
   scheduleHealthChecks() {
     const task = cron.schedule('*/15 * * * *', async () => {
