@@ -769,8 +769,7 @@ class EmailApprovalManager {
         placeholder_created_at: new Date()
       });
       
-      // Send manual registration confirmation email
-      await this.sendManualRegistrationConfirmation(event, placeholderResult);
+      // No confirmation email - placeholder created silently
       
       // Start monitoring for duplicate calendar events (if we have the monitoring service)
       if (this.calendarMonitor) {
