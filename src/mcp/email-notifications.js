@@ -326,15 +326,7 @@ The placeholder will be automatically removed once you complete registration and
           this.logger.info(`✅ Event ${latestApproval.event_id} (${latestApproval.event_title}) approved via email`);
         }
         
-        // Send confirmation
-        await this.sendConfirmationEmail(from, {
-          type: 'approved',
-          eventTitle: latestApproval.event_title,
-          eventCost: latestApproval.event_cost,
-          message: latestApproval.event_cost > 0 
-            ? `✅ Great! "${latestApproval.event_title}" approved. You can register using the link I provided above.`
-            : `✅ Perfect! "${latestApproval.event_title}" approved and will be booked automatically. You'll get a calendar invite soon! 🎉`
-        });
+        // No confirmation email - just create calendar event silently
         
         return {
           approved: true,
