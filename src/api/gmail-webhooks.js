@@ -6,17 +6,22 @@ const UnifiedNotificationService = require('../services/unified-notification');
 const Database = require('../database');
 
 class GmailWebhookHandler {
-  constructor(logger, database) {
+  constructor(logger, database, unifiedNotifications = null) {
     this.logger = logger;
     this.database = database;
     this.gmailClient = new GmailMCPClient(logger);
-    this.notificationService = new UnifiedNotificationService(logger, database);
+    this.notificationService = unifiedNotifications || new UnifiedNotificationService(logger, database);
     this.processedMessages = new Set(); // Prevent duplicate processing
   }
 
   async init() {
     await this.gmailClient.init();
-    await this.notificationService.init();
+    
+    // Only initialize notification service if we created our own (not passed in)
+    if (!this.notificationService.emailAvailable) {
+      await this.notificationService.init();
+    }
+    
     this.logger.info('Gmail webhook handler initialized');
   }
 

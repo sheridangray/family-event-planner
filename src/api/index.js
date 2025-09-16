@@ -5,16 +5,16 @@ const createAutomationRouter = require('./automation');
 const GmailWebhookHandler = require('./gmail-webhooks');
 const { authenticateAPI } = require('../middleware/auth');
 
-function createApiRouter(database, scheduler, registrationAutomator, logger) {
+function createApiRouter(database, scheduler, registrationAutomator, logger, unifiedNotifications = null) {
   const router = express.Router();
 
   router.use('/events', eventsRouter);
   router.use('/dashboard', dashboardRouter);
   router.use('/automation', createAutomationRouter(database, scheduler, registrationAutomator));
   
-  // Gmail webhook routes
+  // Gmail webhook routes - pass unifiedNotifications to access CalendarManager
   if (logger) {
-    const gmailWebhookHandler = new GmailWebhookHandler(logger, database);
+    const gmailWebhookHandler = new GmailWebhookHandler(logger, database, unifiedNotifications);
     gmailWebhookHandler.init().catch(err => {
       logger.error('Failed to initialize Gmail webhook handler:', err);
     });

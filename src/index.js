@@ -204,7 +204,7 @@ async function initializeComponents() {
     app.locals.paymentGuard = paymentGuard;
     
     // Initialize API router now that all components are ready
-    const apiRouter = createApiRouter(database, scheduler, registrationAutomator, logger);
+    const apiRouter = createApiRouter(database, scheduler, registrationAutomator, logger, unifiedNotifications);
     app.use('/api', apiRouter);
     
     return {
