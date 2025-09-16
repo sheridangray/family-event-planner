@@ -259,11 +259,12 @@ class GmailWebhookHandler {
   async isEventReply(headers, message) {
     // Check if sender is one of our family members first
     const from = headers.from || '';
-    const isFamilyMember = from.includes(process.env.PARENT1_EMAIL) || 
-                          from.includes(process.env.PARENT2_EMAIL);
+    const cleanEmailAddress = this.extractEmailAddress(from);
+    const isFamilyMember = cleanEmailAddress === process.env.PARENT1_EMAIL || 
+                          cleanEmailAddress === process.env.PARENT2_EMAIL;
 
     if (!isFamilyMember) {
-      this.logger.debug(`Email from non-family member: ${from}`);
+      this.logger.debug(`Email from non-family member: ${cleanEmailAddress} (original: ${from})`);
       return false;
     }
 
@@ -336,6 +337,17 @@ class GmailWebhookHandler {
   }
 
   /**
+   * Extract email address from header (e.g., "Name <email@domain.com>" -> "email@domain.com")
+   */
+  extractEmailAddress(fromHeader) {
+    if (!fromHeader) return null;
+    
+    // Match email in angle brackets or standalone email
+    const emailMatch = fromHeader.match(/<([^>]+)>/) || fromHeader.match(/([^\s<>]+@[^\s<>]+)/);
+    return emailMatch ? emailMatch[1] : fromHeader;
+  }
+
+  /**
    * Process an email reply to an event notification
    */
   async processEventReply(message, headers) {
@@ -350,9 +362,13 @@ class GmailWebhookHandler {
         return;
       }
 
+      // Extract clean email address for database lookup
+      const cleanEmailAddress = this.extractEmailAddress(headers.from);
+      this.logger.debug(`Extracted email address: ${cleanEmailAddress} from header: ${headers.from}`);
+
       // Process the reply using our unified notification service
       const result = await this.notificationService.handleIncomingResponse(
-        headers.from,
+        cleanEmailAddress,
         { subject: headers.subject, body: body },
         message.id,
         true // isEmail = true
