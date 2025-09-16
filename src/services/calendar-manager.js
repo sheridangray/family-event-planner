@@ -372,7 +372,13 @@ class CalendarManager {
       };
 
     } catch (error) {
-      this.logger.error('Failed to create placeholder calendar event:', error.message);
+      this.logger.error('Failed to create placeholder calendar event:', error.message, { 
+        stack: error.stack,
+        eventTitle: event.title,
+        eventId: event.id,
+        calendarAvailable: !!this.calendar,
+        calendarId: this.calendarId
+      });
       return { 
         success: false, 
         error: error.message,
