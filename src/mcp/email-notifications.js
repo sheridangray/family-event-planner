@@ -257,6 +257,7 @@ The placeholder will be automatically removed once you complete registration and
   async handleIncomingEmail(from, subject, body, messageId) {
     try {
       this.logger.info(`Received email response from ${from}: ${subject}`);
+      this.logger.debug(`Email body preview: "${body.substring(0, 100)}..."`);
       
       const response = this.parseEmailResponse(body);
       
@@ -562,6 +563,8 @@ The placeholder will be automatically removed once you complete registration and
     try {
       // Get pending notifications from the unified notifications table
       const notifications = await this.database.getPendingNotifications(emailAddress, 'email');
+      this.logger.debug(`Found ${notifications.length} pending notifications for ${emailAddress}:`, 
+        notifications.map(n => ({ id: n.id, event_title: n.event_title, status: n.status, created_at: n.created_at })));
       return notifications;
     } catch (error) {
       this.logger.error(`Error getting pending approvals for ${emailAddress}:`, error.message);
