@@ -33,6 +33,9 @@ class CalendarManager {
       this.calendar = google.calendar({ version: 'v3', auth });
       this.calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
       
+      // Share calendar with family members
+      await this.ensureCalendarSharing();
+      
       this.logger.info(`Calendar manager initialized successfully with calendar ID: ${this.calendarId}`);
     } catch (error) {
       this.logger.warn('Calendar integration not available:', error.message);
@@ -98,16 +101,7 @@ class CalendarManager {
         dateTime: eventEndDate.toISOString(),
         timeZone: 'America/Los_Angeles'
       },
-      attendees: (() => {
-        try {
-          const attendees = this.getAttendees();
-          this.logger.debug(`Attendees: ${JSON.stringify(attendees)}`);
-          return attendees;
-        } catch (err) {
-          this.logger.error(`Error getting attendees:`, err.message);
-          return [];
-        }
-      })(),
+      // Skip attendees - calendar is shared instead so family can see events
       reminders: {
         useDefault: false,
         overrides: [
@@ -481,16 +475,7 @@ class CalendarManager {
         dateTime: eventEndDate.toISOString(),
         timeZone: 'America/Los_Angeles'
       },
-      attendees: (() => {
-        try {
-          const attendees = this.getAttendees();
-          this.logger.debug(`Attendees: ${JSON.stringify(attendees)}`);
-          return attendees;
-        } catch (err) {
-          this.logger.error(`Error getting attendees:`, err.message);
-          return [];
-        }
-      })(),
+      // Skip attendees - calendar is shared instead so family can see events
       reminders: {
         useDefault: false,
         overrides: [
@@ -571,6 +556,57 @@ REGISTRATION CHECKLIST:
     } catch (error) {
       this.logger.error('Failed to get calendar stats:', error.message);
       return { available: false, error: error.message };
+    }
+  }
+
+  /**
+   * Ensure calendar is shared with family members
+   */
+  async ensureCalendarSharing() {
+    if (!this.calendar) {
+      return;
+    }
+
+    try {
+      const { config } = require('../config');
+      const familyEmails = [
+        config.gmail.parent1Email,
+        config.gmail.parent2Email
+      ].filter(Boolean);
+
+      for (const email of familyEmails) {
+        try {
+          // Check if already shared
+          const existingRule = await this.calendar.acl.list({
+            calendarId: this.calendarId
+          });
+
+          const alreadyShared = existingRule.data.items?.some(
+            rule => rule.scope?.value === email
+          );
+
+          if (!alreadyShared) {
+            // Share calendar with read/write access
+            await this.calendar.acl.insert({
+              calendarId: this.calendarId,
+              resource: {
+                role: 'reader', // Can see all event details
+                scope: {
+                  type: 'user',
+                  value: email
+                }
+              }
+            });
+            this.logger.info(`Shared calendar with ${email}`);
+          } else {
+            this.logger.debug(`Calendar already shared with ${email}`);
+          }
+        } catch (shareError) {
+          this.logger.warn(`Could not share calendar with ${email}:`, shareError.message);
+        }
+      }
+    } catch (error) {
+      this.logger.warn('Error setting up calendar sharing:', error.message);
     }
   }
 }
