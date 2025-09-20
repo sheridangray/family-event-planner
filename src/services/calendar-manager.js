@@ -375,8 +375,10 @@ class CalendarManager {
 
     try {
       this.logger.info(`Creating placeholder calendar event for: ${event.title}`);
+      this.logger.debug(`Calendar available: ${!!this.calendar}, Calendar ID: ${this.calendarId}`);
       
       const calendarEvent = this.buildPlaceholderCalendarEvent(event);
+      this.logger.debug(`Built calendar event object:`, JSON.stringify(calendarEvent, null, 2));
       
       const response = await this.calendar.events.insert({
         calendarId: this.calendarId,
