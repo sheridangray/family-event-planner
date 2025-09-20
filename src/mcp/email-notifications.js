@@ -611,6 +611,7 @@ The placeholder will be automatically removed once you complete registration and
       }
     } catch (error) {
       this.logger.error(`Error getting pending approvals for ${emailAddress}:`, error.message);
+      this.logger.error(`Error stack:`, error.stack);
       return [];
     }
   }
@@ -775,6 +776,7 @@ class EmailApprovalManager {
     } catch (error) {
       this.logger.error(`❌ EmailApprovalManager error sending event for approval: ${event.title}`, error.message);
       this.logger.error(`📍 Error stack:`, error.stack);
+      this.logger.error(`📍 Full error object:`, error);
       throw error;
     }
   }
