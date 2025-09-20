@@ -564,9 +564,11 @@ REGISTRATION CHECKLIST:
    */
   async ensureCalendarSharing() {
     if (!this.calendar) {
+      this.logger.warn('Calendar sharing skipped - no calendar available');
       return;
     }
 
+    this.logger.info('Starting calendar sharing setup...');
     try {
       const { config } = require('../config');
       const familyEmails = [
@@ -574,7 +576,10 @@ REGISTRATION CHECKLIST:
         config.gmail.parent2Email
       ].filter(Boolean);
 
+      this.logger.info(`Family emails to share with: ${familyEmails.join(', ')}`);
+
       for (const email of familyEmails) {
+        this.logger.info(`Processing calendar sharing for ${email}...`);
         try {
           // Check if already shared
           const existingRule = await this.calendar.acl.list({
@@ -602,12 +607,15 @@ REGISTRATION CHECKLIST:
             this.logger.debug(`Calendar already shared with ${email}`);
           }
         } catch (shareError) {
-          this.logger.warn(`Could not share calendar with ${email}:`, shareError.message);
+          this.logger.error(`Could not share calendar with ${email}:`, shareError.message);
+          this.logger.error(`Share error details:`, shareError.stack);
         }
       }
     } catch (error) {
-      this.logger.warn('Error setting up calendar sharing:', error.message);
+      this.logger.error('Error setting up calendar sharing:', error.message);
+      this.logger.error('Calendar sharing error stack:', error.stack);
     }
+    this.logger.info('Calendar sharing setup completed');
   }
 }
 
