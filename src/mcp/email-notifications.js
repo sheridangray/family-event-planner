@@ -93,8 +93,7 @@ class EmailNotificationClient {
   }
 
   getRecipientEmail() {
-    // Always send to Sheridan Gray for now
-    return config.gmail.parent2Email; // Sheridan in all environments
+    return config.app.nodeEnv === 'production' ? config.gmail.parent1Email : config.gmail.parent2Email;
   }
 
   buildEmailSubject(event) {
@@ -287,13 +286,6 @@ The placeholder will be automatically removed once you complete registration and
       
       if (pendingApprovals.length === 0) {
         this.logger.warn(`No pending approvals found for ${from}`);
-        
-        // Send helpful response if no pending approvals
-        await this.sendConfirmationEmail(from, {
-          type: 'no_pending',
-          message: "No pending event approvals found. You'll receive new event suggestions soon! 🎉"
-        });
-        
         return null;
       }
       
