@@ -746,7 +746,7 @@ class EmailApprovalManager {
       this.logger.info(`📧 EmailApprovalManager: Processing approval request for: ${event.title}`);
       
       // Check if we've already sent a recent email for this event (within 24 hours)
-      const recentNotifications = await this.database.getPendingNotifications(this.getRecipientEmail(), 'email');
+      const recentNotifications = await this.database.getPendingNotifications(this.emailClient.getRecipientEmail(), 'email');
       const existingForThisEvent = recentNotifications.find(notification => notification.event_id === event.id);
       if (existingForThisEvent) {
         this.logger.info(`⏭️ Skipping duplicate email for event: ${event.title} (recent notification exists: ${existingForThisEvent.id})`);
