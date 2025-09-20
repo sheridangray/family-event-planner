@@ -254,6 +254,24 @@ The placeholder will be automatically removed once you complete registration and
     return !event.previouslyAttended && !event.isRecurring;
   }
 
+  extractEventTitleFromSubject(subject) {
+    // Extract event title from email subject like "Re: New Family Event: Glow (FREE)"
+    // Pattern: "Re: New Family Event: TITLE (additional info)"
+    const match = subject.match(/Re:\s*New Family Event:\s*([^(]+?)(?:\s*\(|$)/i);
+    if (match) {
+      return match[1].trim();
+    }
+    
+    // Fallback: try to extract any text after "Re: New Family Event:"
+    const fallbackMatch = subject.match(/Re:\s*New Family Event:\s*(.+?)(?:\s*-|$)/i);
+    if (fallbackMatch) {
+      return fallbackMatch[1].trim();
+    }
+    
+    this.logger.warn(`Could not extract event title from subject: "${subject}"`);
+    return null;
+  }
+
   async handleIncomingEmail(from, subject, body, messageId) {
     try {
       this.logger.info(`Received email response from ${from}: ${subject}`);
@@ -261,7 +279,11 @@ The placeholder will be automatically removed once you complete registration and
       
       const response = this.parseEmailResponse(body);
       
-      const pendingApprovals = await this.getPendingApprovals(from);
+      // Extract event title from subject line
+      const eventTitle = this.extractEventTitleFromSubject(subject);
+      this.logger.debug(`Extracted event title from subject: "${eventTitle}"`);
+      
+      const pendingApprovals = await this.getPendingApprovals(from, eventTitle);
       
       if (pendingApprovals.length === 0) {
         this.logger.warn(`No pending approvals found for ${from}`);
@@ -559,13 +581,34 @@ The placeholder will be automatically removed once you complete registration and
     };
   }
 
-  async getPendingApprovals(emailAddress) {
+  async getPendingApprovals(emailAddress, eventTitle = null) {
     try {
-      // Get pending notifications from the unified notifications table
-      const notifications = await this.database.getPendingNotifications(emailAddress, 'email');
-      this.logger.debug(`Found ${notifications.length} pending notifications for ${emailAddress}:`, 
-        notifications.map(n => ({ id: n.id, event_title: n.event_title, status: n.status, created_at: n.created_at })));
-      return notifications;
+      if (eventTitle) {
+        // If we have an event title from the email subject, look for notifications for that specific event
+        this.logger.debug(`Looking for notifications for specific event: "${eventTitle}"`);
+        const allNotifications = await this.database.postgres.pool.query(
+          `SELECT n.*, e.title as event_title, e.date as event_date, e.cost as event_cost
+           FROM notifications n
+           LEFT JOIN events e ON n.event_id = e.id  
+           WHERE n.recipient = $1 
+           AND n.notification_type = 'email'
+           AND e.title = $2
+           AND n.status IN ('sent', 'pending')
+           ORDER BY n.created_at DESC
+           LIMIT 1`,
+          [emailAddress, eventTitle]
+        );
+        const notifications = allNotifications.rows;
+        this.logger.debug(`Found ${notifications.length} notifications for event "${eventTitle}":`, 
+          notifications.map(n => ({ id: n.id, event_title: n.event_title, status: n.status, created_at: n.created_at })));
+        return notifications;
+      } else {
+        // Fallback to the original 24-hour window logic
+        const notifications = await this.database.getPendingNotifications(emailAddress, 'email');
+        this.logger.debug(`Found ${notifications.length} pending notifications (24hr window) for ${emailAddress}:`, 
+          notifications.map(n => ({ id: n.id, event_title: n.event_title, status: n.status, created_at: n.created_at })));
+        return notifications;
+      }
     } catch (error) {
       this.logger.error(`Error getting pending approvals for ${emailAddress}:`, error.message);
       return [];
