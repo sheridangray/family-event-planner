@@ -10,30 +10,24 @@ class CalendarManager {
 
   async init() {
     try {
-      // Initialize Google Calendar API using same credentials as Gmail
+      // Initialize Google Calendar API using service account credentials
       let auth;
       
-      if (process.env.MCP_GMAIL_CREDENTIALS_JSON) {
-        // Use JSON credentials directly
-        const credentials = JSON.parse(process.env.MCP_GMAIL_CREDENTIALS_JSON);
+      if (process.env.GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON) {
+        // Use service account JSON credentials
+        const credentials = JSON.parse(process.env.GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON);
         auth = new google.auth.GoogleAuth({
           credentials: credentials,
           scopes: ['https://www.googleapis.com/auth/calendar']
         });
-      } else if (process.env.MCP_GMAIL_CREDENTIALS) {
-        // Use credentials file path
-        auth = new google.auth.GoogleAuth({
-          keyFile: process.env.MCP_GMAIL_CREDENTIALS,
-          scopes: ['https://www.googleapis.com/auth/calendar']
-        });
       } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        // Fallback to standard Google credentials
+        // Fallback to standard Google credentials file
         auth = new google.auth.GoogleAuth({
           keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
           scopes: ['https://www.googleapis.com/auth/calendar']
         });
       } else {
-        throw new Error('No Google credentials found. Need MCP_GMAIL_CREDENTIALS, MCP_GMAIL_CREDENTIALS_JSON, or GOOGLE_APPLICATION_CREDENTIALS');
+        throw new Error('No Google Calendar credentials found. Need GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS');
       }
 
       this.calendar = google.calendar({ version: 'v3', auth });
