@@ -10,16 +10,36 @@ class CalendarManager {
 
   async init() {
     try {
-      // Initialize Google Calendar API
-      const auth = new google.auth.GoogleAuth({
-        keyFile: config.calendar?.keyFile || process.env.GOOGLE_APPLICATION_CREDENTIALS,
-        scopes: ['https://www.googleapis.com/auth/calendar']
-      });
+      // Initialize Google Calendar API using same credentials as Gmail
+      let auth;
+      
+      if (process.env.MCP_GMAIL_CREDENTIALS_JSON) {
+        // Use JSON credentials directly
+        const credentials = JSON.parse(process.env.MCP_GMAIL_CREDENTIALS_JSON);
+        auth = new google.auth.GoogleAuth({
+          credentials: credentials,
+          scopes: ['https://www.googleapis.com/auth/calendar']
+        });
+      } else if (process.env.MCP_GMAIL_CREDENTIALS) {
+        // Use credentials file path
+        auth = new google.auth.GoogleAuth({
+          keyFile: process.env.MCP_GMAIL_CREDENTIALS,
+          scopes: ['https://www.googleapis.com/auth/calendar']
+        });
+      } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        // Fallback to standard Google credentials
+        auth = new google.auth.GoogleAuth({
+          keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+          scopes: ['https://www.googleapis.com/auth/calendar']
+        });
+      } else {
+        throw new Error('No Google credentials found. Need MCP_GMAIL_CREDENTIALS, MCP_GMAIL_CREDENTIALS_JSON, or GOOGLE_APPLICATION_CREDENTIALS');
+      }
 
       this.calendar = google.calendar({ version: 'v3', auth });
-      this.calendarId = config.calendar?.calendarId || 'primary';
+      this.calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
       
-      this.logger.info('Calendar manager initialized successfully');
+      this.logger.info(`Calendar manager initialized successfully with calendar ID: ${this.calendarId}`);
     } catch (error) {
       this.logger.warn('Calendar integration not available:', error.message);
       this.logger.warn('Calendar events will not be automatically created');
