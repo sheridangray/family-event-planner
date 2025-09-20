@@ -698,6 +698,13 @@ class EmailApprovalManager {
     try {
       this.logger.info(`📧 EmailApprovalManager: Processing approval request for: ${event.title}`);
       
+      // Check if we've already sent an email for this event
+      const existingNotifications = await this.database.getNotificationsByEventId(event.id);
+      if (existingNotifications && existingNotifications.length > 0) {
+        this.logger.info(`⏭️ Skipping duplicate email for event: ${event.title} (${existingNotifications.length} existing notifications)`);
+        return null;
+      }
+      
       const shouldSend = this.shouldSendEvent();
       this.logger.info(`🔍 Should send check: ${shouldSend} (dailyEventCount: ${this.dailyEventCount}/${config.discovery.eventsPerDayMax})`);
       

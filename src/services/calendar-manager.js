@@ -104,7 +104,16 @@ class CalendarManager {
         dateTime: eventEndDate.toISOString(),
         timeZone: 'America/Los_Angeles'
       },
-      attendees: this.getAttendees(),
+      attendees: (() => {
+        try {
+          const attendees = this.getAttendees();
+          this.logger.debug(`Attendees: ${JSON.stringify(attendees)}`);
+          return attendees;
+        } catch (err) {
+          this.logger.error(`Error getting attendees:`, err.message);
+          return [];
+        }
+      })(),
       reminders: {
         useDefault: false,
         overrides: [
@@ -395,10 +404,22 @@ class CalendarManager {
         throw buildError;
       }
       
+      this.logger.debug(`Calling Google Calendar API with calendarId: ${this.calendarId}`);
+      this.logger.debug(`Calling Google Calendar API:`, {
+        calendarId: this.calendarId,
+        summary: calendarEvent.summary,
+        start: calendarEvent.start.dateTime,
+        end: calendarEvent.end.dateTime,
+        location: calendarEvent.location
+      });
+      
       const response = await this.calendar.events.insert({
         calendarId: this.calendarId,
         resource: calendarEvent
       });
+      
+      this.logger.debug(`Google Calendar API success - Event ID: ${response.data.id}`);
+      this.logger.debug(`Google Calendar API response received successfully`);
 
       this.logger.info(`Placeholder calendar event created with ID: ${response.data.id}`);
       
@@ -413,8 +434,13 @@ class CalendarManager {
         stack: error.stack,
         eventTitle: event.title,
         eventId: event.id,
+        eventDate: event.date,
         calendarAvailable: !!this.calendar,
-        calendarId: this.calendarId
+        calendarId: this.calendarId,
+        errorCode: error.code,
+        errorStatus: error.status,
+        errorData: error.response?.data,
+        googleApiError: error.errors
       });
       return { 
         success: false, 
@@ -428,13 +454,29 @@ class CalendarManager {
    * Build placeholder calendar event object
    */
   buildPlaceholderCalendarEvent(event) {
+    this.logger.debug(`Building placeholder event - input date: ${event.date}`);
     const eventDate = new Date(event.date);
+    if (isNaN(eventDate.getTime())) {
+      throw new Error(`Invalid event date: ${event.date}`);
+    }
+    this.logger.debug(`Parsed event date: ${eventDate.toISOString()}`);
+    
     const eventEndDate = this.calculateEventEndTime(eventDate, event);
+    this.logger.debug(`Calculated end date: ${eventEndDate.toISOString()}`);
     
     const calendarEvent = {
       summary: `📋 PLACEHOLDER: ${event.title}`,
       location: event.location_address,
-      description: this.buildPlaceholderDescription(event),
+      description: (() => {
+        try {
+          const desc = this.buildPlaceholderDescription(event);
+          this.logger.debug(`Description length: ${desc?.length || 0}`);
+          return desc;
+        } catch (err) {
+          this.logger.error(`Error building description:`, err.message);
+          return `Placeholder for ${event.title}`;
+        }
+      })(),
       start: {
         dateTime: eventDate.toISOString(),
         timeZone: 'America/Los_Angeles'
@@ -443,7 +485,16 @@ class CalendarManager {
         dateTime: eventEndDate.toISOString(),
         timeZone: 'America/Los_Angeles'
       },
-      attendees: this.getAttendees(),
+      attendees: (() => {
+        try {
+          const attendees = this.getAttendees();
+          this.logger.debug(`Attendees: ${JSON.stringify(attendees)}`);
+          return attendees;
+        } catch (err) {
+          this.logger.error(`Error getting attendees:`, err.message);
+          return [];
+        }
+      })(),
       reminders: {
         useDefault: false,
         overrides: [
@@ -452,7 +503,7 @@ class CalendarManager {
         ]
       },
       colorId: '8', // Gray color for placeholders
-      visibility: 'private',
+      visibility: 'private', 
       transparency: 'transparent', // Shows as "free" time
       extendedProperties: {
         private: {
