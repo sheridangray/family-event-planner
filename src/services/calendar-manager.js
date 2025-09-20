@@ -10,33 +10,86 @@ class CalendarManager {
 
   async init() {
     try {
-      // Initialize Google Calendar API using service account credentials
+      // Initialize Google Calendar API using OAuth credentials
       let auth;
       
-      if (process.env.GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON) {
-        // Use service account JSON credentials
+      if (process.env.MCP_GMAIL_CREDENTIALS_JSON) {
+        // Use OAuth credentials from MCP_GMAIL_CREDENTIALS_JSON
+        const credentials = JSON.parse(process.env.MCP_GMAIL_CREDENTIALS_JSON);
+        const { client_secret, client_id, redirect_uris } = credentials.installed;
+        auth = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+        
+        // Load OAuth token
+        const fs = require('fs');
+        const path = require('path');
+        let tokenLoaded = false;
+        
+        // Try local development token path first
+        const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
+        if (fs.existsSync(tokenPath)) {
+          try {
+            const token = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+            auth.setCredentials(token);
+            this.logger.info('Calendar manager loaded OAuth token from local file');
+            tokenLoaded = true;
+          } catch (error) {
+            this.logger.warn('Error loading local OAuth token:', error.message);
+          }
+        }
+        
+        // Try production token paths if local failed
+        if (!tokenLoaded && process.env.NODE_ENV === 'production') {
+          const renderTokenPath = '/etc/secrets/google-oauth-token.json';
+          if (fs.existsSync(renderTokenPath)) {
+            try {
+              const token = JSON.parse(fs.readFileSync(renderTokenPath, 'utf8'));
+              auth.setCredentials(token);
+              this.logger.info('Calendar manager loaded OAuth token from Render secret');
+              tokenLoaded = true;
+            } catch (error) {
+              this.logger.warn('Error loading Render OAuth token:', error.message);
+            }
+          }
+        }
+        
+        // Try environment variable token as fallback
+        if (!tokenLoaded && process.env.GOOGLE_OAUTH_TOKEN) {
+          try {
+            const token = JSON.parse(process.env.GOOGLE_OAUTH_TOKEN);
+            auth.setCredentials(token);
+            this.logger.info('Calendar manager loaded OAuth token from environment variable');
+            tokenLoaded = true;
+          } catch (error) {
+            this.logger.warn('Error loading OAuth token from environment:', error.message);
+          }
+        }
+        
+        if (!tokenLoaded) {
+          throw new Error('OAuth token not found for calendar access');
+        }
+        
+      } else if (process.env.GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON) {
+        // Fallback to service account if OAuth not available
+        this.logger.warn('Falling back to service account credentials for calendar');
         const credentials = JSON.parse(process.env.GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON);
         auth = new google.auth.GoogleAuth({
           credentials: credentials,
           scopes: ['https://www.googleapis.com/auth/calendar']
         });
       } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        // Fallback to standard Google credentials file
+        // Final fallback to standard Google credentials file
         auth = new google.auth.GoogleAuth({
           keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
           scopes: ['https://www.googleapis.com/auth/calendar']
         });
       } else {
-        throw new Error('No Google Calendar credentials found. Need GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS');
+        throw new Error('No Google Calendar credentials found. Need MCP_GMAIL_CREDENTIALS_JSON, GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON, or GOOGLE_APPLICATION_CREDENTIALS');
       }
 
       this.calendar = google.calendar({ version: 'v3', auth });
-      this.calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+      this.calendarId = 'primary'; // Always use primary calendar with OAuth
       
-      // Share calendar with family members
-      await this.ensureCalendarSharing();
-      
-      this.logger.info(`Calendar manager initialized successfully with calendar ID: ${this.calendarId}`);
+      this.logger.info(`Calendar manager initialized successfully with OAuth credentials on primary calendar`);
     } catch (error) {
       this.logger.warn('Calendar integration not available:', error.message);
       this.logger.warn('Calendar events will not be automatically created');
@@ -101,7 +154,7 @@ class CalendarManager {
         dateTime: eventEndDate.toISOString(),
         timeZone: 'America/Los_Angeles'
       },
-      // Skip attendees - calendar is shared instead so family can see events
+      attendees: this.getAttendees(),
       reminders: {
         useDefault: false,
         overrides: [
@@ -475,7 +528,7 @@ class CalendarManager {
         dateTime: eventEndDate.toISOString(),
         timeZone: 'America/Los_Angeles'
       },
-      // Skip attendees - calendar is shared instead so family can see events
+      attendees: this.getAttendees(),
       reminders: {
         useDefault: false,
         overrides: [
@@ -560,62 +613,12 @@ REGISTRATION CHECKLIST:
   }
 
   /**
-   * Ensure calendar is shared with family members
+   * Skip calendar sharing since we're using OAuth on primary calendar
+   * Events will be created directly on the authenticated user's calendar with attendees
    */
   async ensureCalendarSharing() {
-    if (!this.calendar) {
-      this.logger.warn('Calendar sharing skipped - no calendar available');
-      return;
-    }
-
-    this.logger.info('Starting calendar sharing setup...');
-    try {
-      const { config } = require('../config');
-      const familyEmails = [
-        config.gmail.parent1Email,
-        config.gmail.parent2Email
-      ].filter(Boolean);
-
-      this.logger.info(`Family emails to share with: ${familyEmails.join(', ')}`);
-
-      for (const email of familyEmails) {
-        this.logger.info(`Processing calendar sharing for ${email}...`);
-        try {
-          // Check if already shared
-          const existingRule = await this.calendar.acl.list({
-            calendarId: this.calendarId
-          });
-
-          const alreadyShared = existingRule.data.items?.some(
-            rule => rule.scope?.value === email
-          );
-
-          if (!alreadyShared) {
-            // Share calendar with read/write access
-            await this.calendar.acl.insert({
-              calendarId: this.calendarId,
-              resource: {
-                role: 'reader', // Can see all event details
-                scope: {
-                  type: 'user',
-                  value: email
-                }
-              }
-            });
-            this.logger.info(`Shared calendar with ${email}`);
-          } else {
-            this.logger.debug(`Calendar already shared with ${email}`);
-          }
-        } catch (shareError) {
-          this.logger.error(`Could not share calendar with ${email}:`, shareError.message);
-          this.logger.error(`Share error details:`, shareError.stack);
-        }
-      }
-    } catch (error) {
-      this.logger.error('Error setting up calendar sharing:', error.message);
-      this.logger.error('Calendar sharing error stack:', error.stack);
-    }
-    this.logger.info('Calendar sharing setup completed');
+    this.logger.info('Calendar sharing skipped - using OAuth on primary calendar with attendees');
+    return;
   }
 }
 
