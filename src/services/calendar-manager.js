@@ -376,11 +376,20 @@ class CalendarManager {
     try {
       this.logger.info(`Creating placeholder calendar event for: ${event.title}`);
       this.logger.debug(`Calendar available: ${!!this.calendar}, Calendar ID: ${this.calendarId}`);
+      this.logger.debug(`Event object:`, { 
+        id: event.id, 
+        title: event.title, 
+        date: event.date,
+        location_address: event.location_address 
+      });
       
       let calendarEvent;
       try {
         calendarEvent = this.buildPlaceholderCalendarEvent(event);
-        this.logger.debug(`Built calendar event object:`, JSON.stringify(calendarEvent, null, 2));
+        this.logger.debug(`Built calendar event - summary: ${calendarEvent?.summary}, start: ${calendarEvent?.start?.dateTime}`);
+        if (!calendarEvent || !calendarEvent.summary) {
+          this.logger.error(`Calendar event is empty or missing required fields:`, calendarEvent);
+        }
       } catch (buildError) {
         this.logger.error(`Error building calendar event:`, buildError.message, { stack: buildError.stack });
         throw buildError;
