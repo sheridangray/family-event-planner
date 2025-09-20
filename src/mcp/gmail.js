@@ -14,16 +14,20 @@ class GmailMCPClient {
     try {
       this.logger.info('Initializing Gmail MCP client...');
       
-      if (!config.gmail.mcpCredentials) {
+      if (!config.gmail.mcpCredentials && !process.env.MCP_GMAIL_CREDENTIALS_JSON) {
         throw new Error('Gmail MCP credentials not configured');
       }
       
       let credentials;
       
       // Check if mcpCredentials is already a JSON object (from environment variable)
-      if (typeof config.gmail.mcpCredentials === 'object') {
+      if (typeof config.gmail.mcpCredentials === 'object' && config.gmail.mcpCredentials !== null) {
         credentials = config.gmail.mcpCredentials;
         this.logger.debug('Using Gmail credentials from environment variable');
+      } else if (process.env.MCP_GMAIL_CREDENTIALS_JSON) {
+        // Fallback to direct JSON environment variable
+        credentials = JSON.parse(process.env.MCP_GMAIL_CREDENTIALS_JSON);
+        this.logger.debug('Using Gmail credentials from MCP_GMAIL_CREDENTIALS_JSON');
       } else {
         // Load credentials from file path
         const credentialsPath = config.gmail.mcpCredentials;
