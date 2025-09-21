@@ -10,13 +10,17 @@ interface SystemHealth {
     database: boolean;
     scrapers: boolean;
     mcp: boolean;
-    automation: boolean;
+    emailService: boolean;
+    calendarIntegration: boolean;
+    databasePerformance: boolean;
+    systemResources: boolean;
     scheduler: boolean;
   };
   performance: {
-    registrationSuccessRate: string;
-    avgResponseTime: string;
-    totalActions24h: number;
+    discoveryEngineScore: number;
+    avgDatabaseResponseTime: string;
+    memoryUsageMB: number;
+    uptimeHours: number;
   };
   lastHealthCheck: string;
 }
@@ -124,17 +128,62 @@ export function SystemHealth() {
 
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center">
-                  <span className="mr-2">{getHealthIcon(healthMetrics.components.automation)}</span>
-                  <span className="font-medium">Registration Bot</span>
+                  <span className="mr-2">{getHealthIcon(healthMetrics.components.emailService)}</span>
+                  <span className="font-medium">Email Service</span>
                 </div>
                 <div className="text-right">
                   <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                    getHealthColor(healthMetrics.components.automation)
+                    getHealthColor(healthMetrics.components.emailService)
                   }`}>
-                    {healthMetrics.components.automation ? 'healthy' : 'error'}
+                    {healthMetrics.components.emailService ? 'healthy' : 'error'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center">
+                  <span className="mr-2">{getHealthIcon(healthMetrics.components.calendarIntegration)}</span>
+                  <span className="font-medium">Calendar Integration</span>
+                </div>
+                <div className="text-right">
+                  <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                    getHealthColor(healthMetrics.components.calendarIntegration)
+                  }`}>
+                    {healthMetrics.components.calendarIntegration ? 'healthy' : 'error'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center">
+                  <span className="mr-2">{getHealthIcon(healthMetrics.components.databasePerformance)}</span>
+                  <span className="font-medium">Database Performance</span>
+                </div>
+                <div className="text-right">
+                  <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                    getHealthColor(healthMetrics.components.databasePerformance)
+                  }`}>
+                    {healthMetrics.components.databasePerformance ? 'healthy' : 'slow'}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    Success: {healthMetrics.performance.registrationSuccessRate}
+                    Avg: {healthMetrics.performance.avgDatabaseResponseTime}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center">
+                  <span className="mr-2">{getHealthIcon(healthMetrics.components.systemResources)}</span>
+                  <span className="font-medium">System Resources</span>
+                </div>
+                <div className="text-right">
+                  <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                    getHealthColor(healthMetrics.components.systemResources)
+                  }`}>
+                    {healthMetrics.components.systemResources ? 'healthy' : 'high usage'}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    Memory: {healthMetrics.performance.memoryUsageMB}MB
                   </div>
                 </div>
               </div>
@@ -151,7 +200,7 @@ export function SystemHealth() {
                     {healthMetrics.components.mcp ? 'healthy' : 'warning'}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    Avg: {healthMetrics.performance.avgResponseTime}
+                    Uptime: {healthMetrics.performance.uptimeHours.toFixed(1)}h
                   </div>
                 </div>
               </div>
@@ -168,7 +217,7 @@ export function SystemHealth() {
                     {healthMetrics.components.scrapers ? 'healthy' : 'error'}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    24h: {healthMetrics.performance.totalActions24h} actions
+                    Score: {healthMetrics.performance.discoveryEngineScore}%
                   </div>
                 </div>
               </div>

@@ -716,9 +716,12 @@ Date: ${new Date().toDateString()}
     try {
       const health = {
         database: await this.checkDatabaseHealth(),
-        scrapers: await this.checkScrapersHealth(),
+        discoveryEngine: await this.checkScrapersHealth(),
         mcp: await this.checkMCPHealth(),
-        automation: await this.checkAutomationHealth()
+        emailService: await this.checkEmailServiceHealth(),
+        calendarIntegration: await this.checkCalendarIntegrationHealth(),
+        databasePerformance: await this.checkDatabasePerformanceHealth(),
+        systemResources: await this.checkSystemResourcesHealth()
       };
       
       const issues = Object.entries(health).filter(([key, value]) => !value.healthy);
@@ -742,8 +745,103 @@ Date: ${new Date().toDateString()}
   }
 
   async checkScrapersHealth() {
-    // Basic check - more comprehensive checks could be added
-    return { healthy: true };
+    try {
+      // Check recent scraper success rates from scraper_stats table
+      const recentStatsQuery = `
+        SELECT 
+          s.name as scraper_name,
+          s.enabled,
+          COUNT(ss.id) as total_runs,
+          COUNT(CASE WHEN ss.success = true THEN 1 END) as successful_runs,
+          AVG(ss.execution_time_ms) as avg_execution_time,
+          MAX(ss.completed_at) as last_run
+        FROM scrapers s
+        LEFT JOIN scraper_stats ss ON s.id = ss.scraper_id 
+          AND ss.completed_at >= NOW() - INTERVAL '7 days'
+        GROUP BY s.id, s.name, s.enabled
+        ORDER BY s.name
+      `;
+      
+      const statsResult = await this.database.query(recentStatsQuery);
+      const scraperStats = statsResult.rows;
+      
+      // Check last discovery run status
+      const lastRunQuery = `
+        SELECT status, completed_at, error_message, events_found
+        FROM discovery_runs 
+        WHERE completed_at IS NOT NULL
+        ORDER BY completed_at DESC 
+        LIMIT 1
+      `;
+      
+      const lastRunResult = await this.database.query(lastRunQuery);
+      const lastRun = lastRunResult.rows[0];
+      
+      // Calculate overall health metrics
+      const enabledScrapers = scraperStats.filter(s => s.enabled);
+      const totalEnabledScrapers = enabledScrapers.length;
+      
+      // Count scrapers with recent successful runs (within 7 days)
+      const recentlySuccessful = enabledScrapers.filter(s => 
+        s.total_runs > 0 && (s.successful_runs / s.total_runs) >= 0.5
+      ).length;
+      
+      // Check if last discovery run was successful and recent (within 24 hours)
+      const lastRunSuccessful = lastRun && lastRun.status === 'completed' && !lastRun.error_message;
+      const lastRunRecent = lastRun && 
+        (new Date() - new Date(lastRun.completed_at)) < (24 * 60 * 60 * 1000);
+      
+      // Calculate health percentage
+      let healthScore = 0;
+      
+      // 50% weight: Recent scraper success rate
+      if (totalEnabledScrapers > 0) {
+        healthScore += (recentlySuccessful / totalEnabledScrapers) * 50;
+      }
+      
+      // 30% weight: Last discovery run successful
+      if (lastRunSuccessful) {
+        healthScore += 30;
+      }
+      
+      // 20% weight: Last discovery run recent
+      if (lastRunRecent) {
+        healthScore += 20;
+      }
+      
+      const isHealthy = healthScore >= 70; // Healthy if 70% or higher
+      
+      return {
+        healthy: isHealthy,
+        score: Math.round(healthScore),
+        details: {
+          totalScrapers: totalEnabledScrapers,
+          recentlySuccessful: recentlySuccessful,
+          lastRunStatus: lastRun ? lastRun.status : 'no runs',
+          lastRunTime: lastRun ? lastRun.completed_at : null,
+          lastRunRecent: lastRunRecent,
+          scraperBreakdown: scraperStats.map(s => ({
+            name: s.scraper_name,
+            enabled: s.enabled,
+            successRate: s.total_runs > 0 ? Math.round((s.successful_runs / s.total_runs) * 100) : 0,
+            totalRuns: parseInt(s.total_runs),
+            avgExecutionTime: s.avg_execution_time ? Math.round(s.avg_execution_time) : 0,
+            lastRun: s.last_run
+          }))
+        }
+      };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        error: error.message,
+        score: 0,
+        details: {
+          totalScrapers: 0,
+          recentlySuccessful: 0,
+          scraperBreakdown: []
+        }
+      };
+    }
   }
 
   async checkMCPHealth() {
@@ -796,25 +894,183 @@ Date: ${new Date().toDateString()}
     }
   }
 
-  async checkAutomationHealth() {
+  async checkEmailServiceHealth() {
     try {
-      // Check recent registration success rate
-      const registrationStats = await this.database.getRegistrationStats('24 hours');
-      const successRate = parseFloat(registrationStats.successRate) || 100;
+      // Check if unified notifications service is available and functional
+      if (!this.unifiedNotifications) {
+        return { 
+          healthy: false, 
+          error: 'Unified notifications service not initialized',
+          details: { serviceAvailable: false }
+        };
+      }
       
-      // Check if registration automator is responsive
-      const isResponsive = this.registrationAutomator && typeof this.registrationAutomator.processApprovedEvents === 'function';
+      // Test basic functionality without sending actual emails
+      const canSend = await this.unifiedNotifications.shouldSendEvent();
+      const isResponsive = typeof canSend === 'boolean';
+      
+      // Check recent email sending success rate (if available)
+      let recentSuccess = true;
+      try {
+        // This would check email_approvals table if it exists
+        const emailStats = await this.database.query(`
+          SELECT 
+            COUNT(*) as total,
+            COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent
+          FROM email_approvals 
+          WHERE created_at >= NOW() - INTERVAL '24 hours'
+        `);
+        
+        if (emailStats.rows[0] && emailStats.rows[0].total > 0) {
+          const successRate = (emailStats.rows[0].sent / emailStats.rows[0].total) * 100;
+          recentSuccess = successRate >= 80;
+        }
+      } catch (error) {
+        // Table might not exist, that's ok
+      }
       
       return {
-        healthy: successRate >= 70 && isResponsive,
+        healthy: isResponsive && recentSuccess,
         details: {
-          registrationSuccessRate: successRate,
+          serviceAvailable: true,
           isResponsive: isResponsive,
-          recentAttempts: registrationStats.totalAttempts
+          recentSuccess: recentSuccess
         }
       };
     } catch (error) {
-      return { healthy: false, error: error.message };
+      return { 
+        healthy: false, 
+        error: error.message,
+        details: { serviceAvailable: false }
+      };
+    }
+  }
+
+  async checkCalendarIntegrationHealth() {
+    try {
+      // Check if calendar manager is available and functional
+      if (!this.calendarManager) {
+        return { 
+          healthy: false, 
+          error: 'Calendar manager not initialized',
+          details: { serviceAvailable: false }
+        };
+      }
+      
+      // Test calendar functionality with a future date
+      const testDate = new Date();
+      testDate.setDate(testDate.getDate() + 365); // Test 1 year from now
+      
+      const hasConflictMethod = typeof this.calendarManager.hasConflict === 'function';
+      let canCheckConflicts = false;
+      
+      if (hasConflictMethod) {
+        try {
+          await this.calendarManager.hasConflict(testDate.toISOString());
+          canCheckConflicts = true;
+        } catch (error) {
+          // Calendar check failed
+        }
+      }
+      
+      return {
+        healthy: hasConflictMethod && canCheckConflicts,
+        details: {
+          serviceAvailable: true,
+          hasConflictMethod: hasConflictMethod,
+          canCheckConflicts: canCheckConflicts
+        }
+      };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        error: error.message,
+        details: { serviceAvailable: false }
+      };
+    }
+  }
+
+  async checkDatabasePerformanceHealth() {
+    try {
+      const startTime = Date.now();
+      
+      // Test basic database operations
+      await this.database.query('SELECT 1');
+      const basicQueryTime = Date.now() - startTime;
+      
+      // Test more complex query (events table)
+      const complexStart = Date.now();
+      await this.database.query(`
+        SELECT COUNT(*) FROM events 
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+      `);
+      const complexQueryTime = Date.now() - complexStart;
+      
+      // Check database size and table counts
+      const tableStats = await this.database.query(`
+        SELECT 
+          schemaname,
+          tablename,
+          n_tup_ins as inserts,
+          n_tup_upd as updates,
+          n_tup_del as deletes
+        FROM pg_stat_user_tables 
+        WHERE tablename IN ('events', 'discovery_runs', 'scraper_stats')
+      `);
+      
+      const isHealthy = basicQueryTime < 100 && complexQueryTime < 500; // ms thresholds
+      
+      return {
+        healthy: isHealthy,
+        details: {
+          basicQueryTime: basicQueryTime,
+          complexQueryTime: complexQueryTime,
+          tableStats: tableStats.rows,
+          responsive: basicQueryTime < 1000
+        }
+      };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        error: error.message,
+        details: { responsive: false }
+      };
+    }
+  }
+
+  async checkSystemResourcesHealth() {
+    try {
+      // Check memory usage
+      const memUsage = process.memoryUsage();
+      const memUsedMB = memUsage.heapUsed / 1024 / 1024;
+      const memTotalMB = memUsage.heapTotal / 1024 / 1024;
+      const memUsagePercent = (memUsedMB / memTotalMB) * 100;
+      
+      // Check uptime
+      const uptimeSeconds = process.uptime();
+      const uptimeHours = uptimeSeconds / 3600;
+      
+      // Check if process is responsive (uptime > 0 and memory not excessive)
+      const memoryHealthy = memUsagePercent < 85; // Alert if heap usage > 85%
+      const uptimeHealthy = uptimeSeconds > 10; // Must be running for at least 10 seconds
+      
+      return {
+        healthy: memoryHealthy && uptimeHealthy,
+        details: {
+          memoryUsageMB: Math.round(memUsedMB),
+          memoryTotalMB: Math.round(memTotalMB),
+          memoryUsagePercent: Math.round(memUsagePercent),
+          uptimeHours: Math.round(uptimeHours * 100) / 100,
+          memoryHealthy: memoryHealthy,
+          uptimeHealthy: uptimeHealthy
+        }
+      };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        error: error.message,
+        details: {}
+      };
     }
   }
 
@@ -824,34 +1080,45 @@ Date: ${new Date().toDateString()}
         this.checkDatabaseHealth(),
         this.checkScrapersHealth(),
         this.checkMCPHealth(),
-        this.checkAutomationHealth()
+        this.checkEmailServiceHealth(),
+        this.checkCalendarIntegrationHealth(),
+        this.checkDatabasePerformanceHealth(),
+        this.checkSystemResourcesHealth()
       ]);
 
-      const [database, scrapers, mcp, automation] = healthChecks;
+      const [database, discoveryEngine, mcp, emailService, calendarIntegration, databasePerformance, systemResources] = healthChecks;
       
       // Calculate weighted health score
       let score = 0;
       let maxScore = 0;
       
-      // Database health (40% weight)
-      maxScore += 40;
-      if (database.healthy) score += 40;
-      else score += 0;
+      // Database health (25% weight)
+      maxScore += 25;
+      if (database.healthy) score += 25;
       
-      // Scrapers health (20% weight)
+      // Discovery Engine health (20% weight)
       maxScore += 20;
-      if (scrapers.healthy) score += 20;
-      else score += 0;
+      if (discoveryEngine.healthy) score += 20;
       
-      // MCP health (20% weight)
-      maxScore += 20;
-      if (mcp.healthy) score += 20;
-      else score += 0;
+      // Email Service health (15% weight)
+      maxScore += 15;
+      if (emailService.healthy) score += 15;
       
-      // Automation health (20% weight)
-      maxScore += 20;
-      if (automation.healthy) score += 20;
-      else score += 0;
+      // MCP health (15% weight)
+      maxScore += 15;
+      if (mcp.healthy) score += 15;
+      
+      // Calendar Integration health (10% weight)
+      maxScore += 10;
+      if (calendarIntegration.healthy) score += 10;
+      
+      // Database Performance health (10% weight)
+      maxScore += 10;
+      if (databasePerformance.healthy) score += 10;
+      
+      // System Resources health (5% weight)
+      maxScore += 5;
+      if (systemResources.healthy) score += 5;
       
       const healthPercentage = (score / maxScore) * 100;
       
@@ -865,7 +1132,15 @@ Date: ${new Date().toDateString()}
       return {
         score: healthPercentage,
         description: description,
-        details: { database, scrapers, mcp, automation }
+        details: { 
+          database, 
+          discoveryEngine, 
+          mcp, 
+          emailService, 
+          calendarIntegration, 
+          databasePerformance, 
+          systemResources 
+        }
       };
       
     } catch (error) {

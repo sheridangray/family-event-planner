@@ -718,15 +718,19 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
         healthScore: healthScore.score,
         components: {
           database: healthScore.details.database?.healthy || false,
-          scrapers: healthScore.details.scrapers?.healthy || false, 
+          scrapers: healthScore.details.discoveryEngine?.healthy || false, 
           mcp: healthScore.details.mcp?.healthy || false,
-          automation: healthScore.details.automation?.healthy || false,
+          emailService: healthScore.details.emailService?.healthy || false,
+          calendarIntegration: healthScore.details.calendarIntegration?.healthy || false,
+          databasePerformance: healthScore.details.databasePerformance?.healthy || false,
+          systemResources: healthScore.details.systemResources?.healthy || false,
           scheduler: schedulerStatus.running
         },
         performance: {
-          registrationSuccessRate: `${registrationStats.successRate}%`,
-          avgResponseTime: '2.3s', // Could be calculated from actual metrics
-          totalActions24h: registrationStats.totalAttempts || 0
+          discoveryEngineScore: healthScore.details.discoveryEngine?.score || 0,
+          avgDatabaseResponseTime: `${healthScore.details.databasePerformance?.details?.basicQueryTime || 0}ms`,
+          memoryUsageMB: healthScore.details.systemResources?.details?.memoryUsageMB || 0,
+          uptimeHours: healthScore.details.systemResources?.details?.uptimeHours || 0
         },
         lastHealthCheck: new Date().toISOString()
       });
