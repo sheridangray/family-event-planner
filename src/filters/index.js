@@ -27,6 +27,13 @@ class EventFilter {
     }
   }
 
+  async evaluateAllEvents(events) {
+    // This method evaluates filters for all events and attaches results,
+    // but returns all events (not just the ones that pass filters)
+    await this.filterEvents(events);
+    return events; // Return all events with filterResults attached
+  }
+
   async filterEvents(events) {
     // Get current family demographics for age checking
     const familyDemographics = await this.familyService.getFamilyDemographics();

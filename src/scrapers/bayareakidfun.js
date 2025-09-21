@@ -1,5 +1,6 @@
 const BaseScraper = require('./base');
 const cheerio = require('cheerio');
+const chrono = require('chrono-node');
 
 class BayAreaKidFunScraper extends BaseScraper {
   constructor(logger) {
@@ -258,6 +259,29 @@ class BayAreaKidFunScraper extends BaseScraper {
     if (!dateString) return null;
     
     try {
+      // First try the existing regex-based approach for speed
+      const regexResult = this.tryRegexParsing(dateString);
+      if (regexResult && this.isValidDate(regexResult)) {
+        return regexResult;
+      }
+      
+      // Fallback to chrono-node for complex cases
+      const chronoResult = this.tryChronoParsing(dateString);
+      if (chronoResult && this.isValidDate(chronoResult)) {
+        return chronoResult;
+      }
+      
+      this.logger.warn(`Could not parse date with any method: "${dateString}"`);
+      return null;
+      
+    } catch (error) {
+      this.logger.error(`Error parsing date "${dateString}":`, error.message);
+      return null;
+    }
+  }
+
+  tryRegexParsing(dateString) {
+    try {
       // Clean up the date string
       let cleanDateString = dateString.replace(/\s+/g, ' ').replace(/\u00A0/g, ' ').trim();
       
@@ -266,33 +290,93 @@ class BayAreaKidFunScraper extends BaseScraper {
       
       // Handle specific Bay Area Kid Fun date patterns
       const currentYear = new Date().getFullYear();
+      const nextYear = currentYear + 1;
       
-      // Pattern: "Saturday, August 23" -> add current year
+      // Pattern: "Saturday, August 23" -> add appropriate year
       if (/^[a-z]+,?\s+[a-z]+\s+\d{1,2}$/i.test(cleanDateString)) {
-        cleanDateString += `, ${currentYear}`;
+        const testCurrentYear = new Date(`${cleanDateString}, ${currentYear}`);
+        const testNextYear = new Date(`${cleanDateString}, ${nextYear}`);
+        
+        // Use the date that's closest to future but not too far past
+        if (testCurrentYear > new Date()) {
+          cleanDateString += `, ${currentYear}`;
+        } else {
+          cleanDateString += `, ${nextYear}`;
+        }
       }
-      // Pattern: "August 23" -> add current year
+      // Pattern: "August 23" -> add appropriate year
       else if (/^[a-z]+\s+\d{1,2}$/i.test(cleanDateString)) {
-        cleanDateString += `, ${currentYear}`;
+        const testCurrentYear = new Date(`${cleanDateString}, ${currentYear}`);
+        const testNextYear = new Date(`${cleanDateString}, ${nextYear}`);
+        
+        if (testCurrentYear > new Date()) {
+          cleanDateString += `, ${currentYear}`;
+        } else {
+          cleanDateString += `, ${nextYear}`;
+        }
       }
-      // Pattern: "8/23" -> add current year
+      // Pattern: "8/23" -> add appropriate year
       else if (/^\d{1,2}\/\d{1,2}$/.test(cleanDateString)) {
-        cleanDateString += `/${currentYear}`;
+        const testCurrentYear = new Date(`${cleanDateString}/${currentYear}`);
+        const testNextYear = new Date(`${cleanDateString}/${nextYear}`);
+        
+        if (testCurrentYear > new Date()) {
+          cleanDateString += `/${currentYear}`;
+        } else {
+          cleanDateString += `/${nextYear}`;
+        }
       }
       
       const date = new Date(cleanDateString);
-      
-      if (!isNaN(date.getTime())) {
-        return date;
-      }
-      
-      this.logger.warn(`Could not parse date: ${dateString}`);
-      return null;
+      return !isNaN(date.getTime()) ? date : null;
       
     } catch (error) {
-      this.logger.error(`Error parsing date ${dateString}:`, error.message);
       return null;
     }
+  }
+
+  tryChronoParsing(dateString) {
+    try {
+      // Use chrono-node for natural language date parsing
+      const now = new Date();
+      const parsedDates = chrono.parseDate(dateString, now);
+      
+      if (parsedDates) {
+        return parsedDates;
+      }
+      
+      // Try with some context hints for Bay Area Kid Fun
+      const contextualAttempts = [
+        `${dateString} this year`,
+        `${dateString} next year`,
+        `${dateString} 2025`,
+        `${dateString} 2026`
+      ];
+      
+      for (const attempt of contextualAttempts) {
+        const result = chrono.parseDate(attempt, now);
+        if (result && this.isValidDate(result)) {
+          return result;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  isValidDate(date) {
+    if (!date || isNaN(date.getTime())) {
+      return false;
+    }
+    
+    const now = new Date();
+    const twoYearsFromNow = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate());
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    // Date should be within reasonable range (not too far in past or future)
+    return date >= oneWeekAgo && date <= twoYearsFromNow;
   }
 }
 

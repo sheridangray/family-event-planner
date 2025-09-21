@@ -147,9 +147,11 @@ class ScraperManager {
         const eventsWithFilters = [];
         for (const event of rawEvents) {
           try {
-            // Apply filters to get detailed results
-            const filteredResult = await this.eventFilter.filterEvents([event]);
-            const filterResults = event.filterResults || { passed: false, reasons: ['No filter results'] };
+            // Apply filters to capture detailed results for ALL events (not just passing ones)
+            await this.eventFilter.evaluateAllEvents([event]);
+            
+            // Get the filter results that were attached to the event during filtering
+            const filterResults = event.filterResults || { passed: false, reasons: ['No filter results captured'] };
             
             eventsWithFilters.push({
               event,
