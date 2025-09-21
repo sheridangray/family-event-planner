@@ -770,9 +770,9 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
           completed_at,
           CASE
             WHEN completed_at IS NOT NULL
-            THEN EXTRACT(EPOCH FROM (completed_at - started_at)) || ' seconds'
-            ELSE 'Still running'
-          END as duration,
+            THEN EXTRACT(EPOCH FROM (completed_at - started_at))
+            ELSE NULL
+          END as duration_seconds,
           scrapers_count,
           events_found,
           events_saved,
@@ -848,7 +848,7 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
           triggerType: latestRun.trigger_type,
           startedAt: latestRun.started_at,
           completedAt: latestRun.completed_at,
-          duration: latestRun.duration,
+          durationSeconds: latestRun.duration_seconds,
           scrapersCount: latestRun.scrapers_count,
           eventsFound: latestRun.events_found,
           eventsSaved: latestRun.events_saved,

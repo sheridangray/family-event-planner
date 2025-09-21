@@ -13,7 +13,7 @@ interface LatestDiscoveryRunData {
     triggerType: string;
     startedAt: string;
     completedAt: string | null;
-    duration: string;
+    durationSeconds: number | null;
     scrapersCount: number;
     eventsFound: number;
     eventsSaved: number;
@@ -82,6 +82,20 @@ export function LatestDiscoveryRun() {
       return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
     } else {
       return 'Just now';
+    }
+  };
+
+  const formatDuration = (durationSeconds: number | null) => {
+    if (!durationSeconds) return 'Still running';
+    
+    const totalSeconds = Math.floor(durationSeconds);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    
+    if (minutes > 0) {
+      return `${minutes} minute${minutes > 1 ? 's' : ''} ${seconds} second${seconds !== 1 ? 's' : ''}`;
+    } else {
+      return `${seconds} second${seconds !== 1 ? 's' : ''}`;
     }
   };
 
@@ -204,7 +218,7 @@ export function LatestDiscoveryRun() {
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Duration</div>
             <div className="text-sm font-semibold text-gray-900 mt-1">
-              {discoveryRun!.duration}
+              {formatDuration(discoveryRun!.durationSeconds)}
             </div>
           </div>
           
@@ -234,14 +248,14 @@ export function LatestDiscoveryRun() {
                 <div className="text-xs text-blue-600">Total Events Found</div>
               </div>
               
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="text-lg font-bold text-green-700">{eventsBreakdown!.eventsPassedFilters}</div>
-                <div className="text-xs text-green-600">Passed Filters</div>
-              </div>
-              
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <div className="text-lg font-bold text-red-700">{eventsBreakdown!.eventsFilteredOut}</div>
                 <div className="text-xs text-red-600">Filtered Out</div>
+              </div>
+              
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="text-lg font-bold text-green-700">{eventsBreakdown!.eventsPassedFilters}</div>
+                <div className="text-xs text-green-600">Passed Filters</div>
               </div>
             </div>
           </div>
@@ -267,35 +281,6 @@ export function LatestDiscoveryRun() {
             </div>
           </div>
 
-          {/* Scraper Breakdown */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">🤖 Scraper Performance</h4>
-            <div className="space-y-2">
-              {scraperBreakdown!.map((scraper, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="text-sm">
-                      {scraper.success ? '✅' : '❌'}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{scraper.scraperName}</div>
-                      {!scraper.success && scraper.errorMessage && (
-                        <div className="text-xs text-red-600">{scraper.errorMessage}</div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium text-gray-700">
-                      {scraper.eventsFound} found • {scraper.eventsSaved} saved
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {formatExecutionTime(scraper.executionTimeMs)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* Error Messages */}
           {discoveryRun!.errorMessage && (
