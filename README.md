@@ -1,379 +1,515 @@
 # Bay Area Family Event Planner
 
-An automated system that discovers family-friendly events in the San Francisco Bay Area, checks calendar availability, sends approval requests via SMS, and handles event registration and calendar scheduling.
+**Modern automated system for discovering family-friendly events in the San Francisco Bay Area, with intelligent filtering, email approval workflow, automated registration, and calendar integration.**
 
-## 🚨 CRITICAL SAFETY FEATURES
+![System Architecture](https://img.shields.io/badge/Architecture-Microservices-blue) ![Node.js](https://img.shields.io/badge/Node.js-20+-green) ![Next.js](https://img.shields.io/badge/Next.js-15-black) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 
-This system includes multiple safety layers to prevent unauthorized payments:
-
-- **Payment Guard**: Automatically detects and blocks any payment-related automation
-- **Free Events Only**: Only processes events marked as free ($0 cost)
-- **Manual Payment**: All paid events require explicit manual confirmation and payment
-- **Safety Violations**: System logs and alerts on any payment-related detection
-- **Emergency Shutdown**: Automatic shutdown if payment safety is compromised
-
-## 🏗 Architecture
+## 🏗️ System Architecture
 
 ```
-family-event-planner/
-├── src/
-│   ├── scrapers/        # Event source scrapers (SF Recreation, EventBrite, etc.)
-│   ├── filters/         # Event filtering by age, schedule, location
-│   ├── scoring/         # Event ranking system (novelty, urgency, social proof)
-│   ├── mcp/            # MCP server integrations (Gmail, Twilio)
-│   ├── automation/     # Registration automation (FREE events only)
-│   ├── scheduler/      # Cron job management
-│   ├── safety/         # Payment guards and error handling
-│   └── api/           # REST API endpoints
-├── config/            # Configuration files
-├── data/             # Database migrations
-└── logs/             # Application logs and screenshots
+Family Event Planner
+├── 🔧 Backend (Node.js + Express)
+│   ├── Event Discovery Engine (10 scrapers)
+│   ├── Smart Filtering & Scoring System  
+│   ├── Email Notification Service (OAuth)
+│   ├── Calendar Integration (Google Calendar)
+│   ├── Automated Registration (FREE events only)
+│   └── Safety & Payment Guards
+│
+├── 🎨 Frontend (Next.js + TypeScript)
+│   ├── Mobile-first Responsive Design
+│   ├── Real-time Dashboard & Analytics
+│   ├── Event Management Interface
+│   ├── Calendar Views & Settings
+│   └── Google OAuth Authentication
+│
+└── 🗄️ Infrastructure
+    ├── PostgreSQL Database (Render)
+    ├── File Storage & Logging
+    ├── Webhook Integrations (Gmail)
+    └── Background Job Scheduler
 ```
 
-## 🚀 Quick Start
+## 🚀 Key Features
+
+### 🔍 **Intelligent Event Discovery**
+- **10 Active Event Sources**: SF Rec & Parks, Exploratorium, Cal Academy, Chase Center, SF Library, FunCheapSF, Bay Area Kid Fun, and more
+- **Smart Age Filtering**: AI-powered age appropriateness detection (2-4 years)
+- **Schedule Compatibility**: Weekday evenings (4:30 PM+), weekends with nap time awareness
+- **Location Intelligence**: 30-mile radius with travel time calculation
+- **Deduplication**: Advanced event matching across sources
+
+### 📊 **Advanced Scoring System**
+- **Novelty Score (35%)**: Prioritizes new venues and unique experiences
+- **Urgency Score (25%)**: Registration deadlines, limited capacity detection
+- **Social Proof (20%)**: Instagram mentions, Google reviews, influencer content
+- **Family Match (15%)**: Age range compatibility, activity preferences
+- **Cost Efficiency (5%)**: Preference for free events, budget optimization
+
+### 📧 **Email-First Approval Workflow**
+- **Smart Recipient Routing**: Joyce (production) / Sheridan (development)
+- **Rich Event Details**: Venue info, ratings, cost, age ranges, special notes
+- **One-Click Responses**: Reply "YES" or "NO" to approve/reject events
+- **Calendar Integration**: OAuth-based event creation on primary calendar
+- **No Spam Confirmation**: Silent processing, no unnecessary reply emails
+
+### 🤖 **Automated Registration (FREE Events Only)**
+- **Payment Safety**: Multiple layers prevent any payment processing
+- **Form Automation**: Intelligent field detection and family data filling  
+- **Screenshot Verification**: Visual confirmation of all registrations
+- **Venue-Specific Adapters**: Custom logic for major venues (10 adapters)
+- **Error Recovery**: Graceful fallback to manual registration links
+
+### 🗓️ **Calendar & Scheduling**
+- **Google Calendar Integration**: OAuth-based event creation with attendees
+- **Conflict Detection**: Automatic calendar checking for both parents
+- **Smart Reminders**: 1 week, 1 day, 2 hours before events
+- **Travel Buffers**: 30-minute arrival buffers for all events
+- **Family Coordination**: Shared calendar visibility
+
+## 🎯 **User Experience**
+
+### 📱 **Mobile-First Dashboard**
+- **Real-time Analytics**: Event discovery metrics, approval rates, attendance tracking
+- **Event Management**: Browse, filter, approve/reject discovered events
+- **Calendar Views**: Monthly calendar with event details and status
+- **Settings Control**: Family profiles, preferences, notification settings
+- **System Monitoring**: Scraper health, automation status, system alerts
+
+### 🔐 **Secure Family Access**
+- **Google OAuth**: Secure authentication for family members only
+- **Role-Based Access**: Joyce and Sheridan have full system access
+- **Session Management**: Secure token handling with NextAuth.js
+- **HTTPS Everywhere**: End-to-end encryption for all communications
+
+## 🛡️ **Safety & Security**
+
+### 💰 **Payment Protection (Critical)**
+- **Zero Payment Processing**: System never handles payment information
+- **Multi-Layer Detection**: Page scanning, field validation, keyword blocking
+- **Emergency Shutdown**: Automatic system halt if payment fields detected
+- **Audit Logging**: All safety violations logged with screenshots
+- **Manual Override**: Paid events require explicit manual payment
+
+### 🚨 **Error Handling & Monitoring**
+- **Graceful Degradation**: Fallback mechanisms for all critical operations
+- **Health Monitoring**: Continuous system health checks and alerting
+- **Error Classification**: Critical/High/Medium/Low severity levels
+- **Retry Logic**: Exponential backoff for transient failures
+- **Data Backup**: Automated database backups and recovery
+
+## 🏗️ **Technical Stack**
+
+### Backend (`/src/`)
+```javascript
+// Core Services
+├── Event Discovery Engine (src/scrapers/)
+│   ├── 10 venue-specific scrapers
+│   ├── Intelligent deduplication 
+│   └── Real-time health monitoring
+│
+├── Smart Processing Pipeline (src/filters/, src/scoring/)
+│   ├── Age-appropriate filtering
+│   ├── Schedule compatibility
+│   ├── Advanced scoring algorithms
+│   └── Preference learning
+│
+├── Communication Services (src/mcp/)
+│   ├── Gmail OAuth integration
+│   ├── Email notification system
+│   └── Webhook processing
+│
+├── Automation Engine (src/automation/)
+│   ├── 10 venue-specific adapters
+│   ├── Form filling automation
+│   ├── Payment safety guards
+│   └── Screenshot verification
+│
+└── Infrastructure (src/services/, src/safety/)
+    ├── PostgreSQL database layer
+    ├── Calendar management
+    ├── Error handling & logging
+    └── Background job scheduler
+```
+
+### Frontend (`/frontend/src/`)
+```typescript
+// Modern React Architecture
+├── Pages & Routing (app/)
+│   ├── Dashboard with real-time updates
+│   ├── Event management interface
+│   ├── Calendar views & scheduling
+│   ├── Analytics & reporting
+│   └── Settings & preferences
+│
+├── Component Library (components/)
+│   ├── Responsive mobile-first design
+│   ├── Real-time data visualization
+│   ├── Interactive event cards
+│   ├── Calendar widgets
+│   └── Form controls & settings
+│
+├── State Management (lib/)
+│   ├── TanStack Query for server state
+│   ├── Zustand for client state
+│   ├── API client with error handling
+│   └── Type-safe interfaces
+│
+└── Infrastructure
+    ├── NextAuth.js authentication
+    ├── Tailwind CSS styling
+    ├── TypeScript everywhere
+    └── Turbopack for fast builds
+```
+
+## 📊 **Event Sources & Coverage**
+
+| Source | Status | Events/Week | Coverage |
+|--------|--------|-------------|----------|
+| **SF Recreation & Parks** | ✅ Active | 15-25 | Sports, Arts, Family Programs |
+| **Exploratorium** | ✅ Active | 5-8 | Science, Interactive Learning |
+| **California Academy of Sciences** | ✅ Active | 3-5 | Nature, Planetarium, Aquarium |
+| **Chase Center** | ✅ Active | 2-4 | Sports, Concerts, Family Shows |
+| **SF Public Library** | ✅ Active | 10-15 | Story Time, Educational Programs |
+| **FunCheapSF** | ✅ Active | 20-30 | Free Events, Festivals, Markets |
+| **Bay Area Kid Fun** | ✅ Active | 8-12 | Family Activities, Seasonal Events |
+| **Kids Out and About SF** | ✅ Active | 6-10 | Classes, Workshops, Playgroups |
+| **Yerba Buena Gardens Festival** | ✅ Active | 2-5 | Cultural Events, Performances |
+| **Community Events** | ✅ Active | 5-8 | Local Festivals, Neighborhood Events |
+
+**Total Discovery**: 70-120 events/week → 8-20 curated suggestions → 2-6 bookings/week
+
+## 🚀 **Quick Start**
 
 ### Prerequisites
+- **Node.js 20+** with npm
+- **PostgreSQL 16** database
+- **Google Cloud Project** with Calendar & Gmail APIs
+- **MCP Credentials** for Gmail integration
 
-- Node.js 20+ 
-- PostgreSQL database
-- Docker & Docker Compose (for local development)
-- Gmail account with API access
-- Valid MCP server configurations
+### 🔧 **Backend Setup**
+```bash
+# Clone and install dependencies
+git clone <repository>
+cd family-event-planner
+npm install
 
-### Installation
+# Start PostgreSQL (Docker)
+docker-compose up -d postgres
 
-1. **Clone and install dependencies:**
-   ```bash
-   git clone <repository>
-   cd family-event-planner
-   npm install
-   ```
+# Environment configuration
+cp .env.example .env
+# Edit .env with your settings (see Configuration section)
 
-2. **Start local PostgreSQL database:**
-   ```bash
-   docker-compose up -d postgres
-   ```
+# Run database migrations
+npm run migrate
 
-3. **Set up environment variables:**
-   ```bash
-   # Local development
-   export DATABASE_URL="postgresql://postgres:password@localhost:5432/family_event_planner"
-   
-   # Production uses Render's DATABASE_URL automatically
-   ```
+# Start development server
+npm run dev
+```
 
-2. **Configure environment:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your settings
-   ```
+### 🎨 **Frontend Setup**
+```bash
+# Navigate to frontend directory
+cd frontend
+npm install
 
-3. **Start the application:**
-   ```bash
-   npm start
-   # or for development
-   npm run dev
-   ```
+# Start development server (runs on port 3002)
+npm run dev
+```
 
-## ⚙️ Configuration
+### 🌐 **Production Deployment (Render)**
+Both backend and frontend auto-deploy from the `main` branch:
+- **Backend**: https://family-event-planner-backend.onrender.com
+- **Frontend**: https://family-event-planner-frontend.onrender.com
 
-Create a `.env` file with the following settings:
+## ⚙️ **Configuration**
 
-```env
-# Gmail MCP Configuration
-PARENT1_EMAIL=parent1@example.com
-PARENT2_EMAIL=parent2@example.com
-MCP_GMAIL_CREDENTIALS=your_gmail_mcp_credentials
+### Environment Variables (`.env`)
+```bash
+# 👥 Family Configuration
+PARENT1_EMAIL=joyce.yan.zhang@gmail.com
+PARENT2_EMAIL=sheridan.gray@gmail.com
+PARENT1_NAME=Joyce Zhang
+PARENT2_NAME=Sheridan Gray
+CHILD1_NAME=Apollo Gray
+CHILD1_AGE=4
+CHILD2_NAME=Athena Gray  
+CHILD2_AGE=2
 
-# Twilio MCP Configuration  
-TWILIO_PHONE_TO=+15551234567
-MCP_TWILIO_CREDENTIALS=your_twilio_mcp_credentials
+# 🔐 Google OAuth & APIs
+MCP_GMAIL_CREDENTIALS_JSON={"installed":{...}}
+GOOGLE_OAUTH_TOKEN={"access_token":"..."}
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_client_secret
 
-# Location Settings
+# 📍 Location & Scheduling
 HOME_ADDRESS=San Francisco, CA
 MAX_DISTANCE_MILES=30
-
-# Schedule Settings
 WEEKDAY_EARLIEST_TIME=16:30
 WEEKEND_EARLIEST_TIME=08:00
 WEEKEND_NAP_START=12:00
 WEEKEND_NAP_END=14:00
 
-# Event Preferences
+# 🎯 Event Preferences  
 MIN_CHILD_AGE=2
 MAX_CHILD_AGE=4
 MAX_COST_PER_EVENT=200
-MIN_ADVANCE_WEEKS=2
+MIN_ADVANCE_DAYS=2
 MAX_ADVANCE_MONTHS=6
 
-# Registration Info
-PARENT1_NAME=Parent One
-PARENT2_NAME=Parent Two
-CHILD1_NAME=Child One
-CHILD1_AGE=4
-CHILD2_NAME=Child Two
-CHILD2_AGE=2
-EMERGENCY_CONTACT=+15551234567
+# 🔍 Discovery Settings
+EVENTS_PER_WEEK_MIN=8
+EVENTS_PER_WEEK_MAX=20
+EVENTS_PER_DAY_MAX=3
+SCAN_FREQUENCY_HOURS=6
+
+# 🗄️ Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/family_event_planner
+
+# 🔑 API Keys
+TOGETHER_AI_API_KEY=your_llm_api_key
+WEATHER_API_KEY=your_weather_key
+API_KEY=your_secure_api_key
 ```
 
-## 🔄 How It Works
+## 🔄 **Automated Workflows**
 
-### 1. Event Discovery
-- Scrapes multiple Bay Area event sources every 6 hours
-- Filters events by age appropriateness (2-4 years old)
-- Checks schedule compatibility (weekday evenings, weekends)
-- Prioritizes novel venues and experiences
+### 📅 **Scheduled Tasks**
+- **Every 6 hours**: Event discovery and scraping across all sources
+- **Every 30 minutes**: Process approved events for automated registration
+- **Every 4 hours**: Check approval timeouts, send reminder notifications
+- **Daily 9:00 AM**: Scoring and ranking of newly discovered events
+- **Daily 6:00 PM**: Generate comprehensive daily reports
+- **Every 15 minutes**: System health monitoring and error detection
 
-### 2. Event Scoring & Ranking
-- **Novelty Score (35%)**: Prioritizes new venues and experiences
-- **Urgency Score (25%)**: Registration opening soon, limited capacity
-- **Social Score (20%)**: Instagram mentions, reviews, influencer recommendations
-- **Match Score (15%)**: Age appropriateness, preferred activities
-- **Cost Score (5%)**: Prefers free events, within budget
-
-### 3. SMS Approval Workflow
-- Sends 8-20 event suggestions per week
-- Maximum 3 events per day
-- Different message formats for FREE vs PAID events
-- 24-hour response timeout (6 hours for urgent events)
-
-#### FREE Event Message:
+### 📧 **Email Workflow**
 ```
-New family event found!
-Story Time at Golden Gate Park ⭐ 4.8
-Date: Sat, Nov 18, 10:00 AM (3 weeks away)
-Location: Golden Gate Park
-Cost: FREE
-Ages: 2-5
-✨ New venue for us!
-
-Reply YES to book or NO to skip
+1. 🔍 Event Discovery → Intelligent filtering → Smart scoring
+2. 📧 Email to Joyce/Sheridan: "New Family Event: Story Time (FREE)"
+3. 📱 Reply: "YES" → ✅ Automatic calendar event creation
+4. 🤖 FREE events → Automated registration with safety checks
+5. 📅 Calendar updates with reminders and family coordination
 ```
 
-#### PAID Event Message:
-```
-New family event found!
-Children's Theatre Workshop ⭐ 4.6
-Date: Sun, Nov 19, 2:00 PM (3 weeks away)
-Location: Children's Creativity Museum
-⚠️ COST: $45 - REQUIRES PAYMENT
-Ages: 3-6
-📸 Trending on Instagram
+## 🔌 **API Reference**
 
-Reply YES to receive payment link
-Reply NO to skip
-```
-
-### 4. Automated Registration (FREE Events Only)
-- **CRITICAL**: Only processes events with $0 cost
-- Detects and blocks any payment fields
-- Fills common registration forms automatically
-- Takes screenshots for confirmation
-- **NEVER** handles payment information
-
-### 5. Calendar Integration
-- Checks both parents' calendars for conflicts
-- Creates calendar events with:
-  - 30-minute travel buffer
-  - Multiple reminders (1 week, 1 day, 2 hours)
-  - Event details and preparation notes
-  - Registration confirmations
-
-## 🛡️ Safety Features
-
-### Payment Protection
-- **Pre-registration validation**: Verifies event cost is $0
-- **Page scanning**: Detects credit card fields, payment keywords
-- **Form validation**: Blocks sensitive form fields
-- **Emergency shutdown**: Automatic stop if payment detected
-- **Audit logging**: All safety violations logged
-
-### Error Handling
-- **Graceful degradation**: Fallback mechanisms for all operations
-- **Retry logic**: Exponential backoff for failed operations
-- **Health monitoring**: Continuous system health checks
-- **Error classification**: Critical/High/Medium/Low severity levels
-
-## 🔌 API Endpoints
-
-### System Status
+### System Health & Monitoring
 ```bash
-GET /health
-# Returns system health, error stats, uptime
+GET  /health                          # System status and metrics
+GET  /api/automation/status           # Automation engine status  
+GET  /api/automation/health           # Component health checks
+GET  /api/automation/scraper-runs     # Recent scraper execution logs
 ```
 
 ### Event Management
 ```bash
-GET /api/events?status=discovered
-POST /api/events/:id/approve
-POST /api/events/:id/reject
-POST /api/events/:id/register  # FREE events only
-POST /api/events/:id/calendar
+GET  /api/events                      # List events with filtering
+POST /api/events/:id/approve          # Approve event for booking
+POST /api/events/:id/reject           # Reject event suggestion
+GET  /api/events/:id/details          # Get detailed event information
 ```
 
 ### Manual Operations
 ```bash
-POST /api/scrape
-POST /api/score
-POST /api/process-approvals
+POST /api/automation/discover         # Trigger manual event discovery
+POST /api/automation/scrape          # Run specific scraper
+POST /api/automation/process          # Process pending approvals
 ```
 
-### Emergency Controls
+### Dashboard Data
 ```bash
-POST /emergency-shutdown  # Safety override
+GET  /api/dashboard/stats             # Real-time dashboard statistics
+GET  /api/dashboard/events            # Recent events and activity
+GET  /api/dashboard/analytics         # Performance metrics and trends
 ```
 
-## 📊 Monitoring
+## 📊 **Performance Metrics**
 
-### Logs
-- `logs/combined.log`: All application logs
-- `logs/error.log`: Error logs only
-- `logs/errors.json`: Structured error data
-- `logs/screenshots/`: Registration screenshots
+### 🎯 **Success Criteria**
+- ✅ **8-20 relevant events suggested per week**
+- ✅ **2-6 week advance notice for 80% of events**
+- ✅ **< 5 minutes registration time for high-demand events**
+- ✅ **90%+ novel events (not previously attended)**
+- ✅ **80%+ approval rate on suggestions** 
+- ✅ **95%+ successful auto-registration for FREE events**
+- ✅ **Zero payment safety violations**
 
-### Health Checks
-- Database connectivity
-- MCP server status
-- Scraper functionality
-- Payment guard violations
-- Recent error rates
+### 📈 **Key Performance Indicators**
+- **Discovery Rate**: 70-120 raw events → 8-20 suggestions weekly
+- **Approval Conversion**: 80% of suggestions get approved
+- **Booking Success**: 95% of approved FREE events get registered
+- **Calendar Accuracy**: 100% calendar events created for approvals
+- **System Uptime**: 99.5% availability target
+- **Safety Record**: 0 payment violations (critical)
 
-### Daily Reports
-Automated daily summary at 6:00 PM:
-- Events discovered, proposed, booked
-- System health status
-- Pending approvals
-- Cost summaries
-- Attention-needed items
+## 🧪 **Testing & Quality Assurance**
 
-## 🗓️ Scheduled Tasks
+### Test Coverage
+```bash
+# Unit Tests
+npm run test:unit              # Core logic and utilities
 
-- **Every 6 hours**: Event discovery and scraping
-- **Every 30 minutes**: Process approved events for registration
-- **Every 4 hours**: Check approval timeouts, send reminders
-- **Daily 9:00 AM**: Event processing and scoring
-- **Daily 10:00 AM**: Calendar sync for booked events
-- **Daily 6:00 PM**: Generate daily reports
-- **Every 15 minutes**: System health checks
+# Integration Tests  
+npm run test:integration       # API endpoints and workflows
 
-## 🚨 Emergency Procedures
+# Error Scenario Tests
+npm run test:errors           # Safety and failure conditions
 
-### If Payment Fields Detected
-1. System automatically stops registration
-2. Logs safety violation
-3. Takes screenshot of issue
-4. Notifies via error logs
-5. Manual intervention required
+# Full Test Suite
+npm run test:coverage         # Generate coverage report
+```
+
+### Manual Testing Workflows
+```bash
+# Test event discovery
+curl -X POST /api/automation/discover
+
+# Test specific scraper
+curl -X POST /api/automation/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"source": "SF Recreation & Parks"}'
+
+# Test email workflow  
+# (Reply to actual event notification email)
+
+# Test calendar integration
+# (Check Google Calendar after approval)
+```
+
+## 🚨 **Emergency Procedures**
+
+### Payment Safety Violations
+```
+1. 🚨 System automatically halts all automation
+2. 📸 Screenshots captured of the issue  
+3. 📝 Detailed logs written to error tracking
+4. 🔔 Alert sent to error monitoring system
+5. 🛠️ Manual intervention required to resume
+```
 
 ### System Health Issues
-- **Critical errors**: Automatic alerts and potential shutdown
-- **High error rates**: Degraded mode operation
-- **MCP failures**: Fallback to manual processing
-- **Database issues**: Emergency data backup
-
-## 🧪 Testing
-
-### Manual Testing (Recommended)
-```bash
-# Test with free events first
-POST /api/scrape
-GET /api/events?status=discovered
-POST /api/events/:id/approve
-POST /api/events/:id/register
+```
+Critical Errors    → Automatic service restart + alerts
+High Error Rates   → Degraded mode operation  
+Database Issues    → Emergency backup + read-only mode
+External API Fails → Graceful fallback to manual processes
 ```
 
-### Safety Testing
-- Verify payment detection works
-- Test emergency shutdown
-- Validate error handling
-- Check violation logging
-
-## 📈 Performance Metrics
-
-### Success Criteria
-- ✅ 8-20 relevant events suggested per week
-- ✅ 2-6 week advance notice for 80% of events
-- ✅ Registration within 5 minutes for high-demand events
-- ✅ 90%+ novel events (not previously attended)
-- ✅ 80%+ approval rate on suggestions
-- ✅ 90%+ successful auto-registration for approved free events
-- ✅ Zero payment safety violations
-
-### Key Performance Indicators
-- Event discovery rate
-- Approval-to-booking conversion
-- Calendar conflict rate
-- System uptime
-- Error rates by component
-- Safety violation count (should be 0)
-
-## 🔒 Security Considerations
+## 🔒 **Security & Privacy**
 
 ### Data Protection
-- No credit card information stored
-- Personal information encrypted
-- MCP credentials secured
-- Access logs maintained
+- **No Payment Data**: Zero credit card or banking information stored
+- **Encrypted Credentials**: All API keys and tokens securely encrypted
+- **HTTPS Everywhere**: End-to-end encryption for all communications
+- **Minimal Data Collection**: Only necessary family and preference data
+- **Regular Backups**: Automated database backups with encryption
 
-### Operational Security
-- Rate limiting on external requests
-- Input validation on all forms
-- SQL injection prevention
-- XSS protection on web interface
+### Access Control
+- **Family-Only Access**: Restricted to Joyce and Sheridan email addresses
+- **OAuth Authentication**: Google-based secure login system
+- **Session Management**: Secure JWT tokens with expiration
+- **API Key Protection**: Rate limiting and request validation
+- **Audit Logging**: All actions logged for security review
 
-## 🆘 Troubleshooting
+## 🆘 **Troubleshooting**
 
 ### Common Issues
 
-**MCP Connection Failures**
+**📧 Emails Not Sending**
 ```bash
-# Check MCP credentials and connectivity
+# Check OAuth token status
 GET /health
-# Review logs for specific MCP errors
+
+# Verify Gmail API credentials
+# Review logs: logs/combined.log
 ```
 
-**Scraping Issues**
+**🔍 Scraping Failures**
 ```bash
 # Test individual scrapers
-POST /api/scrape {"source": "SF Recreation & Parks"}
+POST /api/automation/scrape {"source": "Exploratorium"}
+
+# Check scraper health
+GET /api/automation/health
 ```
 
-**Registration Failures**
+**🤖 Registration Failures**
 ```bash
-# Check screenshots in logs/screenshots/
-# Review error logs for specific failures
+# Review automation logs
+GET /api/automation/status
+
+# Check screenshots: logs/screenshots/
+# Review error details in logs/errors.json
 ```
 
-**SMS Not Sending**
+**📅 Calendar Issues**
 ```bash
-# Verify Twilio MCP configuration
-# Check phone number format
+# Test OAuth token refresh
+# Verify Google Calendar API access
+# Check calendar sharing permissions
 ```
 
-### Support Contacts
-- System logs: `logs/combined.log`
-- Error tracking: `logs/errors.json`
-- Health dashboard: `GET /health`
-- Emergency shutdown: `POST /emergency-shutdown`
+### Support Resources
+- **System Logs**: `logs/combined.log` for all activities
+- **Error Tracking**: `logs/errors.json` for structured error data  
+- **Health Dashboard**: `GET /health` for real-time system status
+- **Performance Metrics**: Frontend dashboard for detailed analytics
 
-## 📝 Development
+## 🛠️ **Development**
 
 ### Adding New Event Sources
-1. Create scraper in `src/scrapers/`
-2. Extend `BaseScraper` class
-3. Add to `ScraperManager`
-4. Update database schema if needed
+1. Create scraper class extending `BaseScraper` in `src/scrapers/`
+2. Implement required methods: `scrapeEvents()`, `parseEventData()`
+3. Add registration adapter in `src/automation/adapters/`
+4. Update scraper registry in `src/scrapers/index.js`
+5. Add comprehensive tests and error handling
 
-### Extending Functionality
-- Follow safety-first principles
-- Add comprehensive error handling
-- Include payment guard checks
-- Update health monitoring
+### Extending Frontend Features
+1. Create React components in `frontend/src/components/`
+2. Add new pages in `frontend/src/app/`
+3. Update API client in `frontend/src/lib/api.ts`
+4. Follow TypeScript best practices and responsive design
+5. Test across mobile and desktop breakpoints
 
-## 📄 License
+### Safety-First Development
+- **Never bypass payment guards** - all changes must maintain safety
+- **Comprehensive error handling** - graceful degradation required
+- **Audit logging** - log all significant system actions
+- **Test safety scenarios** - verify payment protection works
+- **Code review required** - all changes reviewed for safety
 
-This project is for personal/family use. Commercial use requires additional safety audits and payment processing compliance.
+## 📈 **Roadmap & Future Enhancements**
+
+### Short Term (Next 3 months)
+- [ ] **Enhanced Mobile Experience**: Native mobile app with push notifications
+- [ ] **Smart Recommendations**: ML-powered personalization based on attendance history
+- [ ] **Event Reminders**: SMS/push notifications 1 hour before events
+- [ ] **Weather Integration**: Automatic event suggestions based on weather forecasts
+- [ ] **Social Features**: Share events with other Bay Area families
+
+### Medium Term (3-6 months)  
+- [ ] **Multi-City Support**: Expand beyond Bay Area to other family-friendly cities
+- [ ] **Advanced Calendar Intelligence**: Optimize scheduling based on travel time and preferences
+- [ ] **Venue Partnerships**: Direct integration with major venues for priority access
+- [ ] **Cost Optimization**: Budget tracking and cost-per-event analytics
+- [ ] **Event Reviews**: Family feedback system for event quality
+
+### Long Term (6+ months)
+- [ ] **AI Event Creation**: Generate custom events based on family interests
+- [ ] **Community Platform**: Connect with other families for group events
+- [ ] **Virtual Events**: Integration with online family activities and classes
+- [ ] **Travel Events**: Weekend getaways and vacation planning
+- [ ] **Educational Tracking**: Monitor children's learning and development through events
+
+## 📄 **License & Usage**
+
+This project is designed for **personal/family use**. The system includes comprehensive safety measures and is specifically configured for the Gray/Zhang family's event discovery needs.
+
+**⚠️ Important**: Commercial use would require additional safety audits, payment processing compliance (PCI DSS), and legal review of automated registration capabilities.
 
 ---
 
-**⚠️ IMPORTANT**: This system is designed for family event discovery and handles NO payment processing. All paid events require manual intervention and payment completion.
+**🎉 Built with ❤️ for Apollo (4) and Athena (2) by the Gray family**
+
+*Last updated: September 2025 | System version: 2.0.0*

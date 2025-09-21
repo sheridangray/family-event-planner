@@ -93,8 +93,7 @@ class EmailNotificationClient {
   }
 
   getRecipientEmail() {
-    // Always send to Sheridan Gray for now
-    return config.gmail.parent2Email; // Sheridan in all environments
+    return config.app.nodeEnv === 'production' ? config.gmail.parent1Email : config.gmail.parent2Email;
   }
 
   buildEmailSubject(event) {
