@@ -141,10 +141,9 @@ class ScraperManager {
       this.logger.info(`Starting targeted scrape for ${scraper.name}${discoveryRunId ? ` (Discovery Run #${discoveryRunId})` : ''}`);
       const rawEvents = await scraper.scrape();
       
-      // Save all discovered events (including duplicates) if we have a discovery run ID
+      // Run filtering to get filter results for each event (if we have a discovery run)
+      let eventsWithFilters = [];
       if (discoveryRunId && rawEvents.length > 0) {
-        // Run filtering to get filter results for each event
-        const eventsWithFilters = [];
         for (const event of rawEvents) {
           try {
             // Apply filters to capture detailed results for ALL events (not just passing ones)
@@ -206,36 +205,58 @@ class ScraperManager {
       //   }
       // }
       
-      // Save all events (no deduplication during debugging)
+      // Save only events that passed filters to main events table (for approval pipeline)
       const savedEvents = [];
-      for (const event of uniqueEvents) {
-        try {
-          // Assign discovery run ID if provided
-          if (discoveryRunId) {
-            event.discovery_run_id = discoveryRunId;
-          }
-          
-          const eventId = await this.database.saveEvent(event);
-          if (eventId) {
-            savedEvents.push(event);
-            this.logger.info(`Saved event: ${event.title} on ${event.date}${event.sources ? ` (sources: ${event.sources.join(', ')})` : ''} [ID: ${eventId}]${discoveryRunId ? ` [Run: ${discoveryRunId}]` : ''}`);
-          } else {
-            this.logger.warn(`Event save returned no ID: ${event.title} on ${event.date} [Source: ${event.source}]`);
-          }
-        } catch (error) {
-          this.logger.error(`Error saving event "${event.title}" from ${event.source}:`, {
-            error: error.message,
-            stack: error.stack,
-            eventId: event.id,
-            eventData: {
-              title: event.title,
-              date: event.date,
-              source: event.source,
-              location: event.location?.address || 'No address',
-              cost: event.cost,
-              ageRange: event.ageRange
+      if (discoveryRunId && eventsWithFilters) {
+        // Filter to only events that passed all filters
+        const eventsPassedFilters = eventsWithFilters.filter(({ filterResults }) => 
+          filterResults && filterResults.passed === true
+        );
+        
+        this.logger.info(`${eventsPassedFilters.length} events passed filters out of ${eventsWithFilters.length} total events`);
+        
+        for (const { event, filterResults } of eventsPassedFilters) {
+          try {
+            // Assign discovery run ID if provided
+            if (discoveryRunId) {
+              event.discovery_run_id = discoveryRunId;
             }
-          });
+            
+            const eventId = await this.database.saveEvent(event);
+            if (eventId) {
+              savedEvents.push(event);
+              this.logger.info(`Saved filtered event: ${event.title} on ${event.date} [ID: ${eventId}] [Run: ${discoveryRunId}] (passed filters)`);
+            } else {
+              this.logger.warn(`Event save returned no ID: ${event.title} on ${event.date} [Source: ${event.source}]`);
+            }
+          } catch (error) {
+            this.logger.error(`Error saving filtered event "${event.title}" from ${event.source}:`, {
+              error: error.message,
+              stack: error.stack,
+              eventId: event.id,
+              eventData: {
+                title: event.title,
+                date: event.date,
+                source: event.source,
+                location: event.location?.address || 'No address',
+                cost: event.cost,
+                ageRange: event.ageRange
+              }
+            });
+          }
+        }
+      } else {
+        // Fallback for when not using discovery run (save all events - legacy behavior)
+        for (const event of uniqueEvents) {
+          try {
+            const eventId = await this.database.saveEvent(event);
+            if (eventId) {
+              savedEvents.push(event);
+              this.logger.info(`Saved event: ${event.title} on ${event.date} [ID: ${eventId}] (legacy mode)`);
+            }
+          } catch (error) {
+            this.logger.error(`Error saving event "${event.title}":`, error.message);
+          }
         }
       }
       
