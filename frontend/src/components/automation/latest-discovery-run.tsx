@@ -45,6 +45,7 @@ export function LatestDiscoveryRun() {
   const [data, setData] = useState<LatestDiscoveryRunData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRunningDiscovery, setIsRunningDiscovery] = useState(false);
 
   useEffect(() => {
     const fetchLatestDiscoveryRun = async () => {
@@ -82,6 +83,67 @@ export function LatestDiscoveryRun() {
       return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
     } else {
       return 'Just now';
+    }
+  };
+
+  const getNextScheduledRun = () => {
+    // Discovery runs every 6 hours at 0:00, 6:00, 12:00, 18:00
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Find next scheduled hour (0, 6, 12, 18)
+    const scheduleHours = [0, 6, 12, 18];
+    let nextHour = scheduleHours.find(hour => hour > currentHour);
+    
+    // If no hour found today, use first hour tomorrow
+    if (!nextHour) {
+      nextHour = scheduleHours[0];
+    }
+    
+    // Calculate next run time
+    const nextRun = new Date(now);
+    if (nextHour === 0 && currentHour >= 18) {
+      // Tomorrow at midnight
+      nextRun.setDate(nextRun.getDate() + 1);
+    }
+    nextRun.setHours(nextHour, 0, 0, 0);
+    
+    // Calculate time difference
+    const diffMs = nextRun.getTime() - now.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffHours === 0) {
+      return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''}`;
+    } else if (diffHours < 24) {
+      return diffMinutes > 0 ? `${diffHours}h ${diffMinutes}m` : `${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
+    } else {
+      const diffDays = Math.floor(diffHours / 24);
+      const remainingHours = diffHours % 24;
+      return `${diffDays}d ${remainingHours}h`;
+    }
+  };
+
+  const handleRunDiscovery = async () => {
+    setIsRunningDiscovery(true);
+    try {
+      await api.runDiscovery();
+      // Refresh data after starting discovery
+      setTimeout(() => {
+        const fetchLatestDiscoveryRun = async () => {
+          try {
+            const response = await api.getLatestDiscoveryRun();
+            setData(response);
+          } catch (error) {
+            console.error('Error fetching latest discovery run:', error);
+          }
+        };
+        fetchLatestDiscoveryRun();
+      }, 1000);
+    } catch (error) {
+      console.error('Error starting discovery run:', error);
+    } finally {
+      setIsRunningDiscovery(false);
     }
   };
 
@@ -196,13 +258,49 @@ export function LatestDiscoveryRun() {
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
       <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">🔍 Latest Discovery Run</h3>
-          <div className="flex items-center space-x-2">
-            {getStatusIcon(discoveryRun!.status)}
-            <span className="text-sm text-gray-600">
-              {formatTimeAgo(discoveryRun!.startedAt)}
-            </span>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleRunDiscovery}
+              disabled={isRunningDiscovery}
+              className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
+            >
+              {isRunningDiscovery ? (
+                <>
+                  <div className="animate-spin -ml-1 mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  Running...
+                </>
+              ) : (
+                <>
+                  <span className="mr-1">🚀</span>
+                  Run Discovery
+                </>
+              )}
+            </button>
+            <div className="flex items-center space-x-2">
+              {getStatusIcon(discoveryRun!.status)}
+              <div className="text-right">
+                <div className="text-sm text-gray-600">
+                  {formatTimeAgo(discoveryRun!.startedAt)}
+                </div>
+                <div className="text-xs text-gray-500">
+                  Next: {getNextScheduledRun()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Run Summary - moved to top */}
+        <div className="bg-gray-50 rounded-lg p-4 mb-6">
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Run Summary</div>
+          <div className="text-sm text-gray-700">
+            Started {format(new Date(discoveryRun!.startedAt), 'MMM d, h:mm a')} • 
+            Run #{discoveryRun!.id} • 
+            {discoveryRun!.eventsFound} events found • 
+            {discoveryRun!.eventsSaved} saved • 
+            {discoveryRun!.eventsDuplicated} duplicates
           </div>
         </div>
 
@@ -290,17 +388,6 @@ export function LatestDiscoveryRun() {
             </div>
           )}
 
-          {/* Summary Stats */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Run Summary</div>
-            <div className="text-sm text-gray-700">
-              Started {format(new Date(discoveryRun!.startedAt), 'MMM d, h:mm a')} • 
-              Run #{discoveryRun!.id} • 
-              {discoveryRun!.eventsFound} events found • 
-              {discoveryRun!.eventsSaved} saved • 
-              {discoveryRun!.eventsDuplicated} duplicates
-            </div>
-          </div>
         </div>
       </div>
     </div>
