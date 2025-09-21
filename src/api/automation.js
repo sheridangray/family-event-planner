@@ -758,6 +758,132 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
     }
   });
 
+  // Get latest discovery run with comprehensive breakdown
+  router.get('/latest-discovery-run', async (req, res) => {
+    try {
+      // Get the latest discovery run with full details
+      const latestRunResult = await database.query(`
+        SELECT
+          id,
+          trigger_type,
+          started_at,
+          completed_at,
+          CASE
+            WHEN completed_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (completed_at - started_at)) || ' seconds'
+            ELSE 'Still running'
+          END as duration,
+          scrapers_count,
+          events_found,
+          events_saved,
+          events_duplicated,
+          status,
+          error_message
+        FROM discovery_runs
+        ORDER BY started_at DESC
+        LIMIT 1
+      `);
+
+      if (latestRunResult.rows.length === 0) {
+        return res.json({
+          hasData: false,
+          message: 'No discovery runs found'
+        });
+      }
+
+      const latestRun = latestRunResult.rows[0];
+      const runId = latestRun.id;
+
+      // Get events breakdown: passed vs filtered
+      const eventsBreakdownResult = await database.query(`
+        SELECT
+          COUNT(*) as total_events,
+          SUM(CASE WHEN (filter_results ->> 'passed')::boolean = true THEN 1 ELSE 0 END) as events_passed_filters,
+          SUM(CASE WHEN (filter_results ->> 'passed')::boolean = false THEN 1 ELSE 0 END) as events_filtered_out
+        FROM discovered_events
+        WHERE discovery_run_id = $1
+      `, [runId]);
+
+      const eventsBreakdown = eventsBreakdownResult.rows[0];
+
+      // Get approval pipeline breakdown
+      const approvalBreakdownResult = await database.query(`
+        SELECT
+          COUNT(CASE WHEN status = 'proposed' THEN 1 END) as events_sent_for_approval,
+          COUNT(CASE WHEN status IN ('proposed', 'sent') THEN 1 END) as events_pending_approval,
+          COUNT(CASE WHEN status = 'approved' THEN 1 END) as events_approved
+        FROM events
+        WHERE discovery_run_id = $1
+      `, [runId]);
+
+      const approvalBreakdown = approvalBreakdownResult.rows[0];
+
+      // Get scraper breakdown
+      const scraperBreakdownResult = await database.query(`
+        SELECT
+          s.display_name as scraper_name,
+          ss.events_found,
+          ss.success,
+          ss.error_message,
+          ss.execution_time_ms,
+          COALESCE(de.events_discovered, 0) as events_saved
+        FROM scraper_stats ss
+        JOIN scrapers s ON s.id = ss.scraper_id
+        LEFT JOIN (
+          SELECT 
+            scraper_name,
+            COUNT(*) as events_discovered
+          FROM discovered_events 
+          WHERE discovery_run_id = $1
+          GROUP BY scraper_name
+        ) de ON s.name = de.scraper_name
+        WHERE ss.discovery_run_id = $1
+        ORDER BY ss.events_found DESC
+      `, [runId]);
+
+      const response = {
+        hasData: true,
+        discoveryRun: {
+          id: latestRun.id,
+          triggerType: latestRun.trigger_type,
+          startedAt: latestRun.started_at,
+          completedAt: latestRun.completed_at,
+          duration: latestRun.duration,
+          scrapersCount: latestRun.scrapers_count,
+          eventsFound: latestRun.events_found,
+          eventsSaved: latestRun.events_saved,
+          eventsDuplicated: latestRun.events_duplicated,
+          status: latestRun.status,
+          errorMessage: latestRun.error_message
+        },
+        eventsBreakdown: {
+          totalEvents: parseInt(eventsBreakdown.total_events || 0),
+          eventsPassedFilters: parseInt(eventsBreakdown.events_passed_filters || 0),
+          eventsFilteredOut: parseInt(eventsBreakdown.events_filtered_out || 0)
+        },
+        approvalPipeline: {
+          eventsSentForApproval: parseInt(approvalBreakdown.events_sent_for_approval || 0),
+          eventsPendingApproval: parseInt(approvalBreakdown.events_pending_approval || 0),
+          eventsApproved: parseInt(approvalBreakdown.events_approved || 0)
+        },
+        scraperBreakdown: scraperBreakdownResult.rows.map(scraper => ({
+          scraperName: scraper.scraper_name,
+          eventsFound: parseInt(scraper.events_found || 0),
+          eventsSaved: parseInt(scraper.events_saved || 0),
+          success: scraper.success,
+          errorMessage: scraper.error_message,
+          executionTimeMs: parseInt(scraper.execution_time_ms || 0)
+        }))
+      };
+
+      res.json(response);
+
+    } catch (error) {
+      console.error('Error getting latest discovery run:', error);
+      res.status(500).json({ error: 'Failed to get latest discovery run details' });
+    }
+  });
+
   // Manual discovery trigger endpoint
   router.post('/run-discovery', async (req, res) => {
     try {

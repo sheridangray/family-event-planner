@@ -212,6 +212,9 @@ export const api = {
   getDiscoveryRunEvents: (runId: number): Promise<any[]> =>
     apiRequest(`/automation/discovery-run/${runId}/events`),
 
+  getLatestDiscoveryRun: (): Promise<any> =>
+    apiRequest('/automation/latest-discovery-run'),
+
   deleteScraper: (scraperId: number): Promise<{ success: boolean; message: string }> =>
     apiRequest(`/automation/scrapers/${scraperId}`, { method: 'DELETE' }),
 

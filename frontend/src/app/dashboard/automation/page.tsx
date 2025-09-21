@@ -1,7 +1,7 @@
 import { AutomationHeader } from "@/components/automation/automation-header";
 
 // Note: This page shows Discovery & Email Approval workflow, not auto-approval
-import { AutomationStatus } from "@/components/automation/automation-status";
+import { LatestDiscoveryRun } from "@/components/automation/latest-discovery-run";
 import { ScrapersManagement } from "@/components/automation/scrapers-management";
 import { RecentActivity } from "@/components/automation/recent-activity";
 import { SystemHealth } from "@/components/automation/system-health";
@@ -13,11 +13,11 @@ export default function AutomationPage() {
       <AutomationHeader />
       
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Top Section - Status Overview */}
+        {/* Top Section - Latest Discovery Run & System Health */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2">
             <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-48"></div>}>
-              <AutomationStatus />
+              <LatestDiscoveryRun />
             </Suspense>
           </div>
           <div>
