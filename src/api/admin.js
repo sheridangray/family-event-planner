@@ -106,11 +106,8 @@ router.post('/mcp-auth-start', authenticateAPI, async (req, res) => {
 
     // Create Gmail client and get auth URL
     const gmailClient = new GmailMCPClient(logger);
-    logger.info(`Gmail client created, type: ${typeof gmailClient}, has getAuthUrl: ${typeof gmailClient.getAuthUrl}`);
     try {
-      logger.info(`About to call getAuthUrl for ${email}`);
       const authUrl = await gmailClient.getAuthUrl(email);
-      logger.info(`getAuthUrl returned: ${authUrl ? 'SUCCESS' : 'NULL'}`);
       
       const scopes = [
         'https://www.googleapis.com/auth/gmail.readonly',
