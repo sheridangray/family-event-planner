@@ -9,74 +9,40 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
   try {
     const { logger } = req.app.locals;
     
-    // Define the MCP services we want to check
-    const mcpServices = [
-      { 
-        email: 'sheridan.gray@gmail.com',
-        scopes: [
-          'https://www.googleapis.com/auth/gmail.readonly',
-          'https://www.googleapis.com/auth/gmail.send',
-          'https://www.googleapis.com/auth/calendar.events',
-          'https://www.googleapis.com/auth/calendar.readonly'
-        ]
-      },
-      { 
-        email: 'joyce.yan.zhang@gmail.com',
-        scopes: [
-          'https://www.googleapis.com/auth/gmail.readonly',
-          'https://www.googleapis.com/auth/gmail.send',
-          'https://www.googleapis.com/auth/calendar.events',
-          'https://www.googleapis.com/auth/calendar.readonly'
-        ]
-      }
-    ];
+    // Use multi-user singleton to get authentication status for all users
+    const { getAllUserAuthStatus } = require('../mcp/gmail-multi-user-singleton');
+    const userStatuses = await getAllUserAuthStatus();
 
-    const serviceStatus = [];
+    const serviceStatus = userStatuses.map(user => ({
+      userId: user.userId,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      authenticated: user.isAuthenticated,
+      lastAuthenticated: user.lastUpdated,
+      tokenExpiryDate: user.tokenExpiryDate,
+      scopes: [
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.readonly'
+      ],
+      error: user.isAuthenticated ? null : 'No valid OAuth tokens found'
+    }));
 
-    for (const service of mcpServices) {
-      try {
-        // Create a temporary Gmail client to test authentication
-        const gmailClient = new GmailMCPClient(logger);
-        let authenticated = false;
-        let lastAuthenticated = null;
-        let error = null;
-
-        try {
-          // Try to initialize - if it succeeds, we have valid tokens
-          await gmailClient.init();
-          
-          // Check if we have auth credentials
-          authenticated = !!gmailClient.auth && !!gmailClient.auth.credentials;
-          lastAuthenticated = authenticated ? new Date().toISOString() : null;
-        } catch (authError) {
-          authenticated = false;
-          error = authError.message;
-          logger.warn(`MCP auth check failed for ${service.email}:`, authError.message);
-        }
-
-        serviceStatus.push({
-          email: service.email,
-          authenticated,
-          lastAuthenticated,
-          scopes: service.scopes,
-          error
-        });
-
-      } catch (serviceError) {
-        logger.error(`Error checking MCP service ${service.email}:`, serviceError.message);
-        serviceStatus.push({
-          email: service.email,
-          authenticated: false,
-          lastAuthenticated: null,
-          scopes: service.scopes,
-          error: serviceError.message
-        });
-      }
-    }
+    // Add legacy compatibility for existing frontend
+    const legacyServices = serviceStatus.map(status => ({
+      email: status.email,
+      authenticated: status.authenticated,
+      lastAuthenticated: status.lastAuthenticated,
+      scopes: status.scopes,
+      error: status.error
+    }));
 
     res.json({
       success: true,
-      services: serviceStatus,
+      services: legacyServices, // Legacy format for backwards compatibility
+      users: serviceStatus,     // New multi-user format
       timestamp: new Date().toISOString()
     });
 
@@ -154,7 +120,7 @@ router.post('/mcp-auth-start', authenticateAPI, async (req, res) => {
 // POST /api/admin/mcp-auth-complete - Complete MCP OAuth flow
 router.post('/mcp-auth-complete', authenticateAPI, async (req, res) => {
   try {
-    const { email, authCode } = req.body;
+    const { email, authCode, requestingUserEmail } = req.body;
     const { logger } = req.app.locals;
 
     if (!email || !authCode) {
@@ -164,21 +130,37 @@ router.post('/mcp-auth-complete', authenticateAPI, async (req, res) => {
       });
     }
 
-    logger.info(`Completing MCP OAuth flow for: ${email}`);
+    logger.info(`Completing MCP OAuth flow for: ${email} (requested by: ${requestingUserEmail || 'unknown'})`);
 
-    // Use singleton pattern for consistent token management
-    const { getGmailClient, refreshGmailClient } = require('../mcp/gmail-singleton');
-    const gmailClient = await getGmailClient(logger);
-    const result = await gmailClient.completeAuth(email, authCode);
+    // Get user ID from database
+    const { getUserIdByEmail, completeOAuthForUser } = require('../mcp/gmail-multi-user-singleton');
+    const userId = await getUserIdByEmail(email);
+    
+    if (!userId) {
+      return res.status(404).json({
+        success: false,
+        error: `User not found: ${email}. Please ensure user exists in the system.`
+      });
+    }
 
-    // Refresh singleton to ensure all instances use new tokens
-    await refreshGmailClient(logger);
+    logger.info(`Found user ID ${userId} for email ${email}`);
 
-    logger.info(`MCP OAuth completed successfully for: ${email}`);
+    // Complete OAuth flow for the specific user
+    const result = await completeOAuthForUser(userId, email, authCode, logger);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'OAuth completion failed'
+      });
+    }
+
+    logger.info(`MCP OAuth completed successfully for user ${userId} (${email})`);
 
     res.json({
       success: true,
       email,
+      userId,
       authenticated: true,
       message: 'MCP authentication completed successfully',
       timestamp: new Date().toISOString()

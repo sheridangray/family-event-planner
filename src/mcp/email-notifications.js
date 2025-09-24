@@ -1,28 +1,36 @@
 const { config } = require('../config');
 const RegistrationOrchestrator = require('../services/registration-orchestrator');
-const { GmailMCPClient } = require('./gmail');
 
 class EmailNotificationClient {
-  constructor(logger, database) {
+  constructor(logger, database, userId = null) {
     this.logger = logger;
     this.database = database;
-    this.gmailClient = new GmailMCPClient(logger);
+    this.userId = userId; // User ID for multi-user support
+    this.gmailClient = null;
     this.isInitialized = false;
   }
 
   async init() {
     try {
-      this.logger.info('Initializing Email notification client...');
+      this.logger.info(`Initializing Email notification client for user ${this.userId || 'default'}...`);
       
       if (!config.gmail.parent1Email && !config.gmail.parent2Email) {
         throw new Error('No parent email addresses configured');
       }
       
-      // Initialize Gmail client
-      await this.gmailClient.init();
+      // Use multi-user singleton to get Gmail client
+      const { getGmailClient } = require('./gmail-multi-user-singleton');
+      if (this.userId) {
+        // Multi-user mode - get client for specific user
+        this.gmailClient = await getGmailClient(this.userId, this.logger);
+      } else {
+        // Backwards compatibility - use single-user mode
+        this.gmailClient = await getGmailClient(this.logger);
+      }
+      
       this.isInitialized = true;
       
-      this.logger.info('Email notification client initialized successfully');
+      this.logger.info(`Email notification client initialized successfully for user ${this.userId || 'default'}`);
       return true;
     } catch (error) {
       this.logger.error('Failed to initialize Email notification client:', error.message);
@@ -724,11 +732,12 @@ The placeholder will be automatically removed once you complete registration and
 }
 
 class EmailApprovalManager {
-  constructor(logger, database, calendarManager = null) {
+  constructor(logger, database, calendarManager = null, userId = null) {
     this.logger = logger;
     this.database = database;
     this.calendarManager = calendarManager;
-    this.emailClient = new EmailNotificationClient(logger, database);
+    this.userId = userId; // User ID for multi-user support
+    this.emailClient = new EmailNotificationClient(logger, database, userId);
     this.registrationOrchestrator = new RegistrationOrchestrator(logger, database, this.emailClient);
     this.dailyEventCount = 0;
     this.lastResetDate = new Date().toDateString();

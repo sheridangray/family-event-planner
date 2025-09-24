@@ -1,12 +1,12 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { GmailMCPClient } = require('../mcp/gmail');
 
 class ReportingService {
-  constructor(logger) {
+  constructor(logger, userId = null) {
     this.logger = logger;
     this.reportsDir = path.join(__dirname, '../../reports');
-    this.gmailClient = new GmailMCPClient(logger);
+    this.gmailClient = null; // Will be initialized on demand
+    this.userId = userId; // User ID for multi-user support
     this.isGmailInitialized = false;
   }
 
@@ -129,9 +129,17 @@ class ReportingService {
   async initializeGmail() {
     if (!this.isGmailInitialized) {
       try {
-        await this.gmailClient.init();
+        // Use multi-user singleton to get Gmail client
+        const { getGmailClient } = require('../mcp/gmail-multi-user-singleton');
+        if (this.userId) {
+          // Multi-user mode - get client for specific user
+          this.gmailClient = await getGmailClient(this.userId, this.logger);
+        } else {
+          // Backwards compatibility - use single-user mode
+          this.gmailClient = await getGmailClient(this.logger);
+        }
         this.isGmailInitialized = true;
-        this.logger.info('Gmail client initialized for email reports');
+        this.logger.info(`Gmail client initialized for email reports (user: ${this.userId || 'default'})`);
       } catch (error) {
         this.logger.warn('Gmail client initialization failed:', error.message);
         this.isGmailInitialized = false;

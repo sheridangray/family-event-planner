@@ -8,7 +8,13 @@ export async function POST(req: NextRequest) {
   try {
     // Check authentication
     const session = await auth();
-    if (!session?.user?.email || session.user.email !== "sheridan.gray@gmail.com") {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
+    // Verify user is authorized (admin or their own account)
+    const allowedEmails = ['sheridan.gray@gmail.com', 'joyce.yan.zhang@gmail.com'];
+    if (!allowedEmails.includes(session.user.email)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -19,14 +25,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and auth code are required" }, { status: 400 });
     }
 
-    // Forward request to backend
+    // Verify user can only complete OAuth for their own account (unless admin)
+    const isAdmin = session.user.email === "sheridan.gray@gmail.com";
+    if (!isAdmin && session.user.email !== email) {
+      return NextResponse.json({ error: "Can only complete OAuth for your own account" }, { status: 403 });
+    }
+
+    // Forward request to backend with user context
     const response = await fetch(`${BACKEND_API_URL}/api/admin/mcp-auth-complete`, {
       method: 'POST',
       headers: {
         'x-api-key': API_KEY,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ email, authCode })
+      body: JSON.stringify({ 
+        email, 
+        authCode,
+        requestingUserEmail: session.user.email // Add user context
+      })
     });
 
     if (response.ok) {

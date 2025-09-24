@@ -5,7 +5,7 @@ const { GmailMCPClient } = require('../mcp/gmail');
 // Google Integration health check - tests calendar and email for sheridan.gray@gmail.com
 async function checkGoogleIntegration() {
   try {
-    const { getGmailClient } = require('../mcp/gmail-singleton');
+    const { getGmailClient } = require('../mcp/gmail-multi-user-singleton');
     const logger = { 
       info: () => {}, 
       warn: () => {}, 
@@ -1088,10 +1088,11 @@ function getAdapterDisplayName(adapterType) {
 
 // Email notification function for scraper requests
 async function sendScraperRequestEmail(domain, description, requestId, logger) {
-  const gmailClient = new GmailMCPClient(logger);
+  // Use multi-user singleton (backwards compatible mode)
+  const { getGmailClient } = require('../mcp/gmail-multi-user-singleton');
   
   try {
-    await gmailClient.init();
+    const gmailClient = await getGmailClient(logger);
     
     const subject = `🤖 New Scraper Request: ${domain}`;
     const body = `Hi Sheridan,

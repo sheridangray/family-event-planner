@@ -9,13 +9,15 @@ class GmailWebhookHandler {
   constructor(logger, database, unifiedNotifications = null) {
     this.logger = logger;
     this.database = database;
-    this.gmailClient = new GmailMCPClient(logger);
+    this.gmailClient = null; // Will be set dynamically based on the email being processed
     this.notificationService = unifiedNotifications || new UnifiedNotificationService(logger, database);
     this.processedMessages = new Set(); // Prevent duplicate processing
   }
 
   async init() {
-    await this.gmailClient.init();
+    // For backwards compatibility, initialize a default client
+    const { getGmailClient } = require('../mcp/gmail-multi-user-singleton');
+    this.gmailClient = await getGmailClient(this.logger);
     
     // Only initialize notification service if we created our own (not passed in)
     if (!this.notificationService.emailAvailable) {

@@ -116,6 +116,61 @@ class GmailMCPClient {
     }
   }
 
+  async initWithTokens(tokens) {
+    try {
+      this.logger.info('🚀 Initializing Gmail MCP client with provided tokens...');
+      
+      if (!config.gmail.mcpCredentials && !process.env.MCP_GMAIL_CREDENTIALS_JSON) {
+        throw new Error('Gmail MCP credentials not configured');
+      }
+      
+      let credentials;
+      
+      // Check if mcpCredentials is already a JSON object (from environment variable)
+      if (typeof config.gmail.mcpCredentials === 'object' && config.gmail.mcpCredentials !== null) {
+        credentials = config.gmail.mcpCredentials;
+        this.logger.debug('Using Gmail credentials from environment variable');
+      } else if (process.env.MCP_GMAIL_CREDENTIALS_JSON) {
+        // Fallback to direct JSON environment variable
+        credentials = JSON.parse(process.env.MCP_GMAIL_CREDENTIALS_JSON);
+        this.logger.debug('Using Gmail credentials from MCP_GMAIL_CREDENTIALS_JSON');
+      } else {
+        // Load credentials from file path
+        const credentialsPath = config.gmail.mcpCredentials;
+        if (!fs.existsSync(credentialsPath)) {
+          // Try to parse as JSON string if file doesn't exist
+          try {
+            credentials = JSON.parse(credentialsPath);
+            this.logger.debug('Parsed Gmail credentials from JSON string');
+          } catch (parseError) {
+            throw new Error(`Gmail credentials file not found: ${credentialsPath}`);
+          }
+        } else {
+          credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+          this.logger.debug('Loaded Gmail credentials from file');
+        }
+      }
+      
+      // Create OAuth2 client
+      const { client_secret, client_id, redirect_uris } = credentials.installed;
+      this.auth = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+      
+      // Set up Calendar and Gmail APIs
+      this.calendar = google.calendar({ version: 'v3', auth: this.auth });
+      this.gmail = google.gmail({ version: 'v1', auth: this.auth });
+      
+      // Set the provided tokens
+      this.auth.setCredentials(tokens);
+      this.logger.info('✅ Gmail MCP client initialized with provided tokens');
+      this.logger.info(`📊 Token expiry: ${tokens.expiry_date ? new Date(tokens.expiry_date) : 'No expiry'}`);
+      
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to initialize Gmail MCP client with tokens:', error.message);
+      throw error;
+    }
+  }
+
   async authenticate() {
     const authUrl = this.auth.generateAuthUrl({
       access_type: 'offline',
