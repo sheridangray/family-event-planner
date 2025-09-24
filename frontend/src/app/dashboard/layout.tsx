@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { MobileNavigation } from "@/components/navigation/mobile-navigation";
+import { TopNavigation } from "@/components/navigation/top-navigation";
 
 export default async function DashboardLayout({
   children,
@@ -15,13 +15,13 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Top Navigation */}
+      <TopNavigation user={session.user} />
+      
       {/* Main Content */}
-      <main className="pb-16">
+      <main>
         {children}
       </main>
-
-      {/* Bottom Navigation - Mobile First */}
-      <MobileNavigation />
     </div>
   );
 }
