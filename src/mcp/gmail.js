@@ -877,6 +877,10 @@ class CalendarConflictChecker {
       throw error;
     }
   }
+  // TEST METHOD - should appear in production logs
+  testMethod() {
+    return 'TEST_METHOD_EXISTS';
+  }
 }
 
 module.exports = { GmailMCPClient, CalendarConflictChecker };
