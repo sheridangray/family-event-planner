@@ -794,7 +794,7 @@ Best regards,
         success: true,
         email: profile.emailAddress,
         authenticated: true,
-        tokens: Object.keys(tokens)
+        tokens: tokens
       };
 
     } catch (error) {
@@ -877,7 +877,7 @@ class CalendarConflictChecker {
         success: true,
         email: profile.emailAddress,
         authenticated: true,
-        tokens: Object.keys(tokens)
+        tokens: tokens
       };
 
     } catch (error) {
@@ -1000,7 +1000,7 @@ class CalendarConflictChecker {
         success: true,
         email: profile.emailAddress,
         authenticated: true,
-        tokens: Object.keys(tokens)
+        tokens: tokens
       };
 
     } catch (error) {
