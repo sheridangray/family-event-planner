@@ -477,23 +477,44 @@ class GmailMCPClient {
 
   async saveTokens(tokens) {
     try {
-      // Save to local development path
-      const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
-      fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
-      
-      // In production, also save to Render secret file location if it exists
+      // Strategy 1: Save to local development path (for local development)
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
+          fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
+          this.logger.info('✅ Tokens saved to local development path');
+        } catch (error) {
+          this.logger.warn('⚠️ Could not save to local path:', error.message);
+        }
+      }
+
+      // Strategy 2: Update environment variable (works in both dev and production)
+      try {
+        process.env.GOOGLE_OAUTH_TOKEN = JSON.stringify(tokens);
+        this.logger.info('✅ Tokens saved to environment variable (runtime)');
+      } catch (error) {
+        this.logger.warn('⚠️ Could not update environment variable:', error.message);
+      }
+
+      // Strategy 3: Try Render secret file path (production only)
       if (process.env.NODE_ENV === 'production') {
         const renderTokenPath = '/etc/secrets/google-oauth-token.json';
         try {
           fs.writeFileSync(renderTokenPath, JSON.stringify(tokens, null, 2));
-          this.logger.info('Tokens saved to both local and production paths');
+          this.logger.info('✅ Tokens saved to production secrets path');
         } catch (error) {
-          this.logger.warn('Could not save to production path (expected if not writable):', error.message);
+          this.logger.warn('⚠️ Could not save to production path (expected if not writable):', error.message);
         }
+      }
+
+      // Strategy 4: Log tokens for manual environment variable update (production fallback)
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.info('📋 For permanent storage, update your Render environment variable:');
+        this.logger.info('GOOGLE_OAUTH_TOKEN=' + JSON.stringify(tokens));
       }
       
     } catch (error) {
-      this.logger.error('Error saving refreshed tokens:', error.message);
+      this.logger.error('❌ Critical error saving tokens:', error.message);
       throw error;
     }
   }

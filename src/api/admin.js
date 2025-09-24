@@ -166,9 +166,13 @@ router.post('/mcp-auth-complete', authenticateAPI, async (req, res) => {
 
     logger.info(`Completing MCP OAuth flow for: ${email}`);
 
-    // Create Gmail client and complete auth flow
-    const gmailClient = new GmailMCPClient(logger);
+    // Use singleton pattern for consistent token management
+    const { getGmailClient, refreshGmailClient } = require('../mcp/gmail-singleton');
+    const gmailClient = await getGmailClient(logger);
     const result = await gmailClient.completeAuth(email, authCode);
+
+    // Refresh singleton to ensure all instances use new tokens
+    await refreshGmailClient(logger);
 
     logger.info(`MCP OAuth completed successfully for: ${email}`);
 

@@ -5,7 +5,7 @@ const { GmailMCPClient } = require('../mcp/gmail');
 // Google Integration health check - tests calendar and email for sheridan.gray@gmail.com
 async function checkGoogleIntegration() {
   try {
-    const { GmailMCPClient } = require('../mcp/gmail');
+    const { getGmailClient } = require('../mcp/gmail-singleton');
     const logger = { 
       info: () => {}, 
       warn: () => {}, 
@@ -13,8 +13,7 @@ async function checkGoogleIntegration() {
       debug: () => {} 
     };
 
-    const gmailClient = new GmailMCPClient(logger);
-    await gmailClient.init();
+    const gmailClient = await getGmailClient(logger);
 
     // Test calendar access
     let calendarHealthy = false;
