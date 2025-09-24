@@ -727,6 +727,21 @@ Best regards,
     }
   }
 
+  async getProfile() {
+    try {
+      if (!this.gmail) {
+        await this.init();
+      }
+
+      const response = await this.gmail.users.getProfile({ userId: 'me' });
+      return response.data;
+
+    } catch (error) {
+      this.logger.error('Error getting Gmail profile:', error.message);
+      throw error;
+    }
+  }
+
   testMethod() {
     return 'TEST_METHOD_EXISTS';
   }
