@@ -60,10 +60,78 @@ export function SystemHealth() {
     return isHealthy ? '✅' : '❌';
   };
 
+  const formatTimeAgo = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffDays > 0) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    } else if (diffHours > 0) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    } else if (diffMinutes > 0) {
+      return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+    } else {
+      return 'Just now';
+    }
+  };
+
+  const getNextHealthCheck = () => {
+    // Health checks run every 15 minutes
+    const now = new Date();
+    const currentMinutes = now.getMinutes();
+    
+    // Find next 15-minute interval (0, 15, 30, 45)
+    const intervals = [0, 15, 30, 45];
+    let nextInterval = intervals.find(interval => interval > currentMinutes);
+    
+    // If no interval found in current hour, use first interval of next hour
+    if (!nextInterval) {
+      nextInterval = intervals[0];
+    }
+    
+    // Calculate next check time
+    const nextCheck = new Date(now);
+    if (nextInterval === 0 && currentMinutes >= 45) {
+      // Next hour at 0 minutes
+      nextCheck.setHours(nextCheck.getHours() + 1);
+    }
+    nextCheck.setMinutes(nextInterval, 0, 0);
+    
+    // Calculate time difference
+    const diffMs = nextCheck.getTime() - now.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    
+    if (diffMinutes === 0) {
+      return 'Less than 1 minute';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''}`;
+    } else {
+      const diffHours = Math.floor(diffMinutes / 60);
+      const remainingMinutes = diffMinutes % 60;
+      return remainingMinutes > 0 ? `${diffHours}h ${remainingMinutes}m` : `${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
       <div className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">🏥 System Health</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">🏥 System Health</h3>
+          {healthMetrics && (
+            <div className="text-right">
+              <div className="text-sm text-gray-600">
+                {formatTimeAgo(healthMetrics.lastHealthCheck)}
+              </div>
+              <div className="text-xs text-gray-500">
+                Next: {getNextHealthCheck()}
+              </div>
+            </div>
+          )}
+        </div>
         
         {loading ? (
           <div className="animate-pulse">
@@ -237,15 +305,6 @@ export function SystemHealth() {
               </div>
             </div>
 
-            {/* System Actions */}
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <button className="w-full px-3 py-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-                View Detailed Logs →
-              </button>
-              <div className="text-xs text-gray-500 text-center mt-2">
-                Last check: {new Date(healthMetrics.lastHealthCheck).toLocaleTimeString()}
-              </div>
-            </div>
           </>
         ) : null}
       </div>
