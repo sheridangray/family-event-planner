@@ -684,6 +684,123 @@ class CalendarConflictChecker {
   async createCalendarEvent(eventData) {
     return await this.gmailClient.createCalendarEvent(eventData);
   }
+
+  // OAuth flow methods for frontend authentication
+  async getAuthUrl(email = null) {
+    try {
+      if (!this.auth) {
+        await this.init();
+      }
+
+      const scopes = [
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.readonly'
+      ];
+
+      const authUrl = this.auth.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        prompt: 'consent', // Force consent to get refresh token
+        login_hint: email // Pre-fill the email if provided
+      });
+
+      this.logger.info(`Generated OAuth URL for ${email || 'default'}: ${authUrl.substring(0, 100)}...`);
+      return authUrl;
+
+    } catch (error) {
+      this.logger.error('Error generating OAuth URL:', error.message);
+      throw error;
+    }
+  }
+
+  async completeAuth(email, authCode) {
+    try {
+      if (!this.auth) {
+        await this.init();
+      }
+
+      this.logger.info(`Completing OAuth flow for: ${email}`);
+
+      // Exchange authorization code for tokens
+      const { tokens } = await this.auth.getToken(authCode);
+      this.logger.info(`Received tokens for ${email}:`, Object.keys(tokens));
+
+      // Set credentials
+      this.auth.setCredentials(tokens);
+
+      // Save tokens to environment variable (for production) or file (for development)
+      await this.saveTokens(email, tokens);
+
+      // Test the connection
+      const profile = await this.getProfile();
+      this.logger.info(`OAuth completed successfully for: ${email}, profile: ${profile.emailAddress}`);
+
+      return {
+        success: true,
+        email: profile.emailAddress,
+        authenticated: true,
+        tokens: Object.keys(tokens)
+      };
+
+    } catch (error) {
+      this.logger.error('Error completing OAuth flow:', error.message);
+      throw error;
+    }
+  }
+
+  async saveTokens(email, tokens) {
+    try {
+      const tokenData = {
+        ...tokens,
+        email: email,
+        created_at: new Date().toISOString()
+      };
+
+      // In production, just log (tokens would be saved via environment variables)
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.info(`Tokens received for ${email} in production environment`);
+        this.logger.info(`Tokens: access_token=${!!tokens.access_token}, refresh_token=${!!tokens.refresh_token}, expiry=${tokens.expiry_date}`);
+        
+        // TODO: In a real production environment, you'd want to save these to a secure store
+        // For now, just log that manual environment variable update is needed
+        this.logger.warn(`MANUAL ACTION REQUIRED: Update GOOGLE_OAUTH_TOKEN environment variable with: ${JSON.stringify(tokenData)}`);
+        
+      } else {
+        // In development, save to file
+        const tokenPath = path.join(__dirname, '../../credentials/google-oauth-token.json');
+        const credentialsDir = path.dirname(tokenPath);
+        
+        // Ensure credentials directory exists
+        if (!fs.existsSync(credentialsDir)) {
+          fs.mkdirSync(credentialsDir, { recursive: true });
+        }
+        
+        fs.writeFileSync(tokenPath, JSON.stringify(tokenData, null, 2));
+        this.logger.info(`Tokens saved to ${tokenPath}`);
+      }
+
+    } catch (error) {
+      this.logger.error('Error saving tokens:', error.message);
+      throw error;
+    }
+  }
+
+  async getProfile() {
+    try {
+      if (!this.gmail) {
+        await this.init();
+      }
+
+      const response = await this.gmail.users.getProfile({ userId: 'me' });
+      return response.data;
+
+    } catch (error) {
+      this.logger.error('Error getting Gmail profile:', error.message);
+      throw error;
+    }
+  }
 }
 
 module.exports = { GmailMCPClient, CalendarConflictChecker };

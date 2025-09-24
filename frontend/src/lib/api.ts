@@ -23,7 +23,7 @@ async function apiRequest<T>(
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
+      'x-api-key': API_KEY,
       ...options.headers,
     },
     ...options,

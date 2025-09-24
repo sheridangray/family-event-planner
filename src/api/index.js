@@ -2,6 +2,7 @@ const express = require('express');
 const eventsRouter = require('./events');
 const dashboardRouter = require('./dashboard');
 const createAutomationRouter = require('./automation');
+const adminRouter = require('./admin');
 const GmailWebhookHandler = require('./gmail-webhooks');
 const { authenticateAPI } = require('../middleware/auth');
 
@@ -11,6 +12,7 @@ function createApiRouter(database, scheduler, registrationAutomator, logger, uni
   router.use('/events', eventsRouter);
   router.use('/dashboard', dashboardRouter);
   router.use('/automation', createAutomationRouter(database, scheduler, registrationAutomator));
+  router.use('/admin', adminRouter);
   
   // Gmail webhook routes - pass unifiedNotifications to access CalendarManager
   if (logger) {

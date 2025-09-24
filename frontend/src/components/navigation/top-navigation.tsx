@@ -15,7 +15,8 @@ import {
   BeakerIcon,
   ChevronDownIcon,
   Bars3Icon,
-  XMarkIcon
+  XMarkIcon,
+  ShieldCheckIcon
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Calendar', href: '/dashboard/calendar', icon: CalendarIcon, current: false },
   { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, current: false },
   { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, current: false },
+  { name: 'Admin', href: '/dashboard/admin', icon: ShieldCheckIcon, current: false, adminOnly: true },
   { name: 'Test', href: '/dashboard/test', icon: BeakerIcon, current: false },
 ];
 
@@ -46,11 +48,14 @@ export function TopNavigation({ user }: TopNavigationProps) {
   const timeOfDay = now.getHours() < 12 ? "morning" : now.getHours() < 17 ? "afternoon" : "evening";
   const greeting = `Good ${timeOfDay}`;
 
-  // Update navigation items to show current page
-  const updatedNavigation = navigation.map(item => ({
-    ...item,
-    current: pathname === item.href
-  }));
+  // Update navigation items to show current page and filter admin-only items
+  const isAdmin = user.email === "sheridan.gray@gmail.com";
+  const updatedNavigation = navigation
+    .filter(item => !item.adminOnly || isAdmin)
+    .map(item => ({
+      ...item,
+      current: pathname === item.href
+    }));
 
   return (
     <nav className="bg-white border-b border-gray-200">
