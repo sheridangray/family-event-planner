@@ -1,3 +1,4 @@
+import { auth } from "@/auth";
 import { SettingsHeader } from "@/components/settings/settings-header";
 import { FamilyProfile } from "@/components/settings/family-profile";
 import { EventPreferences } from "@/components/settings/event-preferences";
@@ -5,9 +6,13 @@ import { NotificationSettings } from "@/components/settings/notification-setting
 import { LocationSettings } from "@/components/settings/location-settings";
 import { ChildrenProfiles } from "@/components/settings/children-profiles";
 import { AccountSettings } from "@/components/settings/account-settings";
+import { MCPAuthenticationPanel } from "@/components/admin/mcp-authentication";
 import { Suspense } from "react";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const session = await auth();
+  const isAdmin = session?.user?.email === "sheridan.gray@gmail.com";
+
   return (
     <div className="min-h-screen bg-gray-50">
       <SettingsHeader />
@@ -42,6 +47,21 @@ export default function SettingsPage() {
         <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-32"></div>}>
           <AccountSettings />
         </Suspense>
+
+        {/* System Administration - Admin Only */}
+        {isAdmin && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">⚙️ System Administration</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage MCP service authentication and system configuration
+              </p>
+            </div>
+            <div className="p-6">
+              <MCPAuthenticationPanel />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

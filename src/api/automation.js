@@ -2,6 +2,89 @@ const express = require('express');
 const router = express.Router();
 const { GmailMCPClient } = require('../mcp/gmail');
 
+// Google Integration health check - tests calendar and email for sheridan.gray@gmail.com
+async function checkGoogleIntegration() {
+  try {
+    const { GmailMCPClient } = require('../mcp/gmail');
+    const logger = { 
+      info: () => {}, 
+      warn: () => {}, 
+      error: () => {}, 
+      debug: () => {} 
+    };
+
+    const gmailClient = new GmailMCPClient(logger);
+    await gmailClient.init();
+
+    // Test calendar access
+    let calendarHealthy = false;
+    try {
+      const calendarResponse = await gmailClient.calendar.calendarList.list({ maxResults: 1 });
+      calendarHealthy = !!calendarResponse.data.items;
+    } catch (error) {
+      console.warn('Calendar health check failed:', error.message);
+    }
+
+    // Test Gmail profile access (email API)
+    let emailHealthy = false;
+    try {
+      const profileResponse = await gmailClient.gmail.users.getProfile({ userId: 'me' });
+      emailHealthy = profileResponse.data.emailAddress === 'sheridan.gray@gmail.com';
+    } catch (error) {
+      console.warn('Email health check failed:', error.message);
+    }
+
+    // Return true only if both calendar and email are working
+    return calendarHealthy && emailHealthy;
+  } catch (error) {
+    console.warn('Google integration health check failed:', error.message);
+    return false;
+  }
+}
+
+// Weather service health check
+async function checkWeatherService() {
+  try {
+    const homeZip = process.env.HOME_ZIP || process.env.HOME_ADDRESS;
+    const homeCity = process.env.HOME_CITY || 'San Francisco';
+    const homeCountry = process.env.HOME_COUNTRY || 'US';
+    const weatherApiKey = process.env.WEATHER_API_KEY;
+
+    if (!weatherApiKey) {
+      return false; // No API key configured
+    }
+
+    // Build weather API URL - prefer zip code for accuracy
+    let weatherUrl;
+    if (homeZip && homeZip.match(/^\d{5}$/)) {
+      weatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${homeZip},${homeCountry}&appid=${weatherApiKey}&units=imperial`;
+    } else {
+      weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(homeCity)}&appid=${weatherApiKey}&units=imperial`;
+    }
+
+    // Test weather API with 3 second timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(weatherUrl, { 
+      signal: controller.signal,
+      headers: { 'User-Agent': 'FamilyEventPlanner/1.0' }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data && data.main && typeof data.main.temp === 'number';
+    }
+    
+    return false;
+  } catch (error) {
+    console.warn('Weather service health check failed:', error.message);
+    return false;
+  }
+}
+
 // Initialize router with database and automation components
 function createAutomationRouter(database, taskScheduler, registrationAutomator) {
   
@@ -710,6 +793,10 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
       const healthScore = await taskScheduler.calculateSystemHealthScore();
       const schedulerStatus = taskScheduler.getStatus();
       
+      // Check external service health
+      const weatherServiceHealthy = await checkWeatherService();
+      const googleIntegrationHealthy = await checkGoogleIntegration();
+      
       // Get recent statistics for performance metrics  
       const registrationStats = await database.getRegistrationStats('24 hours');
       
@@ -719,17 +806,20 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
         components: {
           database: healthScore.details.database?.healthy || false,
           scrapers: healthScore.details.discoveryEngine?.healthy || false, 
-          mcp: healthScore.details.mcp?.healthy || false,
+          googleIntegration: googleIntegrationHealthy,
           emailService: healthScore.details.emailService?.healthy || false,
           calendarIntegration: healthScore.details.calendarIntegration?.healthy || false,
           databasePerformance: healthScore.details.databasePerformance?.healthy || false,
           systemResources: healthScore.details.systemResources?.healthy || false,
-          scheduler: schedulerStatus.running
+          scheduler: schedulerStatus.running,
+          weatherService: weatherServiceHealthy
         },
         performance: {
           discoveryEngineScore: healthScore.details.discoveryEngine?.score || 0,
-          avgDatabaseResponseTime: `${healthScore.details.databasePerformance?.details?.basicQueryTime || 0}ms`,
+          basicDatabaseResponseTime: `${healthScore.details.databasePerformance?.details?.basicQueryTime || 0}ms`,
+          complexDatabaseResponseTime: `${healthScore.details.databasePerformance?.details?.complexQueryTime || 0}ms`,
           memoryUsageMB: healthScore.details.systemResources?.details?.memoryUsageMB || 0,
+          memoryTotalMB: healthScore.details.systemResources?.details?.memoryTotalMB || 0,
           uptimeHours: healthScore.details.systemResources?.details?.uptimeHours || 0
         },
         lastHealthCheck: new Date().toISOString()

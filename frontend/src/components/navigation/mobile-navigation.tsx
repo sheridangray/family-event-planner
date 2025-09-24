@@ -34,22 +34,10 @@ const navigation = [
     activeIcon: ListBulletIconSolid,
   },
   {
-    name: "Calendar",
-    href: "/dashboard/calendar",
-    icon: CalendarDaysIcon,
-    activeIcon: CalendarDaysIconSolid,
-  },
-  {
-    name: "Analytics",
-    href: "/dashboard/analytics", 
-    icon: ChartBarIcon,
-    activeIcon: ChartBarIconSolid,
-  },
-  {
-    name: "Automation",
-    href: "/dashboard/automation",
-    icon: CpuChipIcon,
-    activeIcon: CpuChipIconSolid,
+    name: "Settings",
+    href: "/dashboard/settings",
+    icon: Cog6ToothIcon,
+    activeIcon: Cog6ToothIconSolid,
   },
 ];
 

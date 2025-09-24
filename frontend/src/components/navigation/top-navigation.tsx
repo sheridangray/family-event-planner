@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { format } from "date-fns";
+import { WeatherDisplay } from "./weather-display";
 import { 
   HomeIcon, 
   CalendarIcon, 
@@ -31,12 +32,6 @@ interface TopNavigationProps {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, current: false },
   { name: 'Events', href: '/dashboard/events', icon: ListBulletIcon, current: false },
-  { name: 'Automation', href: '/dashboard/automation', icon: WrenchScrewdriverIcon, current: false },
-  { name: 'Calendar', href: '/dashboard/calendar', icon: CalendarIcon, current: false },
-  { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, current: false },
-  { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, current: false },
-  { name: 'Admin', href: '/dashboard/admin', icon: ShieldCheckIcon, current: false, adminOnly: true },
-  { name: 'Test', href: '/dashboard/test', icon: BeakerIcon, current: false },
 ];
 
 export function TopNavigation({ user }: TopNavigationProps) {
@@ -114,10 +109,8 @@ export function TopNavigation({ user }: TopNavigationProps) {
               </div>
             </div>
 
-            {/* Weather placeholder - hidden on small screens */}
-            <div className="hidden lg:block text-sm text-gray-600">
-              ☀️ 72°F
-            </div>
+            {/* Weather - hidden on small screens */}
+            <WeatherDisplay />
 
             {/* User menu */}
             <div className="relative">
@@ -153,8 +146,9 @@ export function TopNavigation({ user }: TopNavigationProps) {
                   {/* Show greeting on mobile in user menu */}
                   <div className="lg:hidden px-4 py-2 text-sm text-gray-700 border-b">
                     <div className="font-medium">{greeting}!</div>
-                    <div className="text-xs text-gray-500">
-                      {format(now, "EEEE, MMM d")} • ☀️ 72°F
+                    <div className="text-xs text-gray-500 flex items-center justify-between">
+                      <span>{format(now, "EEEE, MMM d")}</span>
+                      <WeatherDisplay mobile={true} />
                     </div>
                   </div>
                   <Link

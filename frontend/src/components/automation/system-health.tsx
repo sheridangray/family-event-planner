@@ -9,17 +9,20 @@ interface SystemHealth {
   components: {
     database: boolean;
     scrapers: boolean;
-    mcp: boolean;
+    googleIntegration: boolean;
     emailService: boolean;
     calendarIntegration: boolean;
     databasePerformance: boolean;
     systemResources: boolean;
     scheduler: boolean;
+    weatherService: boolean;
   };
   performance: {
     discoveryEngineScore: number;
-    avgDatabaseResponseTime: string;
+    basicDatabaseResponseTime: string;
+    complexDatabaseResponseTime: string;
     memoryUsageMB: number;
+    memoryTotalMB: number;
     uptimeHours: number;
   };
   lastHealthCheck: string;
@@ -234,7 +237,7 @@ export function SystemHealth() {
                     {healthMetrics.components.databasePerformance ? 'healthy' : 'slow'}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    Avg: {healthMetrics.performance.avgDatabaseResponseTime}
+                    Basic: {healthMetrics.performance.basicDatabaseResponseTime} | Complex: {healthMetrics.performance.complexDatabaseResponseTime}
                   </div>
                 </div>
               </div>
@@ -251,24 +254,24 @@ export function SystemHealth() {
                     {healthMetrics.components.systemResources ? 'healthy' : 'high usage'}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    Memory: {healthMetrics.performance.memoryUsageMB}MB
+                    Memory: {healthMetrics.performance.memoryUsageMB}MB / {healthMetrics.performance.memoryTotalMB}MB
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center">
-                  <span className="mr-2">{getHealthIcon(healthMetrics.components.mcp)}</span>
-                  <span className="font-medium">MCP Services</span>
+                  <span className="mr-2">{getHealthIcon(healthMetrics.components.googleIntegration)}</span>
+                  <span className="font-medium">Google Integration</span>
                 </div>
                 <div className="text-right">
                   <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                    getHealthColor(healthMetrics.components.mcp)
+                    getHealthColor(healthMetrics.components.googleIntegration)
                   }`}>
-                    {healthMetrics.components.mcp ? 'healthy' : 'warning'}
+                    {healthMetrics.components.googleIntegration ? 'authenticated' : 'auth failed'}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    Uptime: {healthMetrics.performance.uptimeHours.toFixed(1)}h
+                    Calendar + Email API
                   </div>
                 </div>
               </div>
@@ -300,6 +303,20 @@ export function SystemHealth() {
                     getHealthColor(healthMetrics.components.scheduler)
                   }`}>
                     {healthMetrics.components.scheduler ? 'running' : 'stopped'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center">
+                  <span className="mr-2">{getHealthIcon(healthMetrics.components.weatherService)}</span>
+                  <span className="font-medium">Weather Service</span>
+                </div>
+                <div className="text-right">
+                  <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                    getHealthColor(healthMetrics.components.weatherService)
+                  }`}>
+                    {healthMetrics.components.weatherService ? 'operational' : 'unavailable'}
                   </div>
                 </div>
               </div>

@@ -1010,15 +1010,17 @@ Date: ${new Date().toDateString()}
       const tableStats = await this.database.query(`
         SELECT 
           schemaname,
-          tablename,
+          relname as tablename,
           n_tup_ins as inserts,
           n_tup_upd as updates,
           n_tup_del as deletes
         FROM pg_stat_user_tables 
-        WHERE tablename IN ('events', 'discovery_runs', 'scraper_stats')
+        WHERE relname IN ('events', 'discovery_runs', 'scraper_stats')
       `);
       
       const isHealthy = basicQueryTime < 100 && complexQueryTime < 500; // ms thresholds
+      
+      console.log(`Database performance check: basic=${basicQueryTime}ms, complex=${complexQueryTime}ms, healthy=${isHealthy}`);
       
       return {
         healthy: isHealthy,
@@ -1030,6 +1032,7 @@ Date: ${new Date().toDateString()}
         }
       };
     } catch (error) {
+      console.log(`Database performance check FAILED: ${error.message}`);
       return { 
         healthy: false, 
         error: error.message,
