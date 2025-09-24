@@ -43,14 +43,11 @@ export function TopNavigation({ user }: TopNavigationProps) {
   const timeOfDay = now.getHours() < 12 ? "morning" : now.getHours() < 17 ? "afternoon" : "evening";
   const greeting = `Good ${timeOfDay}`;
 
-  // Update navigation items to show current page and filter admin-only items
-  const isAdmin = user.email === "sheridan.gray@gmail.com";
-  const updatedNavigation = navigation
-    .filter(item => !item.adminOnly || isAdmin)
-    .map(item => ({
-      ...item,
-      current: pathname === item.href
-    }));
+  // Update navigation items to show current page
+  const updatedNavigation = navigation.map(item => ({
+    ...item,
+    current: pathname === item.href
+  }));
 
   return (
     <nav className="bg-white border-b border-gray-200">
