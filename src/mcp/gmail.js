@@ -12,7 +12,7 @@ class GmailMCPClient {
 
   async init() {
     try {
-      this.logger.info('Initializing Gmail MCP client...');
+      this.logger.info('🚀 Initializing Gmail MCP client...');
       
       if (!config.gmail.mcpCredentials && !process.env.MCP_GMAIL_CREDENTIALS_JSON) {
         throw new Error('Gmail MCP credentials not configured');
@@ -774,9 +774,13 @@ class CalendarConflictChecker {
 
   // OAuth flow methods for frontend authentication
   async getAuthUrl(email = null) {
+    this.logger.info(`🔑 getAuthUrl called for email: ${email}`);
     try {
+      this.logger.info(`🔍 Checking if auth client exists: ${!!this.auth}`);
       if (!this.auth) {
+        this.logger.info(`⚡ Auth client null, calling init()...`);
         await this.init();
+        this.logger.info(`✅ Init completed, auth client now: ${!!this.auth}`);
       }
 
       const scopes = [
@@ -786,6 +790,7 @@ class CalendarConflictChecker {
         'https://www.googleapis.com/auth/calendar.readonly'
       ];
 
+      this.logger.info(`🎯 About to generate OAuth URL with scopes: ${scopes.length}`);
       const authUrl = this.auth.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
@@ -793,11 +798,12 @@ class CalendarConflictChecker {
         login_hint: email // Pre-fill the email if provided
       });
 
-      this.logger.info(`Generated OAuth URL for ${email || 'default'}: ${authUrl.substring(0, 100)}...`);
+      this.logger.info(`🎉 Generated OAuth URL for ${email || 'default'}: ${authUrl.substring(0, 100)}...`);
       return authUrl;
 
     } catch (error) {
-      this.logger.error('Error generating OAuth URL:', error.message);
+      this.logger.error(`❌ Error in getAuthUrl: ${error.message}`);
+      this.logger.error(`❌ Error stack: ${error.stack}`);
       throw error;
     }
   }

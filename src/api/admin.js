@@ -102,17 +102,23 @@ router.post('/mcp-auth-start', authenticateAPI, async (req, res) => {
       });
     }
 
-    logger.info(`Starting MCP OAuth flow for: ${email}`);
+    logger.info(`🚀 Starting MCP OAuth flow for: ${email}`);
 
     // Create Gmail client and get auth URL
+    logger.info(`📝 Creating GmailMCPClient instance...`);
     const gmailClient = new GmailMCPClient(logger);
+    logger.info(`✅ GmailMCPClient created successfully`);
     
     // DEBUG: List all methods on the Gmail client
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(gmailClient));
-    logger.info(`Available methods on GmailMCPClient: ${methods.join(', ')}`);
+    logger.info(`🔍 Available methods on GmailMCPClient: ${methods.join(', ')}`);
+    logger.info(`🎯 getAuthUrl method exists: ${typeof gmailClient.getAuthUrl}`);
+    logger.info(`🎯 getAuthUrl is function: ${typeof gmailClient.getAuthUrl === 'function'}`);
     
     try {
+      logger.info(`🔑 About to call getAuthUrl for ${email}...`);
       const authUrl = await gmailClient.getAuthUrl(email);
+      logger.info(`🎉 getAuthUrl returned successfully: ${authUrl ? 'URL generated' : 'NO URL'}`);
       
       const scopes = [
         'https://www.googleapis.com/auth/gmail.readonly',
