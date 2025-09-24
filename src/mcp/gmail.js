@@ -685,36 +685,6 @@ class CalendarConflictChecker {
     return await this.gmailClient.createCalendarEvent(eventData);
   }
 
-  // OAuth flow methods for frontend authentication
-  async getAuthUrl(email = null) {
-    try {
-      if (!this.auth) {
-        await this.init();
-      }
-
-      const scopes = [
-        'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/calendar.events',
-        'https://www.googleapis.com/auth/calendar.readonly'
-      ];
-
-      const authUrl = this.auth.generateAuthUrl({
-        access_type: 'offline',
-        scope: scopes,
-        prompt: 'consent', // Force consent to get refresh token
-        login_hint: email // Pre-fill the email if provided
-      });
-
-      this.logger.info(`Generated OAuth URL for ${email || 'default'}: ${authUrl.substring(0, 100)}...`);
-      return authUrl;
-
-    } catch (error) {
-      this.logger.error('Error generating OAuth URL:', error.message);
-      throw error;
-    }
-  }
-
   async completeAuth(email, authCode) {
     try {
       if (!this.auth) {
