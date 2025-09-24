@@ -729,7 +729,7 @@ Best regards,
       this.auth.setCredentials(tokens);
 
       // Save tokens to environment variable (for production) or file (for development)
-      await this.saveTokens(email, tokens);
+      await this.saveTokens(tokens);
 
       // Test the connection
       const profile = await this.getProfile();
@@ -812,7 +812,7 @@ class CalendarConflictChecker {
       this.auth.setCredentials(tokens);
 
       // Save tokens to environment variable (for production) or file (for development)
-      await this.saveTokens(email, tokens);
+      await this.saveTokens(tokens);
 
       // Test the connection
       const profile = await this.getProfile();
@@ -935,7 +935,7 @@ class CalendarConflictChecker {
       this.auth.setCredentials(tokens);
 
       // Save tokens to environment variable (for production) or file (for development)
-      await this.saveTokens(email, tokens);
+      await this.saveTokens(tokens);
 
       // Test the connection
       const profile = await this.getProfile();
