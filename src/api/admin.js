@@ -42,13 +42,12 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
         let error = null;
 
         try {
-          // Try to initialize and test the connection
-          await gmailClient.init(service.email);
+          // Try to initialize - if it succeeds, we have valid tokens
+          await gmailClient.init();
           
-          // Test with a simple profile request
-          const profile = await gmailClient.getProfile();
-          authenticated = !!profile;
-          lastAuthenticated = new Date().toISOString();
+          // Check if we have auth credentials
+          authenticated = !!gmailClient.auth && !!gmailClient.auth.credentials;
+          lastAuthenticated = authenticated ? new Date().toISOString() : null;
         } catch (authError) {
           authenticated = false;
           error = authError.message;
