@@ -655,6 +655,81 @@ Best regards,
       };
     }
   }
+
+  // OAuth flow methods for frontend authentication
+  async getAuthUrl(email = null) {
+    this.logger.info(`🔑 getAuthUrl called for email: ${email}`);
+    try {
+      this.logger.info(`🔍 Checking if auth client exists: ${!!this.auth}`);
+      if (!this.auth) {
+        this.logger.info(`⚡ Auth client null, calling init()...`);
+        await this.init();
+        this.logger.info(`✅ Init completed, auth client now: ${!!this.auth}`);
+      }
+
+      const scopes = [
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.readonly'
+      ];
+
+      this.logger.info(`🎯 About to generate OAuth URL with scopes: ${scopes.length}`);
+      const authUrl = this.auth.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        prompt: 'consent', // Force consent to get refresh token
+        login_hint: email // Pre-fill the email if provided
+      });
+
+      this.logger.info(`🎉 Generated OAuth URL for ${email || 'default'}: ${authUrl.substring(0, 100)}...`);
+      return authUrl;
+
+    } catch (error) {
+      this.logger.error(`❌ Error in getAuthUrl: ${error.message}`);
+      this.logger.error(`❌ Error stack: ${error.stack}`);
+      throw error;
+    }
+  }
+
+  async completeAuth(email, authCode) {
+    try {
+      if (!this.auth) {
+        await this.init();
+      }
+
+      this.logger.info(`Completing OAuth flow for: ${email}`);
+
+      // Exchange authorization code for tokens
+      const { tokens } = await this.auth.getToken(authCode);
+      this.logger.info(`Received tokens for ${email}:`, Object.keys(tokens));
+
+      // Set credentials
+      this.auth.setCredentials(tokens);
+
+      // Save tokens to environment variable (for production) or file (for development)
+      await this.saveTokens(email, tokens);
+
+      // Test the connection
+      const profile = await this.getProfile();
+      this.logger.info(`OAuth completed successfully for: ${email}, profile: ${profile.emailAddress}`);
+
+      return {
+        success: true,
+        email: profile.emailAddress,
+        authenticated: true,
+        tokens: Object.keys(tokens)
+      };
+
+    } catch (error) {
+      this.logger.error('Error completing OAuth flow:', error.message);
+      throw error;
+    }
+  }
+
+  testMethod() {
+    return 'TEST_METHOD_EXISTS';
+  }
 }
 
 class CalendarConflictChecker {
