@@ -106,22 +106,30 @@ router.post('/mcp-auth-start', authenticateAPI, async (req, res) => {
 
     // Create Gmail client and get auth URL
     const gmailClient = new GmailMCPClient(logger);
-    const authUrl = await gmailClient.getAuthUrl(email);
+    try {
+      const authUrl = await gmailClient.getAuthUrl(email);
+      
+      const scopes = [
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.send', 
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.readonly'
+      ];
 
-    const scopes = [
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/gmail.send', 
-      'https://www.googleapis.com/auth/calendar.events',
-      'https://www.googleapis.com/auth/calendar.readonly'
-    ];
-
-    res.json({
-      success: true,
-      authUrl,
-      email,
-      scopes,
-      instructions: 'Open the authUrl in a browser, complete the OAuth flow, and paste the authorization code back'
-    });
+      res.json({
+        success: true,
+        authUrl,
+        email,
+        scopes,
+        instructions: 'Open the authUrl in a browser, complete the OAuth flow, and paste the authorization code back'
+      });
+    } catch (authError) {
+      logger.error(`Failed to generate OAuth URL for ${email}:`, authError.message);
+      return res.status(500).json({
+        success: false,
+        error: `Failed to generate authentication URL: ${authError.message}`
+      });
+    }
 
   } catch (error) {
     req.app.locals.logger.error('MCP auth start error:', error.message);
