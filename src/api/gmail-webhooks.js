@@ -26,6 +26,27 @@ class GmailWebhookHandler {
   }
 
   /**
+   * Execute Gmail API calls with automatic re-authentication on token expiry
+   */
+  async executeWithRetry(apiCall, maxRetries = 1) {
+    let attempts = 0;
+    
+    while (attempts <= maxRetries) {
+      try {
+        return await apiCall();
+      } catch (error) {
+        if (error.message && error.message.includes('invalid_grant') && attempts < maxRetries) {
+          this.logger.warn(`Authentication error (attempt ${attempts + 1}), reinitializing Gmail client...`);
+          await this.gmailClient.init();
+          attempts++;
+        } else {
+          throw error;
+        }
+      }
+    }
+  }
+
+  /**
    * Create Express router for Gmail webhook endpoints
    */
   createRouter() {
@@ -180,12 +201,14 @@ class GmailWebhookHandler {
       }
 
       // Get history of changes since our last check
-      const historyResponse = await this.gmailClient.gmail.users.history.list({
-        userId: 'me',
-        startHistoryId: lastHistoryId,
-        historyTypes: ['messageAdded'],
-        labelId: 'INBOX'
-      });
+      const historyResponse = await this.executeWithRetry(() => 
+        this.gmailClient.gmail.users.history.list({
+          userId: 'me',
+          startHistoryId: lastHistoryId,
+          historyTypes: ['messageAdded'],
+          labelId: 'INBOX'
+        })
+      );
 
       if (!historyResponse.data.history) {
         this.logger.debug('No new messages in history');
@@ -206,7 +229,19 @@ class GmailWebhookHandler {
       await this.saveHistoryId(historyId);
 
     } catch (error) {
-      this.logger.error('Error processing Gmail notification:', error);
+      this.logger.error('Error processing Gmail notification:', error.message);
+      
+      // If we get an authentication error, try to reinitialize the Gmail client
+      if (error.message && error.message.includes('invalid_grant')) {
+        this.logger.warn('Authentication error detected, attempting to reinitialize Gmail client...');
+        try {
+          await this.gmailClient.init();
+          this.logger.info('Gmail client reinitialized successfully');
+        } catch (reinitError) {
+          this.logger.error('Failed to reinitialize Gmail client:', reinitError.message);
+        }
+      }
+      
       throw error;
     }
   }
@@ -222,11 +257,13 @@ class GmailWebhookHandler {
 
     try {
       // Get the full message details
-      const messageResponse = await this.gmailClient.gmail.users.messages.get({
-        userId: 'me',
-        id: messageId,
-        format: 'full'
-      });
+      const messageResponse = await this.executeWithRetry(() => 
+        this.gmailClient.gmail.users.messages.get({
+          userId: 'me',
+          id: messageId,
+          format: 'full'
+        })
+      );
 
       const message = messageResponse.data;
       const headers = this.extractHeaders(message.payload.headers);
@@ -437,11 +474,13 @@ class GmailWebhookHandler {
       // Get messages from the last hour
       const oneHourAgo = Math.floor((Date.now() - 60 * 60 * 1000) / 1000);
       
-      const messagesResponse = await this.gmailClient.gmail.users.messages.list({
-        userId: 'me',
-        q: `in:inbox after:${oneHourAgo}`,
-        maxResults: 10
-      });
+      const messagesResponse = await this.executeWithRetry(() => 
+        this.gmailClient.gmail.users.messages.list({
+          userId: 'me',
+          q: `in:inbox after:${oneHourAgo}`,
+          maxResults: 10
+        })
+      );
 
       if (messagesResponse.data.messages) {
         for (const message of messagesResponse.data.messages) {
