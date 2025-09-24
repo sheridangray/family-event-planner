@@ -43,7 +43,7 @@ export function TopNavigation({ user }: TopNavigationProps) {
   const timeOfDay = now.getHours() < 12 ? "morning" : now.getHours() < 17 ? "afternoon" : "evening";
   const greeting = `Good ${timeOfDay}`;
 
-  // Update navigation items to show current page
+  // Update navigation items to show current page (no admin filtering needed)
   const updatedNavigation = navigation.map(item => ({
     ...item,
     current: pathname === item.href
