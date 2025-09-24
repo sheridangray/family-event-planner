@@ -106,6 +106,11 @@ router.post('/mcp-auth-start', authenticateAPI, async (req, res) => {
 
     // Create Gmail client and get auth URL
     const gmailClient = new GmailMCPClient(logger);
+    
+    // DEBUG: List all methods on the Gmail client
+    const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(gmailClient));
+    logger.info(`Available methods on GmailMCPClient: ${methods.join(', ')}`);
+    
     try {
       const authUrl = await gmailClient.getAuthUrl(email);
       
