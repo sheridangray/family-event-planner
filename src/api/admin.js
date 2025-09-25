@@ -175,4 +175,75 @@ router.post('/mcp-auth-complete', authenticateAPI, async (req, res) => {
   }
 });
 
+// GET /api/admin/user-auth-status - Get current user's authentication status
+router.get('/user-auth-status', authenticateAPI, async (req, res) => {
+  try {
+    const { logger } = req.app.locals;
+    const userEmail = req.headers['x-user-email']; // Get user email from header
+    
+    if (!userEmail) {
+      return res.status(401).json({
+        success: false,
+        error: 'User email not found in request'
+      });
+    }
+
+    // Get authentication status for the current user only
+    const { getUserIdByEmail, isUserAuthenticated } = require('../mcp/gmail-multi-user-singleton');
+    const userId = await getUserIdByEmail(userEmail);
+    
+    if (!userId) {
+      return res.json({
+        success: true,
+        status: {
+          email: userEmail,
+          authenticated: false,
+          error: 'User not found in system'
+        }
+      });
+    }
+
+    const isAuthenticated = await isUserAuthenticated(userId);
+    
+    // Get token details if authenticated
+    let lastAuthenticated = null;
+    if (isAuthenticated) {
+      const { Pool } = require('pg');
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DATABASE_URL?.includes('render.com') ? { rejectUnauthorized: false } : false
+      });
+      
+      try {
+        const result = await pool.query(
+          'SELECT updated_at FROM oauth_tokens WHERE user_id = $1 AND provider = $2',
+          [userId, 'google']
+        );
+        if (result.rows.length > 0) {
+          lastAuthenticated = result.rows[0].updated_at;
+        }
+      } finally {
+        await pool.end();
+      }
+    }
+
+    res.json({
+      success: true,
+      status: {
+        email: userEmail,
+        authenticated: isAuthenticated,
+        lastAuthenticated,
+        error: isAuthenticated ? null : 'No valid OAuth tokens found'
+      }
+    });
+
+  } catch (error) {
+    req.app.locals.logger.error('User auth status check error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check authentication status'
+    });
+  }
+});
+
 module.exports = router;

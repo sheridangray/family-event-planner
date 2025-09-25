@@ -36,17 +36,29 @@ export function UserOAuthPanel() {
     if (!session?.user?.email) return;
     
     try {
-      const response = await fetch(`/api/admin/mcp-status`);
+      const response = await fetch(`/api/auth/user-status`);
       if (response.ok) {
         const data = await response.json();
-        const userStatus = data.services?.find((s: any) => s.email === session.user?.email);
-        setStatus(userStatus || { 
+        setStatus(data.status || { 
           email: session.user.email, 
-          authenticated: false 
+          authenticated: false,
+          error: 'Unable to load status'
+        });
+      } else {
+        console.error('Failed to fetch OAuth status:', response.statusText);
+        setStatus({ 
+          email: session.user.email, 
+          authenticated: false,
+          error: `API error: ${response.statusText}`
         });
       }
     } catch (error) {
       console.error('Failed to fetch OAuth status:', error);
+      setStatus({ 
+        email: session.user.email, 
+        authenticated: false,
+        error: `Network error: ${error.message}`
+      });
     } finally {
       setLoading(false);
     }
