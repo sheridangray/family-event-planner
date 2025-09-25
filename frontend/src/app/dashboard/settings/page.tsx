@@ -7,6 +7,7 @@ import { LocationSettings } from "@/components/settings/location-settings";
 import { ChildrenProfiles } from "@/components/settings/children-profiles";
 import { AccountSettings } from "@/components/settings/account-settings";
 import { MCPAuthenticationPanel } from "@/components/admin/mcp-authentication";
+import { UserOAuthPanel } from "@/components/settings/user-oauth-panel";
 import { Suspense } from "react";
 
 export default async function SettingsPage() {
@@ -46,6 +47,11 @@ export default async function SettingsPage() {
         {/* Account Settings */}
         <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-32"></div>}>
           <AccountSettings />
+        </Suspense>
+
+        {/* User OAuth Authentication - All Users */}
+        <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-32"></div>}>
+          <UserOAuthPanel />
         </Suspense>
 
         {/* System Administration - Admin Only */}
