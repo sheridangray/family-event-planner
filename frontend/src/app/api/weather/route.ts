@@ -1,15 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Helper function to get family setting from backend
+async function getFamilySetting(key: string, defaultValue?: string) {
+  try {
+    const backendUrl = process.env.BACKEND_API_URL || "https://family-event-planner-backend.onrender.com";
+    const apiKey = process.env.BACKEND_API_KEY || "fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA";
+    
+    const response = await fetch(`${backendUrl}/api/family/settings`, {
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data.settings[key]?.value || defaultValue;
+    }
+    
+    return defaultValue;
+  } catch (error) {
+    console.error(`Error fetching setting ${key}:`, error);
+    return defaultValue;
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const weatherApiKey = process.env.WEATHER_API_KEY;
-    const homeZip = process.env.HOME_ZIP;
-    const homeCity = process.env.HOME_CITY;
-    const homeCountry = process.env.HOME_COUNTRY || 'US';
-
+    
     if (!weatherApiKey) {
       return NextResponse.json({ error: 'Weather API key not configured' }, { status: 500 });
     }
+
+    // Get location settings from database
+    const homeZip = await getFamilySetting('home_zip');
+    const homeCity = await getFamilySetting('home_city', 'San Francisco');
+    const homeCountry = await getFamilySetting('home_country', 'US');
 
     // Build weather API URL - prefer zip code for accuracy, fallback to city
     let weatherUrl: string;
@@ -18,7 +45,7 @@ export async function GET(request: NextRequest) {
     } else if (homeCity) {
       weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(homeCity)}&appid=${weatherApiKey}&units=imperial`;
     } else {
-      return NextResponse.json({ error: 'No location configured (need HOME_ZIP or HOME_CITY)' }, { status: 500 });
+      return NextResponse.json({ error: 'No location configured in family settings' }, { status: 500 });
     }
 
     // OpenWeatherMap API call
