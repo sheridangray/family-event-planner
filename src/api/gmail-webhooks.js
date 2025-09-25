@@ -56,10 +56,25 @@ class GmailWebhookHandler {
 
     // Webhook endpoint for Pub/Sub notifications
     router.post('/gmail/notifications', async (req, res) => {
+      // Log ALL incoming webhook requests for debugging
+      this.logger.info('🔔 Gmail webhook endpoint hit!', {
+        method: req.method,
+        url: req.url,
+        headers: {
+          authorization: req.headers.authorization ? 'Bearer [present]' : 'missing',
+          'content-type': req.headers['content-type'],
+          'user-agent': req.headers['user-agent']
+        },
+        bodyType: typeof req.body,
+        bodySize: req.body ? Buffer.byteLength(req.body) : 0,
+        timestamp: new Date().toISOString()
+      });
+
       try {
         await this.handlePubSubNotification(req, res);
       } catch (error) {
-        this.logger.error('Error handling Pub/Sub notification:', error);
+        this.logger.error('❌ Error handling Pub/Sub notification:', error.message);
+        this.logger.error('📍 Webhook error stack:', error.stack);
         res.status(500).json({ error: 'Internal server error' });
       }
     });
@@ -80,13 +95,15 @@ class GmailWebhookHandler {
    * Handle incoming Pub/Sub notification from Gmail
    */
   async handlePubSubNotification(req, res) {
-    this.logger.info('Received Gmail Pub/Sub notification');
+    this.logger.info('📨 Processing Gmail Pub/Sub notification...');
 
     // Verify the request comes from Google
+    this.logger.debug('🔐 Verifying Pub/Sub message authentication...');
     if (!(await this.verifyPubSubMessage(req))) {
-      this.logger.warn('Invalid Pub/Sub message signature');
+      this.logger.warn('❌ Invalid Pub/Sub message signature - rejecting request');
       return res.status(401).json({ error: 'Unauthorized' });
     }
+    this.logger.debug('✅ Pub/Sub message authentication verified');
 
     // Parse the raw buffer body since we use express.raw() middleware
     let pubsubMessage;
