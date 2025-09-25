@@ -36,7 +36,7 @@ class GmailMultiUserSingleton {
       const connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/family_event_planner';
       this.db = new Pool({
         connectionString,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        ssl: connectionString.includes('render.com') ? { rejectUnauthorized: false } : false
       });
     }
   }
