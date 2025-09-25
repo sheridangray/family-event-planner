@@ -14,14 +14,7 @@ export async function GET(request: NextRequest) {
 
     // Call the backend API with the API key
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
-    const apiKey = process.env.API_KEY;
-    
-    if (!apiKey) {
-      return NextResponse.json({
-        success: false,
-        error: 'API key not configured'
-      }, { status: 500 });
-    }
+    const apiKey = process.env.BACKEND_API_KEY || "fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA";
 
     const response = await fetch(`${backendUrl}/api/admin/user-auth-status`, {
       headers: {
