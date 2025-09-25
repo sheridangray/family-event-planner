@@ -12,7 +12,7 @@ async function migrateExistingToken() {
 
   const pool = new Pool({
     connectionString,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: connectionString.includes('render.com') ? { rejectUnauthorized: false } : false
   });
 
   try {

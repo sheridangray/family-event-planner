@@ -5,6 +5,8 @@ const API_KEY = process.env.BACKEND_API_KEY || "fep_secure_api_key_2024_$7mK9pL2
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('Frontend API: Using BACKEND_API_URL:', BACKEND_API_URL);
+    console.log('Frontend API: Using API_KEY:', API_KEY);
     const response = await fetch(`${BACKEND_API_URL}/api/family/settings`, {
       headers: {
         'x-api-key': API_KEY,

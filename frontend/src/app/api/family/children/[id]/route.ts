@@ -9,8 +9,9 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
+    const { id } = await params;
 
-    const response = await fetch(`${BACKEND_API_URL}/api/family/children/${params.id}`, {
+    const response = await fetch(`${BACKEND_API_URL}/api/family/children/${id}`, {
       method: 'PUT',
       headers: {
         'x-api-key': API_KEY,
@@ -40,7 +41,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const response = await fetch(`${BACKEND_API_URL}/api/family/children/${params.id}`, {
+    const { id } = await params;
+    const response = await fetch(`${BACKEND_API_URL}/api/family/children/${id}`, {
       method: 'DELETE',
       headers: {
         'x-api-key': API_KEY,
