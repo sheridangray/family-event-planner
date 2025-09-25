@@ -101,7 +101,8 @@ class EmailNotificationClient {
   }
 
   getRecipientEmail() {
-    return config.app.nodeEnv === 'production' ? config.gmail.parent1Email : config.gmail.parent2Email;
+    // Send all emails to parent1 (Sheridan) in both production and development
+    return config.gmail.parent1Email;
   }
 
   buildEmailSubject(event) {

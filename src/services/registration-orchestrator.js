@@ -243,7 +243,7 @@ class RegistrationOrchestrator {
    * Build success confirmation email body
    */
   buildSuccessConfirmationBody(event, result, calendarResult = null) {
-    const recipientName = config.app.nodeEnv === 'production' ? config.family.parent1Name : config.family.parent2Name;
+    const recipientName = config.family.parent1Name;
     const eventDate = new Date(event.date);
     const formattedDate = eventDate.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -313,7 +313,7 @@ class RegistrationOrchestrator {
    * Build manual registration email body with family data
    */
   buildManualRegistrationBody(event, familyData, failureResult) {
-    const recipientName = config.app.nodeEnv === 'production' ? config.family.parent1Name : config.family.parent2Name;
+    const recipientName = config.family.parent1Name;
     const eventDate = new Date(event.date);
     const formattedDate = eventDate.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -426,7 +426,8 @@ class RegistrationOrchestrator {
    * Get recipient email address
    */
   getRecipientEmail() {
-    return config.app.nodeEnv === 'production' ? config.gmail.parent1Email : config.gmail.parent2Email;
+    // Send all emails to parent1 (Sheridan) in both production and development
+    return config.gmail.parent1Email;
   }
 
   /**

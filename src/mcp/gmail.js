@@ -683,10 +683,9 @@ class GmailMCPClient {
   async sendDailyReport(reportContent, recipients = []) {
     try {
       if (recipients.length === 0) {
-        // Use default recipients from config
+        // Use default recipient from config (send all emails to parent1)
         recipients = [
-          config.gmail.parent1Email,
-          config.gmail.parent2Email
+          config.gmail.parent1Email
         ].filter(Boolean);
       }
       
