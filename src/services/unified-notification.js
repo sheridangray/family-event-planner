@@ -95,8 +95,16 @@ class UnifiedNotificationService {
       return { ...result, method: 'email', userId: userId || this.userId };
       
     } catch (error) {
-      this.logger.error(`❌ UnifiedNotificationService error sending approval request for ${event.title}:`, error.message);
-      this.logger.error(`📍 Error stack:`, error.stack);
+      this.logger.error(`❌ UnifiedNotificationService error sending approval request for "${event.title}" (ID: ${event.id}): ${error.message}`);
+      this.logger.error(`📧 Email notification context:`, {
+        eventId: event.id,
+        eventTitle: event.title,
+        eventDate: event.date,
+        hasEmailManager: !!emailManager,
+        userId: userId || this.userId,
+        authStatus: this.authStatus
+      });
+      this.logger.error(`📍 Unified notification error stack:`, error.stack);
       throw error;
     }
   }

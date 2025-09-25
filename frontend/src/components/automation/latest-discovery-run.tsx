@@ -358,6 +358,26 @@ export function LatestDiscoveryRun() {
             </div>
           </div>
 
+          {/* Scoring & Ranking Pipeline */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-3">🎯 Scoring & Ranking</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="text-lg font-bold text-purple-700">{eventsBreakdown!.eventsPassedFilters}</div>
+                <div className="text-xs text-purple-600">Scored & Ranked</div>
+                <div className="text-xs text-purple-500 mt-1">Events processed through scoring algorithm</div>
+              </div>
+              
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                <div className="text-lg font-bold text-indigo-700">
+                  {Math.min(3, eventsBreakdown!.eventsPassedFilters)}
+                </div>
+                <div className="text-xs text-indigo-600">Top Ranked Events</div>
+                <div className="text-xs text-indigo-500 mt-1">Highest scoring events selected</div>
+              </div>
+            </div>
+          </div>
+
           {/* Approval Pipeline */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-3">📧 Approval Pipeline</h4>

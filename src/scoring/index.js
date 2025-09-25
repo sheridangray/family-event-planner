@@ -27,7 +27,17 @@ class EventScorer {
         
         this.logger.debug(`Scored event ${event.title}: ${scores.totalScore.toFixed(2)}`);
       } catch (error) {
-        this.logger.error(`Error scoring event ${event.title}:`, error.message);
+        this.logger.error(`Error scoring event "${event.title}" (ID: ${event.id}): ${error.message}`);
+        this.logger.debug(`📊 Event data causing scoring error:`, {
+          id: event.id,
+          title: event.title,
+          hasDescription: !!event.description,
+          hasDate: !!event.date,
+          hasLocation: !!event.location,
+          source: event.source
+        });
+        this.logger.debug(`📍 Scoring error stack:`, error.stack);
+        
         // Add error information to the event
         event.scoreFactors = { error: error.message, totalScore: 0 };
         event.totalScore = 0;
@@ -50,8 +60,22 @@ class EventScorer {
     try {
       // Validate event has required fields
       if (!event || !event.title || typeof event.id === 'undefined' || !event.description) {
-        const error = 'Event missing required fields (title, id, description)';
-        this.logger.warn(`Error scoring event:`, error);
+        const missingFields = [];
+        if (!event) missingFields.push('event object');
+        if (!event?.title) missingFields.push('title');
+        if (typeof event?.id === 'undefined') missingFields.push('id');
+        if (!event?.description) missingFields.push('description');
+        
+        const error = `Event missing required fields: ${missingFields.join(', ')}`;
+        this.logger.warn(`Error scoring event "${event?.title || 'Unknown'}" (ID: ${event?.id || 'Unknown'}): ${error}`);
+        this.logger.debug(`📊 Event validation data:`, {
+          hasEvent: !!event,
+          id: event?.id,
+          title: event?.title,
+          hasDescription: !!event?.description,
+          descriptionLength: event?.description?.length || 0
+        });
+        
         return {
           error,
           totalScore: 0,
@@ -71,7 +95,8 @@ class EventScorer {
       
       return scores;
     } catch (error) {
-      this.logger.warn(`Error scoring event ${event?.title}:`, error.message);
+      this.logger.warn(`Error scoring event "${event?.title || 'Unknown'}" (ID: ${event?.id || 'Unknown'}): ${error.message}`);
+      this.logger.debug(`📍 Score calculation error stack:`, error.stack);
       return {
         error: error.message,
         totalScore: 0,

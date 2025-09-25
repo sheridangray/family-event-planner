@@ -283,8 +283,16 @@ class TaskScheduler {
             await this.delay(2000);
             
           } catch (emailError) {
-            this.logger.error(`❌ Failed to send notification for "${event.title}":`, emailError.message);
-            this.logger.error(`📍 Error stack:`, emailError.stack);
+            this.logger.error(`❌ Failed to send notification for "${event.title}" (ID: ${event.id}): ${emailError.message}`);
+            this.logger.error(`📊 Event notification details:`, {
+              eventId: event.id,
+              title: event.title,
+              date: event.date,
+              hasDescription: !!event.description,
+              hasLocation: !!event.location,
+              source: event.source
+            });
+            this.logger.error(`📍 Notification error stack:`, emailError.stack);
             // Continue with next event rather than failing entire discovery
           }
         }
