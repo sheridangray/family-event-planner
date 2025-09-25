@@ -57,7 +57,7 @@ export function UserOAuthPanel() {
       setStatus({ 
         email: session.user.email, 
         authenticated: false,
-        error: `Network error: ${error.message}`
+        error: `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
       });
     } finally {
       setLoading(false);
