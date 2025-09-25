@@ -69,10 +69,9 @@ export function UserOAuthPanel() {
     
     setAuthenticating(true);
     try {
-      const response = await fetch('/api/admin/mcp-auth-start', {
+      const response = await fetch('/api/auth/oauth-start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: session.user.email })
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (response.ok) {
@@ -98,11 +97,10 @@ export function UserOAuthPanel() {
 
     setAuthenticating(true);
     try {
-      const response = await fetch('/api/admin/mcp-auth-complete', {
+      const response = await fetch('/api/auth/oauth-complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: session.user.email,
           authCode: authCode.trim()
         })
       });
