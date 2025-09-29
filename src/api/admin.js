@@ -19,6 +19,9 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
     await database.init();
     logger.info('🚀 Database initialized');
 
+    logger.info('🔍 Available database methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(database)));
+    logger.info('🔍 getAllUserAuthStatus exists:', typeof database.getAllUserAuthStatus);
+
     logger.info('🔍 Fetching user authentication statuses...');
     let userStatuses;
     try {
