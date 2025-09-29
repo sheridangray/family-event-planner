@@ -8,12 +8,15 @@ const router = express.Router();
 router.get('/mcp-status', authenticateAPI, async (req, res) => {
   try {
     const { logger } = req.app.locals;
-    
+
     // Use database to get authentication status for all users
     const Database = require('../database');
     const database = new Database();
     await database.init();
+
+    logger.info('🔍 Fetching user authentication statuses...');
     const userStatuses = await database.getAllUserAuthStatus();
+    logger.info(`✅ Found ${userStatuses.length} user statuses`);
 
     const serviceStatus = userStatuses.map(user => ({
       userId: user.userId,
@@ -49,10 +52,12 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
     });
 
   } catch (error) {
-    req.app.locals.logger.error('MCP status check error:', error.message);
+    req.app.locals.logger.error('❌ MCP status check error:', error.message);
+    req.app.locals.logger.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to check MCP service status'
+      error: 'Failed to check MCP service status',
+      details: error.message
     });
   }
 });
