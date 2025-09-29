@@ -9,14 +9,26 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
   try {
     const { logger } = req.app.locals;
 
+    logger.info('🔍 Starting MCP status check...');
+
     // Use database to get authentication status for all users
     const Database = require('../database');
     const database = new Database();
+
+    logger.info('📦 Database instance created');
     await database.init();
+    logger.info('🚀 Database initialized');
 
     logger.info('🔍 Fetching user authentication statuses...');
-    const userStatuses = await database.getAllUserAuthStatus();
-    logger.info(`✅ Found ${userStatuses.length} user statuses`);
+    let userStatuses;
+    try {
+      userStatuses = await database.getAllUserAuthStatus();
+      logger.info(`✅ Found ${userStatuses.length} user statuses`);
+    } catch (dbError) {
+      logger.error('💥 Database query failed:', dbError.message);
+      logger.error('DB Error details:', dbError);
+      throw dbError;
+    }
 
     const serviceStatus = userStatuses.map(user => ({
       userId: user.userId,
