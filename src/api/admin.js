@@ -20,6 +20,17 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
 
     logger.info('🔍 Available database methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(database)));
     logger.info('🔍 getAllUserAuthStatus exists:', typeof database.getAllUserAuthStatus);
+    logger.info('🔍 Database instance constructor:', database.constructor.name);
+    logger.info('🔍 Database.postgres exists:', !!database.postgres);
+    logger.info('🔍 Database.postgres constructor:', database.postgres?.constructor?.name);
+    logger.info('🔍 getAllUserAuthStatus on postgres instance:', typeof database.postgres?.getAllUserAuthStatus);
+    logger.info('🔍 Direct method call test...');
+    try {
+      const testResult = database.getAllUserAuthStatus;
+      logger.info('🔍 Direct property access result:', typeof testResult);
+    } catch (e) {
+      logger.error('🔍 Direct property access error:', e.message);
+    }
 
     logger.info('🔍 Fetching user authentication statuses...');
     let userStatuses;
