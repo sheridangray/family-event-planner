@@ -18,15 +18,12 @@ class EmailNotificationClient {
         throw new Error('No parent email addresses configured');
       }
       
-      // Use multi-user singleton to get Gmail client
-      const { getGmailClient } = require('./gmail-multi-user-singleton');
-      if (this.userId) {
-        // Multi-user mode - get client for specific user
-        this.gmailClient = await getGmailClient(this.userId, this.logger);
-      } else {
-        // Backwards compatibility - use single-user mode
-        this.gmailClient = await getGmailClient(this.logger);
-      }
+      // Use unified Gmail client
+      const { GmailClient } = require('./gmail-client');
+      const Database = require('../database');
+      const database = new Database();
+      await database.init();
+      this.gmailClient = new GmailClient(this.logger, database);
       
       this.isInitialized = true;
       

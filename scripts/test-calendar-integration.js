@@ -2,7 +2,8 @@
 require('dotenv').config();
 
 const winston = require('winston');
-const { CalendarConflictChecker } = require('../src/mcp/gmail');
+const { GmailClient } = require('../src/mcp/gmail-client');
+const Database = require('../src/database');
 
 const logger = winston.createLogger({
   level: 'debug',
@@ -14,7 +15,9 @@ const logger = winston.createLogger({
 });
 
 async function testCalendarIntegration() {
-  const calendarChecker = new CalendarConflictChecker(logger);
+  const database = new Database();
+  await database.init();
+  const gmailClient = new GmailClient(logger, database);
   
   try {
     logger.info('🧪 Testing Calendar Integration...');

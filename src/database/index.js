@@ -181,6 +181,56 @@ class Database {
     return await this.postgres.getDiscoveredEventsByRunAndScraper(discoveryRunId, scraperName);
   }
 
+  // OAuth Token Management Methods
+  async getOAuthTokens(userId, provider = 'google') {
+    return await this.postgres.getOAuthTokens(userId, provider);
+  }
+
+  async saveOAuthTokens(userId, provider, tokens) {
+    return await this.postgres.saveOAuthTokens(userId, provider, tokens);
+  }
+
+  async updateOAuthTokens(userId, provider, tokens) {
+    return await this.postgres.updateOAuthTokens(userId, provider, tokens);
+  }
+
+  async deleteOAuthTokens(userId, provider = 'google') {
+    return await this.postgres.deleteOAuthTokens(userId, provider);
+  }
+
+  async isUserAuthenticated(userId, provider = 'google') {
+    return await this.postgres.isUserAuthenticated(userId, provider);
+  }
+
+  async getAllUserAuthStatus() {
+    return await this.postgres.getAllUserAuthStatus();
+  }
+
+  async getUserIdByEmail(email) {
+    return await this.postgres.getUserIdByEmail(email);
+  }
+
+  async logOAuthActivity(userId, action, provider, success, errorMessage = null) {
+    return await this.postgres.logOAuthActivity(userId, action, provider, success, errorMessage);
+  }
+
+  // User Management Methods
+  async createUser(email, name, role = 'user') {
+    return await this.postgres.createUser(email, name, role);
+  }
+
+  async getUserById(userId) {
+    return await this.postgres.getUserById(userId);
+  }
+
+  async getUserByEmail(email) {
+    return await this.postgres.getUserByEmail(email);
+  }
+
+  async getAllUsers(activeOnly = true) {
+    return await this.postgres.getAllUsers(activeOnly);
+  }
+
   async query(sql, params = []) {
     return await this.postgres.query(sql, params);
   }

@@ -2,6 +2,7 @@ const { config } = require("../config");
 const WeatherService = require("../services/weather");
 const PreferenceLearningService = require("../services/preference-learning");
 const FamilyDemographicsService = require("../services/family-demographics");
+const FamilyConfigService = require("../services/family-config");
 const LLMAgeEvaluator = require("../services/llm-age-evaluator");
 
 class EventFilter {
@@ -11,6 +12,9 @@ class EventFilter {
     this.weatherService = new WeatherService(logger, database);
     this.preferenceLearning = new PreferenceLearningService(logger, database);
     this.familyService = new FamilyDemographicsService(logger, database);
+    this.familyConfig = new FamilyConfigService(database, logger);
+    this.configCache = null;
+    this.configCacheExpiry = null;
 
     // Initialize LLM age evaluator if Together.ai API key is available
     this.llmEvaluator = null;
@@ -27,6 +31,28 @@ class EventFilter {
     }
   }
 
+  /**
+   * Get configuration from database with caching
+   */
+  async getConfig() {
+    // Check cache first (5 minute TTL)
+    if (this.configCache && this.configCacheExpiry && Date.now() < this.configCacheExpiry) {
+      return this.configCache;
+    }
+
+    try {
+      const dbConfig = await this.familyConfig.getFamilyConfig();
+      this.configCache = dbConfig;
+      this.configCacheExpiry = Date.now() + (5 * 60 * 1000); // 5 minutes
+      
+      this.logger.debug('Loaded filter configuration from database');
+      return dbConfig;
+    } catch (error) {
+      this.logger.warn('Failed to load config from database, using environment fallback:', error.message);
+      return config;
+    }
+  }
+
   async evaluateAllEvents(events) {
     // This method evaluates filters for all events and attaches results,
     // but returns all events (not just the ones that pass filters)
@@ -37,6 +63,9 @@ class EventFilter {
   async filterEvents(events) {
     // Get current family demographics for age checking
     const familyDemographics = await this.familyService.getFamilyDemographics();
+    
+    // Get configuration from database
+    const currentConfig = await this.getConfig();
 
     // Use LLM batch evaluation for age appropriateness and time extraction if available
     let ageEvaluations = new Map();
@@ -115,9 +144,9 @@ class EventFilter {
       }
 
       // Check each filter and capture detailed reasons
-      const timeRange = this.isWithinTimeRange(event);
-      const schedule = this.isScheduleCompatible(event);
-      const budget = this.isWithinBudget(event);
+      const timeRange = await this.isWithinTimeRange(event, currentConfig);
+      const schedule = await this.isScheduleCompatible(event, currentConfig);
+      const budget = await this.isWithinBudget(event, currentConfig);
       const capacity = this.hasAvailableCapacity(event);
       const notAttended = this.isNotPreviouslyAttended(event);
       const weather = await this.isWeatherSuitable(event);
@@ -192,7 +221,11 @@ class EventFilter {
     return { passed: true, reason: "Age appropriate" };
   }
 
-  isWithinTimeRange(event) {
+  async isWithinTimeRange(event, currentConfig = null) {
+    if (!currentConfig) {
+      currentConfig = await this.getConfig();
+    }
+
     const now = new Date();
     const eventDate = new Date(event.date);
 
@@ -223,8 +256,8 @@ class EventFilter {
       };
     }
 
-    const minAdvanceMs = config.preferences.minAdvanceDays * 24 * 60 * 60 * 1000;
-    const maxAdvanceMs = config.preferences.maxAdvanceMonths * 30 * 24 * 60 * 60 * 1000;
+    const minAdvanceMs = currentConfig.preferences.minAdvanceDays * 24 * 60 * 60 * 1000;
+    const maxAdvanceMs = currentConfig.preferences.maxAdvanceMonths * 30 * 24 * 60 * 60 * 1000;
 
     const timeDiff = eventDate.getTime() - now.getTime();
     const daysAway = Math.ceil(timeDiff / (24 * 60 * 60 * 1000));
@@ -237,12 +270,12 @@ class EventFilter {
       if (bufferedTimeDiff < minAdvanceMs) {
         return {
           passed: false,
-          reason: `Too soon (${daysAway} days away, minimum ${config.preferences.minAdvanceDays} days required)`
+          reason: `Too soon (${daysAway} days away, minimum ${currentConfig.preferences.minAdvanceDays} days required)`
         };
       } else if (timeDiff > maxAdvanceMs) {
         return {
           passed: false,
-          reason: `Too far (${daysAway} days away, maximum ${config.preferences.maxAdvanceMonths * 30} days allowed)`
+          reason: `Too far (${daysAway} days away, maximum ${currentConfig.preferences.maxAdvanceMonths * 30} days allowed)`
         };
       }
     }
@@ -250,7 +283,11 @@ class EventFilter {
     return { passed: true, reason: "Within time range" };
   }
 
-  isScheduleCompatible(event) {
+  async isScheduleCompatible(event, currentConfig = null) {
+    if (!currentConfig) {
+      currentConfig = await this.getConfig();
+    }
+
     const eventDate = new Date(event.date);
     const dayOfWeek = eventDate.getDay(); // 0 = Sunday, 6 = Saturday
     let eventTime = eventDate.toTimeString().substr(0, 5); // HH:MM format
@@ -268,9 +305,9 @@ class EventFilter {
 
     let result;
     if (isWeekend) {
-      result = this.isWeekendCompatible(eventDate, eventTime, isAllDayEvent);
+      result = this.isWeekendCompatible(eventDate, eventTime, isAllDayEvent, currentConfig);
     } else {
-      result = this.isWeekdayCompatible(eventTime, isAllDayEvent);
+      result = this.isWeekdayCompatible(eventTime, isAllDayEvent, currentConfig);
     }
 
     // Add day context to the reason
@@ -283,8 +320,8 @@ class EventFilter {
     return result;
   }
 
-  isWeekdayCompatible(eventTime, isAllDayEvent = false) {
-    const earliestTime = config.schedule.weekdayEarliestTime;
+  isWeekdayCompatible(eventTime, isAllDayEvent = false, currentConfig) {
+    const earliestTime = currentConfig.schedule.weekdayEarliestTime;
     const isCompatible = eventTime >= earliestTime;
 
     if (!isCompatible) {
@@ -300,10 +337,10 @@ class EventFilter {
     };
   }
 
-  isWeekendCompatible(eventDate, eventTime, isAllDayEvent = false) {
-    const napStart = config.schedule.weekendNapStart;
-    const napEnd = config.schedule.weekendNapEnd;
-    const earliestTime = config.schedule.weekendEarliestTime;
+  isWeekendCompatible(eventDate, eventTime, isAllDayEvent = false, currentConfig) {
+    const napStart = currentConfig.schedule.weekendNapStart;
+    const napEnd = currentConfig.schedule.weekendNapEnd;
+    const earliestTime = currentConfig.schedule.weekendEarliestTime;
 
     if (eventTime < earliestTime) {
       return {
@@ -324,8 +361,12 @@ class EventFilter {
     };
   }
 
-  isWithinBudget(event) {
-    const maxCost = config.preferences.maxCostPerEvent;
+  async isWithinBudget(event, currentConfig = null) {
+    if (!currentConfig) {
+      currentConfig = await this.getConfig();
+    }
+
+    const maxCost = currentConfig.preferences.maxCostPerEvent;
     const eventCost = event.cost || 0;
     const isAffordable = eventCost <= maxCost;
 

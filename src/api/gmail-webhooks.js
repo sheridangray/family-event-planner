@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { GmailMCPClient } = require('../mcp/gmail');
+const { GmailClient } = require('../mcp/gmail-client');
 const UnifiedNotificationService = require('../services/unified-notification');
 const Database = require('../database');
 
@@ -15,9 +15,10 @@ class GmailWebhookHandler {
   }
 
   async init() {
-    // For backwards compatibility, initialize a default client
-    const { getGmailClient } = require('../mcp/gmail-multi-user-singleton');
-    this.gmailClient = await getGmailClient(this.logger);
+    // Initialize unified Gmail client
+    const database = new Database();
+    await database.init();
+    this.gmailClient = new GmailClient(this.logger, database);
     
     // Only initialize notification service if we created our own (not passed in)
     if (!this.notificationService.emailAvailable) {

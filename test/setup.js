@@ -25,12 +25,12 @@ jest.mock('twilio', () => {
 });
 
 // Mock the Gmail MCP client methods specifically for calendar tests
-jest.mock('../src/mcp/gmail', () => {
-  const original = jest.requireActual('../src/mcp/gmail');
-  
+jest.mock('../src/mcp/gmail-client', () => {
+  const original = jest.requireActual('../src/mcp/gmail-client');
+
   return {
     ...original,
-    GmailMCPClient: jest.fn().mockImplementation(() => ({
+    GmailClient: jest.fn().mockImplementation(() => ({
       init: jest.fn().mockResolvedValue(),
       checkCalendarConflicts: jest.fn().mockImplementation(async (eventDate, durationMinutes = 120) => {
         // Default to no conflicts

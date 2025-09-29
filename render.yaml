@@ -31,49 +31,13 @@ services:
       - key: RENDER_API_KEY
         sync: false
 
-      # Location Settings
-      - key: HOME_ADDRESS
-        value: San Francisco, CA
-      - key: MAX_DISTANCE_MILES
-        value: 30
-
-      # Schedule Settings
-      - key: WEEKDAY_EARLIEST_TIME
-        value: "16:30"
-      - key: WEEKEND_EARLIEST_TIME
-        value: "08:00"
-      - key: WEEKEND_NAP_START
-        value: "12:00"
-      - key: WEEKEND_NAP_END
-        value: "14:00"
-
-      # Event Preferences
-      - key: MIN_CHILD_AGE
-        value: 2
-      - key: MAX_CHILD_AGE
-        value: 4
-      - key: MAX_COST_PER_EVENT
-        value: 200
-      - key: MIN_ADVANCE_DAYS
-        value: 2
-      - key: MAX_ADVANCE_MONTHS
-        value: 6
-
-      # Registration Info
-      - key: PARENT1_NAME
-        value: Joyce Zhang
-      - key: PARENT2_NAME
-        value: Sheridan Gray
-      - key: CHILD1_NAME
-        value: Apollo Gray
-      - key: CHILD1_AGE
-        value: 4
-      - key: CHILD2_NAME
-        value: Athena Gray
-      - key: CHILD2_AGE
-        value: 2
-      - key: EMERGENCY_CONTACT
-        value: +12063909727
+      # These settings have been migrated to the database:
+      # - Location Settings (home_address, max_distance_miles)
+      # - Schedule Settings (weekday_earliest_time, weekend_earliest_time, weekend_nap_start, weekend_nap_end)
+      # - Event Preferences (min_child_age, max_child_age, max_cost_per_event, min_advance_days, max_advance_months)
+      # - Registration Info (parent names, child info, emergency contact)
+      # - Event Discovery Settings (events_per_week_min/max, events_per_day_max, scan_frequency_hours, urgent_scan_frequency_hours)
+      # All family configuration is now managed via the admin interface.
 
       # Application Settings
       - key: PORT
@@ -85,17 +49,6 @@ services:
       - key: API_KEY
         value: fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA
 
-      # Event Discovery Settings
-      - key: EVENTS_PER_WEEK_MIN
-        value: 8
-      - key: EVENTS_PER_WEEK_MAX
-        value: 20
-      - key: EVENTS_PER_DAY_MAX
-        value: 3
-      - key: SCAN_FREQUENCY_HOURS
-        value: 6
-      - key: URGENT_SCAN_FREQUENCY_HOURS
-        value: 1
 
       # Google OAuth (temporary - used only for initial setup)
       - key: GOOGLE_CLIENT_ID

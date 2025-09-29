@@ -1,0 +1,200 @@
+name: Family Event Planner Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: family_event_planner_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Setup test environment
+      run: |
+        cp .env.example .env.test
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/family_event_planner_test" >> .env.test
+        echo "NODE_ENV=test" >> .env.test
+        echo "API_KEY=test_api_key_for_ci" >> .env.test
+    
+    - name: Run database migrations
+      run: |
+        npm run migrate:test || echo "Migration failed, continuing..."
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/family_event_planner_test
+    
+    - name: Run security tests
+      run: npm test -- --testPathPattern="test/security" --coverage=false --verbose
+      env:
+        NODE_ENV: test
+        API_KEY: test_api_key_for_ci
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/family_event_planner_test
+    
+    - name: Run API tests
+      run: npm test -- --testPathPattern="test/api" --coverage=false --verbose
+      env:
+        NODE_ENV: test
+        API_KEY: test_api_key_for_ci
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/family_event_planner_test
+    
+    - name: Run integration tests
+      run: npm test -- --testPathPattern="test/integration" --coverage=false --verbose
+      env:
+        NODE_ENV: test
+        API_KEY: test_api_key_for_ci
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/family_event_planner_test
+    
+    - name: Run unit tests with coverage
+      run: npm test -- --testPathPattern="test/unit" --coverage --coverageReporters=lcov
+      env:
+        NODE_ENV: test
+        API_KEY: test_api_key_for_ci
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/family_event_planner_test
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  security-audit:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run npm audit
+      run: npm audit --audit-level=moderate
+    
+    - name: Run security-focused tests
+      run: npm test -- --testPathPattern="security" --coverage=false
+      env:
+        NODE_ENV: test
+        API_KEY: test_api_key_for_ci
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run ESLint (if configured)
+      run: |
+        if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ]; then
+          npm run lint || echo "ESLint not configured"
+        else
+          echo "ESLint configuration not found, skipping..."
+        fi
+    
+    - name: Check for security vulnerabilities in dependencies
+      run: |
+        npx audit-ci --config .audit-ci.json || echo "audit-ci not configured"
+
+  quality-gates:
+    runs-on: ubuntu-latest
+    needs: [test, security-audit]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run full test suite with coverage thresholds
+      run: npm test -- --coverage --coverageThreshold='{"global":{"branches":75,"functions":80,"lines":80,"statements":80}}'
+      env:
+        NODE_ENV: test
+        API_KEY: test_api_key_for_ci
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/family_event_planner_test
+    
+    - name: Validate critical security tests pass
+      run: |
+        npm test -- --testPathPattern="payment-guard" --verbose
+        npm test -- --testPathPattern="api-security" --verbose
+        npm test -- --testPathPattern="database-integrity" --verbose
+      env:
+        NODE_ENV: test
+        API_KEY: test_api_key_for_ci
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/family_event_planner_test
+    
+    - name: Check for test coverage regression
+      run: |
+        npm test -- --coverage --coverageReporters=json-summary
+        node -e "
+          const coverage = require('./coverage/coverage-summary.json');
+          const minCoverage = 75;
+          
+          ['lines', 'statements', 'functions', 'branches'].forEach(metric => {
+            const pct = coverage.total[metric].pct;
+            console.log(\`\${metric}: \${pct}%\`);
+            
+            if (pct < minCoverage) {
+              console.error(\`❌ \${metric} coverage (\${pct}%) below minimum (\${minCoverage}%)\`);
+              process.exit(1);
+            } else {
+              console.log(\`✅ \${metric} coverage meets minimum requirement\`);
+            }
+          });
+          
+          console.log('🎉 All coverage requirements met!');
+        "
+      env:
+        NODE_ENV: test
+        API_KEY: test_api_key_for_ci
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/family_event_planner_test

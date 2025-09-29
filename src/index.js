@@ -12,7 +12,7 @@ const EventFilter = require('./filters');
 const EventScorer = require('./scoring');
 const FamilyDemographicsService = require('./services/family-demographics');
 const CalendarManager = require('./services/calendar-manager');
-const { CalendarConflictChecker } = require('./mcp/gmail');
+// CalendarConflictChecker functionality is integrated into GmailClient
 const { SMSApprovalManager } = require('./mcp/twilio');
 const UnifiedNotificationService = require('./services/unified-notification');
 const RegistrationAutomator = require('./automation/registration');
@@ -143,9 +143,8 @@ async function initializeComponents() {
     const calendarManager = new CalendarManager(logger);
     await calendarManager.init();
     
-    // Initialize conflict checker
-    const calendarConflictChecker = new CalendarConflictChecker(logger);
-    await calendarConflictChecker.init();
+    // Calendar conflict checking is handled by CalendarManager
+    const calendarConflictChecker = calendarManager;
     
     // Initialize notification services - SMS Manager is optional  
     let smsManager = null;

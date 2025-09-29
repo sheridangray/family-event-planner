@@ -17,7 +17,20 @@
     "test:manual": "npm run test:sms && npm run test:calendar",
     "test:sms": "node scripts/test-sms-parsing.js",
     "test:calendar": "node scripts/test-calendar-integration.js",
-    "test-setup": "node test-setup.js"
+    "test-setup": "node test-setup.js",
+    "test:security": "jest test/security --testTimeout=30000",
+    "test:security:critical": "jest test/security/payment-guard.test.js test/security/payment-guard-audit.test.js --testTimeout=30000",
+    "test:performance": "jest test/performance --testTimeout=60000",
+    "test:load": "jest test/load --testTimeout=120000",
+    "test:e2e": "jest test/e2e --testTimeout=60000",
+    "test:system": "jest test/system --testTimeout=120000",
+    "test:api": "jest test/api --testTimeout=30000",
+    "test:database": "jest test/database --testTimeout=30000",
+    "test:quick": "jest test/unit test/integration --testTimeout=15000",
+    "test:production": "npm run test:security:critical && npm run test:performance && npm run test:load",
+    "test:full": "npm run test:quick && npm run test:security && npm run test:e2e && npm run test:system",
+    "test:pre-deploy": "npm run test:security:critical && npm run test:system",
+    "test:weekly": "npm run test:full && npm run test:load"
   },
   "keywords": [
     "family",
@@ -48,6 +61,7 @@
   },
   "devDependencies": {
     "jest": "^29.7.0",
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "supertest": "^7.1.4"
   }
 }

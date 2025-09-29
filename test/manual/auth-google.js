@@ -14,7 +14,7 @@ async function authenticate() {
   
   try {
     // Load credentials
-    const credentialsPath = process.env.MCP_GMAIL_CREDENTIALS || './gmail-credentials.json';
+    const credentialsPath = process.env.MCP_GMAIL_CREDENTIALS_JSON || './gmail-credentials.json';
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     
     // Create OAuth2 client

@@ -159,9 +159,11 @@ class UnifiedNotificationService {
    */
   async sendEventForApprovalToAllUsers(event) {
     try {
-      // Get all active users
-      const { getAllUserAuthStatus } = require('../mcp/gmail-multi-user-singleton');
-      const userStatuses = await getAllUserAuthStatus();
+      // Get all active users with OAuth tokens
+      const Database = require('../database');
+      const database = new Database();
+      await database.init();
+      const userStatuses = await database.getAllUserAuthStatus();
       const authenticatedUsers = userStatuses.filter(user => user.isAuthenticated);
 
       if (authenticatedUsers.length === 0) {

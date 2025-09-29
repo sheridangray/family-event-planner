@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { GmailMCPClient } = require('../mcp/gmail');
+const { GmailClient } = require('../mcp/gmail-client');
+const Database = require('../database');
 
 // Google Integration health check - tests calendar and email for sheridan.gray@gmail.com
 async function checkGoogleIntegration() {
   try {
-    const { getGmailClient } = require('../mcp/gmail-multi-user-singleton');
     const logger = { 
       info: () => {}, 
       warn: () => {}, 
@@ -13,22 +13,32 @@ async function checkGoogleIntegration() {
       debug: () => {} 
     };
 
-    const gmailClient = await getGmailClient(logger);
+    const database = new Database();
+    await database.init();
+    const gmailClient = new GmailClient(logger, database);
 
-    // Test calendar access
+    // Get user ID for sheridan.gray@gmail.com
+    const user = await database.getUserByEmail('sheridan.gray@gmail.com');
+    if (!user) {
+      console.warn('Primary user sheridan.gray@gmail.com not found in database');
+      return false;
+    }
+
+    // Test calendar access using the unified client
     let calendarHealthy = false;
     try {
-      const calendarResponse = await gmailClient.calendar.calendarList.list({ maxResults: 1 });
-      calendarHealthy = !!calendarResponse.data.items;
+      const testDate = new Date().toISOString();
+      const calendarResult = await gmailClient.checkCalendarConflicts(user.id, testDate, 60);
+      calendarHealthy = true; // If no error thrown, calendar access works
     } catch (error) {
       console.warn('Calendar health check failed:', error.message);
     }
 
-    // Test Gmail profile access (email API)
+    // Test email access by checking if we can get authenticated client
     let emailHealthy = false;
     try {
-      const profileResponse = await gmailClient.gmail.users.getProfile({ userId: 'me' });
-      emailHealthy = profileResponse.data.emailAddress === 'sheridan.gray@gmail.com';
+      const authenticatedClient = await gmailClient.getAuthenticatedClient(user.id);
+      emailHealthy = !!authenticatedClient;
     } catch (error) {
       console.warn('Email health check failed:', error.message);
     }
@@ -44,9 +54,10 @@ async function checkGoogleIntegration() {
 // Weather service health check
 async function checkWeatherService() {
   try {
-    const homeZip = process.env.HOME_ZIP || process.env.HOME_ADDRESS;
-    const homeCity = process.env.HOME_CITY || 'San Francisco';
-    const homeCountry = process.env.HOME_COUNTRY || 'US';
+    // Use default location settings - these will come from database in production
+    const homeZip = '94158';
+    const homeCity = 'San Francisco';
+    const homeCountry = 'US';
     const weatherApiKey = process.env.WEATHER_API_KEY;
 
     if (!weatherApiKey) {
@@ -1088,11 +1099,10 @@ function getAdapterDisplayName(adapterType) {
 
 // Email notification function for scraper requests
 async function sendScraperRequestEmail(domain, description, requestId, logger) {
-  // Use multi-user singleton (backwards compatible mode)
-  const { getGmailClient } = require('../mcp/gmail-multi-user-singleton');
-  
   try {
-    const gmailClient = await getGmailClient(logger);
+    const database = new Database();
+    await database.init();
+    const gmailClient = new GmailClient(logger, database);
     
     const subject = `🤖 New Scraper Request: ${domain}`;
     const body = `Hi Sheridan,
@@ -1109,8 +1119,15 @@ You can review this request and create the scraper when you have time.
 Thanks!
 Family Event Planner System`;
 
+    // Get user ID for sheridan.gray@gmail.com
+    const user = await database.getUserByEmail('sheridan.gray@gmail.com');
+    if (!user) {
+      throw new Error('Primary user sheridan.gray@gmail.com not found in database');
+    }
+
     const emailResult = await gmailClient.sendEmail(
-      ['sheridan.gray@gmail.com'], 
+      user.id, 
+      'sheridan.gray@gmail.com',
       subject, 
       body
     );

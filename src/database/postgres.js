@@ -1004,6 +1004,181 @@ class PostgresDatabase {
     const result = await this.pool.query(sql, [discoveryRunId, scraperName]);
     return result.rows;
   }
+
+  // ===== OAuth Token Management Methods =====
+
+  async getOAuthTokens(userId, provider = 'google') {
+    const sql = `
+      SELECT * FROM oauth_tokens 
+      WHERE user_id = $1 AND provider = $2
+    `;
+    const result = await this.pool.query(sql, [userId, provider]);
+    
+    if (result.rows.length === 0) {
+      throw new Error(`No OAuth tokens found for user ${userId} with provider ${provider}`);
+    }
+    
+    const row = result.rows[0];
+    return {
+      ...row,
+      expiry_date: parseInt(row.expiry_date) // Ensure it's a number for JavaScript Date
+    };
+  }
+
+  async saveOAuthTokens(userId, provider, tokens) {
+    const sql = `
+      INSERT INTO oauth_tokens (user_id, provider, access_token, refresh_token, token_type, scope, expiry_date)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (user_id, provider)
+      DO UPDATE SET 
+        access_token = EXCLUDED.access_token,
+        refresh_token = EXCLUDED.refresh_token,
+        token_type = EXCLUDED.token_type,
+        scope = EXCLUDED.scope,
+        expiry_date = EXCLUDED.expiry_date,
+        updated_at = NOW()
+      RETURNING id
+    `;
+    
+    const result = await this.pool.query(sql, [
+      userId, 
+      provider, 
+      tokens.access_token, 
+      tokens.refresh_token, 
+      tokens.token_type || 'Bearer', 
+      tokens.scope, 
+      tokens.expiry_date
+    ]);
+    
+    return result.rows[0].id;
+  }
+
+  async updateOAuthTokens(userId, provider, tokens) {
+    const sql = `
+      UPDATE oauth_tokens 
+      SET access_token = $3, refresh_token = $4, token_type = $5, scope = $6, expiry_date = $7, updated_at = NOW()
+      WHERE user_id = $1 AND provider = $2
+      RETURNING id
+    `;
+    
+    const result = await this.pool.query(sql, [
+      userId, 
+      provider, 
+      tokens.access_token, 
+      tokens.refresh_token, 
+      tokens.token_type || 'Bearer', 
+      tokens.scope, 
+      tokens.expiry_date
+    ]);
+    
+    if (result.rows.length === 0) {
+      throw new Error(`No OAuth tokens found to update for user ${userId} with provider ${provider}`);
+    }
+    
+    return result.rows[0].id;
+  }
+
+  async deleteOAuthTokens(userId, provider = 'google') {
+    const sql = `DELETE FROM oauth_tokens WHERE user_id = $1 AND provider = $2`;
+    const result = await this.pool.query(sql, [userId, provider]);
+    return result.rowCount > 0;
+  }
+
+  async isUserAuthenticated(userId, provider = 'google') {
+    try {
+      const sql = `
+        SELECT expiry_date FROM oauth_tokens 
+        WHERE user_id = $1 AND provider = $2
+      `;
+      const result = await this.pool.query(sql, [userId, provider]);
+      
+      if (result.rows.length === 0) {
+        return false;
+      }
+      
+      // Check if token is not expired (with 5 minute buffer)
+      const expiryDate = result.rows[0].expiry_date;
+      const now = Date.now();
+      const buffer = 5 * 60 * 1000; // 5 minutes
+      
+      return now < (expiryDate - buffer);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async getAllUserAuthStatus() {
+    const sql = `
+      SELECT u.id, u.email, u.name, u.role,
+             ot.expiry_date, ot.updated_at,
+             CASE 
+               WHEN ot.expiry_date IS NULL THEN false
+               WHEN ot.expiry_date < (EXTRACT(EPOCH FROM NOW()) * 1000 + 300000) THEN false
+               ELSE true
+             END as is_authenticated
+      FROM users u
+      LEFT JOIN oauth_tokens ot ON u.id = ot.user_id AND ot.provider = 'google'
+      WHERE u.active = true
+      ORDER BY u.id
+    `;
+    
+    const result = await this.pool.query(sql);
+    return result.rows.map(row => ({
+      userId: row.id,
+      email: row.email,
+      name: row.name,
+      role: row.role,
+      isAuthenticated: row.is_authenticated,
+      tokenExpiryDate: row.expiry_date ? new Date(parseInt(row.expiry_date)) : null,
+      lastUpdated: row.updated_at
+    }));
+  }
+
+  async getUserIdByEmail(email) {
+    const sql = `SELECT id FROM users WHERE email = $1 AND active = true`;
+    const result = await this.pool.query(sql, [email]);
+    return result.rows.length > 0 ? result.rows[0].id : null;
+  }
+
+  async logOAuthActivity(userId, action, provider, success, errorMessage = null) {
+    const sql = `
+      INSERT INTO oauth_audit_log (user_id, action, provider, success, error_message)
+      VALUES ($1, $2, $3, $4, $5)
+    `;
+    await this.pool.query(sql, [userId, action, provider, success, errorMessage]);
+  }
+
+  // ===== User Management Methods =====
+
+  async createUser(email, name, role = 'user') {
+    const sql = `
+      INSERT INTO users (email, name, role)
+      VALUES ($1, $2, $3)
+      RETURNING id, email, name, role, created_at
+    `;
+    const result = await this.pool.query(sql, [email, name, role]);
+    return result.rows[0];
+  }
+
+  async getUserById(userId) {
+    const sql = `SELECT * FROM users WHERE id = $1 AND active = true`;
+    const result = await this.pool.query(sql, [userId]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  async getUserByEmail(email) {
+    const sql = `SELECT * FROM users WHERE email = $1 AND active = true`;
+    const result = await this.pool.query(sql, [email]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  async getAllUsers(activeOnly = true) {
+    const sql = activeOnly 
+      ? `SELECT * FROM users WHERE active = true ORDER BY id`
+      : `SELECT * FROM users ORDER BY id`;
+    const result = await this.pool.query(sql);
+    return result.rows;
+  }
 }
 
 module.exports = PostgresDatabase;

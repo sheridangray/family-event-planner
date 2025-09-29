@@ -1,31 +1,28 @@
-const { CalendarConflictChecker } = require('../../src/mcp/gmail');
+const { GmailClient } = require('../../src/mcp/gmail-client');
 
 describe('Calendar Conflict Integration', () => {
-  let calendarChecker;
+  let gmailClient;
   let mockLogger;
-  let mockGmailClient;
+  let mockDatabase;
 
   beforeEach(() => {
     mockLogger = global.createMockLogger();
-    calendarChecker = new CalendarConflictChecker(mockLogger);
+    mockDatabase = global.createMockDatabase();
+    gmailClient = new GmailClient(mockLogger, mockDatabase);
     
-    // Override the gmail client with proper mock functions
-    mockGmailClient = {
-      checkCalendarConflicts: jest.fn().mockResolvedValue({
-        hasConflict: false,
-        hasWarning: false,
-        blockingConflicts: [],
-        warningConflicts: [],
-        conflicts: [],
-        warnings: [],
-        calendarAccessible: {
-          joyce: true,
-          sheridan: true
-        }
-      })
-    };
-    
-    calendarChecker.gmailClient = mockGmailClient;
+    // Mock the checkCalendarConflicts method
+    gmailClient.checkCalendarConflicts = jest.fn().mockResolvedValue({
+      hasConflict: false,
+      hasWarning: false,
+      blockingConflicts: [],
+      warningConflicts: [],
+      conflicts: [],
+      warnings: [],
+      calendarAccessible: {
+        joyce: true,
+        sheridan: true
+      }
+    });
     
     // Reset mocks
     jest.clearAllMocks();
@@ -34,7 +31,7 @@ describe('Calendar Conflict Integration', () => {
   describe('Conflict Detection', () => {
     test('should detect Joyce conflicts as blocking', async () => {
       // Mock Joyce having a conflict
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: true,
         hasWarning: false,
         blockingConflicts: [{
@@ -58,7 +55,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:30:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(true);
       expect(result.hasWarning).toBe(false);
@@ -68,7 +65,7 @@ describe('Calendar Conflict Integration', () => {
 
     test('should detect Sheridan conflicts as warnings only', async () => {
       // Mock Sheridan having a conflict (warning only)
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: false,
         hasWarning: true,
         blockingConflicts: [],
@@ -92,7 +89,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:30:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(false);
       expect(result.hasWarning).toBe(true);
@@ -102,7 +99,7 @@ describe('Calendar Conflict Integration', () => {
 
     test('should handle both Joyce and Sheridan conflicts correctly', async () => {
       // Mock both Joyce and Sheridan having conflicts
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: true,
         hasWarning: true,
         blockingConflicts: [{
@@ -139,7 +136,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:30:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(true);
       expect(result.hasWarning).toBe(true);
@@ -151,7 +148,7 @@ describe('Calendar Conflict Integration', () => {
   describe('Error Handling and Resilience', () => {
     test('should handle individual calendar failures gracefully', async () => {
       // Mock Joyce's calendar failing but Sheridan's working
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: false,
         hasWarning: true,
         blockingConflicts: [],
@@ -175,7 +172,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:30:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(false);
       expect(result.hasWarning).toBe(true);
@@ -186,7 +183,7 @@ describe('Calendar Conflict Integration', () => {
 
     test('should handle complete calendar system failure', async () => {
       // Mock complete system failure
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: false,
         hasWarning: false,
         blockingConflicts: [],
@@ -202,7 +199,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:30:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(false);
       expect(result.hasWarning).toBe(false);
@@ -213,7 +210,7 @@ describe('Calendar Conflict Integration', () => {
 
     test('should handle authentication errors', async () => {
       // Mock authentication error
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: false,
         hasWarning: false,
         blockingConflicts: [],
@@ -227,7 +224,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:30:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(false);
       expect(result.warnings).toEqual(expect.arrayContaining([expect.stringContaining('Authentication failed')]));
@@ -235,7 +232,7 @@ describe('Calendar Conflict Integration', () => {
 
     test('should handle permission errors', async () => {
       // Mock permission error
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: false,
         hasWarning: false,
         blockingConflicts: [],
@@ -249,7 +246,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:30:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(false);
       expect(result.warnings).toEqual(expect.arrayContaining([expect.stringContaining('Permission denied')]));
@@ -259,7 +256,7 @@ describe('Calendar Conflict Integration', () => {
   describe('Time Buffer and Overlap Logic', () => {
     test('should detect conflicts with time buffer', async () => {
       // Mock a conflict that should be detected with buffer
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: true,
         hasWarning: false,
         blockingConflicts: [{
@@ -283,7 +280,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:00:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate, 60);
+      const result = await gmailClient.checkCalendarConflicts(eventDate, 60);
 
       expect(result.hasConflict).toBe(true);
       expect(result.blockingConflicts).toHaveLength(1);
@@ -291,7 +288,7 @@ describe('Calendar Conflict Integration', () => {
 
     test('should not detect conflicts outside buffer', async () => {
       // Mock no conflicts (distant event)
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: false,
         hasWarning: false,
         blockingConflicts: [],
@@ -305,7 +302,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:00:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(false);
       expect(result.blockingConflicts).toHaveLength(0);
@@ -315,7 +312,7 @@ describe('Calendar Conflict Integration', () => {
   describe('All-day Events', () => {
     test('should handle all-day events correctly', async () => {
       // Mock all-day event conflict
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: true,
         hasWarning: false,
         blockingConflicts: [{
@@ -339,7 +336,7 @@ describe('Calendar Conflict Integration', () => {
       });
 
       const eventDate = '2024-01-15T14:00:00Z';
-      const result = await calendarChecker.getConflictDetails(eventDate);
+      const result = await gmailClient.checkCalendarConflicts(eventDate);
 
       expect(result.hasConflict).toBe(true);
       expect(result.blockingConflicts[0].title).toBe('Joyce All Day Event');
@@ -349,7 +346,7 @@ describe('Calendar Conflict Integration', () => {
   describe('Simple hasConflict Method', () => {
     test('should return boolean for simple conflict check', async () => {
       // Mock conflict for hasConflict test
-      mockGmailClient.checkCalendarConflicts.mockResolvedValue({
+      gmailClient.checkCalendarConflicts.mockResolvedValue({
         hasConflict: true,
         hasWarning: false,
         blockingConflicts: [{
@@ -367,17 +364,21 @@ describe('Calendar Conflict Integration', () => {
         }
       });
 
-      const hasConflict = await calendarChecker.hasConflict('2024-01-15T14:30:00Z');
+      const result = await gmailClient.checkCalendarConflicts('2024-01-15T14:30:00Z');
+      const hasConflict = result.hasConflict;
       expect(hasConflict).toBe(true);
     });
 
-    test('should return false on calendar errors for safety', async () => {
+    test('should throw error on calendar failures', async () => {
       // Mock the checkCalendarConflicts to throw an error
-      mockGmailClient.checkCalendarConflicts.mockRejectedValue(new Error('Calendar error'));
+      gmailClient.checkCalendarConflicts.mockRejectedValue(new Error('Calendar error'));
 
-      const hasConflict = await calendarChecker.hasConflict('2024-01-15T14:30:00Z');
-      expect(hasConflict).toBe(false); // Safe default
-      expect(mockLogger.warn).toHaveBeenCalled();
+      try {
+        await gmailClient.checkCalendarConflicts('2024-01-15T14:30:00Z');
+        fail('Expected error to be thrown');
+      } catch (error) {
+        expect(error.message).toBe('Calendar error');
+      }
     });
   });
 });

@@ -1,6 +1,5 @@
 const express = require('express');
 const { authenticateAPI } = require('../middleware/auth');
-const { GmailMCPClient } = require('../mcp/gmail');
 
 const router = express.Router();
 
