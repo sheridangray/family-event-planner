@@ -252,17 +252,6 @@ export function MCPAuthenticationPanel() {
         </div>
       )}
 
-      {/* Usage Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-blue-800 mb-2">How to authenticate:</h4>
-        <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-          <li>Click "Authenticate" for the email account you want to set up</li>
-          <li>A popup window will open with Google's OAuth consent screen</li>
-          <li>Grant the requested permissions for Gmail and Calendar access</li>
-          <li>Copy the authorization code from the success page</li>
-          <li>Paste it in the input field and click "Complete Authentication"</li>
-        </ol>
-      </div>
     </div>
   );
 }

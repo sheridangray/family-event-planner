@@ -6,81 +6,34 @@ class FamilyDemographicsService {
 
   async initializeFamilyFromEnvironment() {
     try {
-      // Check if family members already exist
-      const existingMembers = await this.database.getFamilyMembers();
-      if (existingMembers.length > 0) {
-        this.logger.info('Family members already exist in database');
-        return;
+      this.logger.info('Initializing family demographics from environment/database...');
+
+      // Check if we already have family data in the database
+      const existingDemographics = await this.getFamilyDemographics();
+
+      if (existingDemographics.children.length > 0 || existingDemographics.parents.length > 0) {
+        this.logger.info(`Family demographics already exist: ${existingDemographics.children.length} children, ${existingDemographics.parents.length} parents`);
+        return existingDemographics;
       }
 
-      // Initialize from environment variables if they exist
-      const familyData = this.extractFamilyFromEnvironment();
-      if (familyData.length === 0) {
-        this.logger.info('No family data found in environment variables');
-        return;
-      }
+      this.logger.info('No existing family data found in database');
+      return existingDemographics;
 
-      this.logger.info('Initializing family members from environment variables...');
-      
-      for (const member of familyData) {
-        await this.database.addFamilyMember(member);
-        this.logger.info(`Added family member: ${member.name} (${member.role})`);
-      }
-
-      this.logger.info(`Successfully initialized ${familyData.length} family members`);
     } catch (error) {
-      this.logger.error('Error initializing family from environment:', error.message);
-      throw error;
+      this.logger.warn('Error initializing family demographics:', error.message);
+      // Return minimal demographics if initialization fails
+      return {
+        parents: [],
+        children: [],
+        childAges: [],
+        emergencyContacts: [],
+        minChildAge: 2,
+        maxChildAge: 4
+      };
     }
   }
 
-  extractFamilyFromEnvironment() {
-    const familyMembers = [];
 
-    // Add parents
-    if (process.env.PARENT1_NAME && process.env.PARENT1_EMAIL) {
-      familyMembers.push({
-        name: process.env.PARENT1_NAME,
-        email: process.env.PARENT1_EMAIL,
-        role: 'parent',
-        birthdate: '1990-01-01', // Default birthdate - should be updated manually
-        emergencyContact: true
-      });
-    }
-
-    if (process.env.PARENT2_NAME && process.env.PARENT2_EMAIL) {
-      familyMembers.push({
-        name: process.env.PARENT2_NAME,
-        email: process.env.PARENT2_EMAIL,
-        role: 'parent',
-        birthdate: '1990-01-01', // Default birthdate - should be updated manually
-        emergencyContact: true
-      });
-    }
-
-    // Add children with calculated birthdates from current ages
-    if (process.env.CHILD1_NAME && process.env.CHILD1_AGE) {
-      const birthdate = this.calculateBirthdateFromAge(parseInt(process.env.CHILD1_AGE));
-      familyMembers.push({
-        name: process.env.CHILD1_NAME,
-        role: 'child',
-        birthdate: birthdate,
-        emergencyContact: false
-      });
-    }
-
-    if (process.env.CHILD2_NAME && process.env.CHILD2_AGE) {
-      const birthdate = this.calculateBirthdateFromAge(parseInt(process.env.CHILD2_AGE));
-      familyMembers.push({
-        name: process.env.CHILD2_NAME,
-        role: 'child',
-        birthdate: birthdate,
-        emergencyContact: false
-      });
-    }
-
-    return familyMembers;
-  }
 
   calculateBirthdateFromAge(currentAge) {
     const today = new Date();
@@ -105,55 +58,133 @@ class FamilyDemographicsService {
 
   async getFamilyDemographics() {
     try {
-      const familyMembers = await this.database.getFamilyMembers();
-      
-      const demographics = {
-        parents: [],
-        children: [],
-        childAges: [],
-        emergencyContacts: []
-      };
+      // Try new children table first
+      const childrenResult = await this.database.query(`
+        SELECT name, birth_date, interests, special_needs
+        FROM children
+        WHERE active = true
+        ORDER BY birth_date ASC
+      `);
 
-      familyMembers.forEach(member => {
-        const memberWithAge = {
-          ...member,
-          currentAge: this.calculateAge(member.birthdate)
+      // Try family_contacts for parents
+      const parentsResult = await this.database.query(`
+        SELECT name, email, phone
+        FROM family_contacts
+        WHERE contact_type = 'parent'
+        ORDER BY is_primary DESC
+      `);
+
+      // Try family_contacts for emergency contacts
+      const emergencyResult = await this.database.query(`
+        SELECT name, email, phone
+        FROM family_contacts
+        WHERE contact_type = 'emergency'
+      `);
+
+      // Calculate demographics from new tables
+      const children = childrenResult.rows.map(child => {
+        const birthDate = new Date(child.birth_date);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+
+        return {
+          name: child.name,
+          birthDate: child.birth_date,
+          currentAge: age,
+          interests: child.interests || [],
+          specialNeeds: child.special_needs || ''
         };
-
-        if (member.role === 'parent') {
-          demographics.parents.push(memberWithAge);
-        } else if (member.role === 'child') {
-          demographics.children.push(memberWithAge);
-          demographics.childAges.push(memberWithAge.currentAge);
-        }
-
-        if (member.emergency_contact) {
-          demographics.emergencyContacts.push(memberWithAge);
-        }
       });
 
-      // Calculate age range for children
-      if (demographics.childAges.length > 0) {
-        demographics.minChildAge = Math.min(...demographics.childAges);
-        demographics.maxChildAge = Math.max(...demographics.childAges);
-      } else {
-        demographics.minChildAge = 0;
-        demographics.maxChildAge = 18;
-      }
+      const parents = parentsResult.rows.map(parent => ({
+        name: parent.name,
+        email: parent.email,
+        phone: parent.phone
+      }));
 
-      // Sort children by age (youngest first)
-      demographics.children.sort((a, b) => a.currentAge - b.currentAge);
+      const emergencyContacts = emergencyResult.rows.map(contact => ({
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone
+      }));
 
-      this.logger.debug('Family demographics calculated:', {
+      const demographics = {
+        parents,
+        children,
+        childAges: children.map(child => child.currentAge),
+        emergencyContacts,
+        minChildAge: children.length > 0 ? Math.min(...children.map(c => c.currentAge)) : 0,
+        maxChildAge: children.length > 0 ? Math.max(...children.map(c => c.currentAge)) : 18
+      };
+
+      this.logger.debug('Family demographics calculated from database:', {
         parents: demographics.parents.length,
         children: demographics.children.length,
         ageRange: `${demographics.minChildAge}-${demographics.maxChildAge}`
       });
 
       return demographics;
+
     } catch (error) {
-      this.logger.error('Error getting family demographics:', error.message);
-      throw error;
+      this.logger.warn('Failed to load demographics from new tables, trying family_members fallback:', error.message);
+      
+      try {
+        // Fallback to original family_members table
+        const familyMembers = await this.database.getFamilyMembers();
+        
+        const demographics = {
+          parents: [],
+          children: [],
+          childAges: [],
+          emergencyContacts: []
+        };
+
+        familyMembers.forEach(member => {
+          const memberWithAge = {
+            ...member,
+            currentAge: this.calculateAge(member.birthdate)
+          };
+
+          if (member.role === 'parent') {
+            demographics.parents.push(memberWithAge);
+          } else if (member.role === 'child') {
+            demographics.children.push(memberWithAge);
+            demographics.childAges.push(memberWithAge.currentAge);
+          }
+
+          if (member.emergency_contact) {
+            demographics.emergencyContacts.push(memberWithAge);
+          }
+        });
+
+        // Calculate age range for children
+        if (demographics.childAges.length > 0) {
+          demographics.minChildAge = Math.min(...demographics.childAges);
+          demographics.maxChildAge = Math.max(...demographics.childAges);
+        } else {
+          demographics.minChildAge = 0;
+          demographics.maxChildAge = 18;
+        }
+
+        // Sort children by age (youngest first)
+        demographics.children.sort((a, b) => a.currentAge - b.currentAge);
+
+        this.logger.debug('Family demographics calculated from family_members fallback:', {
+          parents: demographics.parents.length,
+          children: demographics.children.length,
+          ageRange: `${demographics.minChildAge}-${demographics.maxChildAge}`
+        });
+
+        return demographics;
+
+      } catch (fallbackError) {
+        this.logger.error('Error getting family demographics from fallback:', fallbackError.message);
+        throw new Error('Family demographics unavailable - database contains no family information');
+      }
     }
   }
 
@@ -242,7 +273,7 @@ class FamilyDemographicsService {
         const contact = demographics.emergencyContacts[0];
         registrationInfo.emergencyContact = {
           name: contact.name,
-          phone: contact.phone || process.env.EMERGENCY_CONTACT,
+          phone: contact.phone,
           email: contact.email
         };
       }

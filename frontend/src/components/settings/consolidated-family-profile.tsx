@@ -230,49 +230,39 @@ export function ConsolidatedFamilyProfile() {
         {/* Family Info Section */}
         <div className="mb-8">
           <h4 className="text-lg font-medium text-gray-900 mb-3">👨‍👩‍👧‍👦 Parents</h4>
-            <div className="space-y-3">
-              {primaryParent && (
-                <div className="flex items-center justify-between p-3 bg-indigo-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{primaryParent.name} (Primary)</p>
-                    <p className="text-sm text-gray-600">{primaryParent.email}</p>
-                    {primaryParent.userRole && (
-                      <span className="inline-block px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full mt-1">
-                        {primaryParent.userRole}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {primaryParent.userId ? (
-                      <span className="text-sm text-green-600">✅ Authenticated</span>
-                    ) : (
-                      <span className="text-sm text-gray-500">Not linked</span>
-                    )}
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {primaryParent && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="mb-3">
+                  <h5 className="text-lg font-medium text-gray-900">{primaryParent.name} (Primary)</h5>
+                  <p className="text-sm text-gray-600">{primaryParent.email}</p>
                 </div>
-              )}
-              
-              {secondaryParent && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                {primaryParent.userRole && (
                   <div>
-                    <p className="font-medium text-gray-900">{secondaryParent.name}</p>
-                    <p className="text-sm text-gray-600">{secondaryParent.email}</p>
-                    {secondaryParent.userRole && (
-                      <span className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full mt-1">
-                        {secondaryParent.userRole}
-                      </span>
-                    )}
+                    <span className="inline-block px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded-full">
+                      {primaryParent.userRole}
+                    </span>
                   </div>
-                  <div className="text-right">
-                    {secondaryParent.userId ? (
-                      <span className="text-sm text-green-600">✅ Authenticated</span>
-                    ) : (
-                      <span className="text-sm text-gray-500">Not linked</span>
-                    )}
-                  </div>
+                )}
+              </div>
+            )}
+
+            {secondaryParent && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="mb-3">
+                  <h5 className="text-lg font-medium text-gray-900">{secondaryParent.name}</h5>
+                  <p className="text-sm text-gray-600">{secondaryParent.email}</p>
                 </div>
-              )}
-            </div>
+                {secondaryParent.userRole && (
+                  <div>
+                    <span className="inline-block px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded-full">
+                      {secondaryParent.userRole}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Children Section */}

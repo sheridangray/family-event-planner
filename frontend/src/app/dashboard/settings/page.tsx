@@ -23,6 +23,11 @@ export default async function SettingsPage() {
           <ConsolidatedFamilyProfile />
         </Suspense>
 
+        {/* User OAuth Authentication - All Users */}
+        <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-32"></div>}>
+          <UserOAuthPanel />
+        </Suspense>
+
         {/* Event Preferences */}
         <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-96"></div>}>
           <EventPreferences />
@@ -41,11 +46,6 @@ export default async function SettingsPage() {
         {/* Account Settings */}
         <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-32"></div>}>
           <AccountSettings />
-        </Suspense>
-
-        {/* User OAuth Authentication - All Users */}
-        <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-32"></div>}>
-          <UserOAuthPanel />
         </Suspense>
 
         {/* System Administration - Admin Only */}

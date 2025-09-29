@@ -9,9 +9,11 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
   try {
     const { logger } = req.app.locals;
     
-    // Use multi-user singleton to get authentication status for all users
-    const { getAllUserAuthStatus } = require('../mcp/gmail-multi-user-singleton');
-    const userStatuses = await getAllUserAuthStatus();
+    // Use database to get authentication status for all users
+    const Database = require('../database');
+    const database = new Database();
+    await database.init();
+    const userStatuses = await database.getAllUserAuthStatus();
 
     const serviceStatus = userStatuses.map(user => ({
       userId: user.userId,
@@ -70,10 +72,14 @@ router.post('/mcp-auth-start', authenticateAPI, async (req, res) => {
 
     logger.info(`🚀 Starting MCP OAuth flow for: ${email}`);
 
-    // Create Gmail client and get auth URL
-    logger.info(`📝 Creating GmailMCPClient instance...`);
-    const gmailClient = new GmailMCPClient(logger);
-    logger.info(`✅ GmailMCPClient created successfully`);
+    // Create unified Gmail client and get auth URL
+    logger.info(`📝 Creating unified GmailClient instance...`);
+    const { GmailClient } = require('../mcp/gmail-client');
+    const Database = require('../database');
+    const database = new Database();
+    await database.init();
+    const gmailClient = new GmailClient(logger, database);
+    logger.info(`✅ Unified GmailClient created successfully`);
     
     // DEBUG: List all methods on the Gmail client
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(gmailClient));
@@ -132,9 +138,12 @@ router.post('/mcp-auth-complete', authenticateAPI, async (req, res) => {
 
     logger.info(`Completing MCP OAuth flow for: ${email} (requested by: ${requestingUserEmail || 'unknown'})`);
 
-    // Get user ID from database
-    const { getUserIdByEmail, completeOAuthForUser } = require('../mcp/gmail-multi-user-singleton');
-    const userId = await getUserIdByEmail(email);
+    // Get user from database
+    const Database = require('../database');
+    const database = new Database();
+    await database.init();
+    const user = await database.getUserByEmail(email);
+    const userId = user ? user.id : null;
     
     if (!userId) {
       return res.status(404).json({
@@ -145,8 +154,10 @@ router.post('/mcp-auth-complete', authenticateAPI, async (req, res) => {
 
     logger.info(`Found user ID ${userId} for email ${email}`);
 
-    // Complete OAuth flow for the specific user
-    const result = await completeOAuthForUser(userId, email, authCode, logger);
+    // Complete OAuth flow using unified client
+    const { GmailClient } = require('../mcp/gmail-client');
+    const gmailClient = new GmailClient(logger, database);
+    const result = await gmailClient.completeOAuthFlow(userId, email, authCode);
 
     if (!result.success) {
       return res.status(400).json({
@@ -175,6 +186,77 @@ router.post('/mcp-auth-complete', authenticateAPI, async (req, res) => {
   }
 });
 
+// GET /api/admin/oauth-callback - Handle OAuth callback from Google
+router.get('/oauth-callback', async (req, res) => {
+  try {
+    const { code, state, error } = req.query;
+    const { logger } = req.app.locals;
+
+    if (error) {
+      logger.error(`OAuth callback error: ${error}`);
+      return res.status(400).send(`
+        <html>
+          <head><title>Authentication Error</title></head>
+          <body>
+            <h1>Authentication Error</h1>
+            <p>Error: ${error}</p>
+            <script>window.close();</script>
+          </body>
+        </html>
+      `);
+    }
+
+    if (!code) {
+      return res.status(400).send(`
+        <html>
+          <head><title>Authentication Error</title></head>
+          <body>
+            <h1>Authentication Error</h1>
+            <p>No authorization code received</p>
+            <script>window.close();</script>
+          </body>
+        </html>
+      `);
+    }
+
+    logger.info(`📨 OAuth callback received with code: ${code.substring(0, 20)}...`);
+
+    // Send success message and close the popup
+    res.send(`
+      <html>
+        <head><title>Authentication Successful</title></head>
+        <body>
+          <h1>✅ Authentication Successful!</h1>
+          <p>You can close this window. Your account is being authenticated...</p>
+          <script>
+            // Send the code to the parent window
+            if (window.opener) {
+              window.opener.postMessage({
+                type: 'oauth_success',
+                code: '${code}'
+              }, window.location.origin);
+            }
+            setTimeout(() => window.close(), 2000);
+          </script>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    req.app.locals.logger.error('OAuth callback error:', error.message);
+    res.status(500).send(`
+      <html>
+        <head><title>Authentication Error</title></head>
+        <body>
+          <h1>Authentication Error</h1>
+          <p>Internal server error: ${error.message}</p>
+          <script>window.close();</script>
+        </body>
+      </html>
+    `);
+  }
+});
+
 // GET /api/admin/user-auth-status - Get current user's authentication status
 router.get('/user-auth-status', authenticateAPI, async (req, res) => {
   try {
@@ -189,8 +271,11 @@ router.get('/user-auth-status', authenticateAPI, async (req, res) => {
     }
 
     // Get authentication status for the current user only
-    const { getUserIdByEmail, isUserAuthenticated } = require('../mcp/gmail-multi-user-singleton');
-    const userId = await getUserIdByEmail(userEmail);
+    const Database = require('../database');
+    const database = new Database();
+    await database.init();
+    const user = await database.getUserByEmail(userEmail);
+    const userId = user ? user.id : null;
     
     if (!userId) {
       return res.json({
@@ -203,7 +288,8 @@ router.get('/user-auth-status', authenticateAPI, async (req, res) => {
       });
     }
 
-    const isAuthenticated = await isUserAuthenticated(userId);
+    const tokens = await database.getOAuthTokens(userId, 'google');
+    const isAuthenticated = !!tokens;
     
     // Get token details if authenticated
     let lastAuthenticated = null;
