@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { 
-  CheckCircleIcon, 
-  XCircleIcon, 
+import {
+  CheckCircleIcon,
+  XCircleIcon,
   ExclamationTriangleIcon,
   ArrowPathIcon,
-  KeyIcon 
+  KeyIcon
 } from '@heroicons/react/24/outline';
+import { api } from '@/lib/api';
 
 interface UserOAuthStatus {
   email: string;
@@ -35,40 +36,29 @@ export function UserOAuthPanel() {
 
   const fetchAuthStatus = async () => {
     try {
-      const response = await fetch(`/api/admin/mcp-status`);
-      if (response.ok) {
-        const data = await response.json();
+      const data = await api.getMcpStatus();
 
-        // Create a status entry for each parent email
-        const parentStatuses = parentEmails.map(email => {
-          const service = data.services?.find((service: any) => service.email === email);
+      // Create a status entry for each parent email
+      const parentStatuses = parentEmails.map(email => {
+        const service = data.services?.find((service: any) => service.email === email);
 
-          if (service) {
-            return {
-              email: service.email,
-              authenticated: service.authenticated,
-              lastAuthenticated: service.lastAuthenticated,
-              error: service.error
-            };
-          } else {
-            return {
-              email,
-              authenticated: false,
-              error: 'MCP service not configured for this email'
-            };
-          }
-        });
+        if (service) {
+          return {
+            email: service.email,
+            authenticated: service.authenticated,
+            lastAuthenticated: service.lastAuthenticated,
+            error: service.error
+          };
+        } else {
+          return {
+            email,
+            authenticated: false,
+            error: 'MCP service not configured for this email'
+          };
+        }
+      });
 
-        setAllServices(parentStatuses);
-      } else {
-        console.error('Failed to fetch MCP status:', response.statusText);
-        // Set error status for all parents
-        setAllServices(parentEmails.map(email => ({
-          email,
-          authenticated: false,
-          error: `API error: ${response.statusText}`
-        })));
-      }
+      setAllServices(parentStatuses);
     } catch (error) {
       console.error('Failed to fetch MCP status:', error);
       // Set error status for all parents
@@ -87,55 +77,42 @@ export function UserOAuthPanel() {
 
     setAuthenticating(true);
     try {
-      const response = await fetch('/api/admin/mcp-auth-start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: session.user.email })
-      });
+      const authData = await api.startMcpAuth(session.user.email);
+      setAuthUrl(authData.authUrl);
 
-      if (response.ok) {
-        const authData = await response.json();
-        setAuthUrl(authData.authUrl);
+      // Open auth URL in new window
+      const authWindow = window.open(authData.authUrl, '_blank', 'width=600,height=700');
 
-        // Open auth URL in new window
-        const authWindow = window.open(authData.authUrl, '_blank', 'width=600,height=700');
+      // Listen for the OAuth callback message
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
 
-        // Listen for the OAuth callback message
-        const handleMessage = async (event: MessageEvent) => {
-          if (event.origin !== window.location.origin) return;
+        if (event.data?.type === 'oauth_success' && event.data?.code) {
+          console.log('Received OAuth code from popup');
 
-          if (event.data?.type === 'oauth_success' && event.data?.code) {
-            console.log('Received OAuth code from popup');
+          // Remove the message listener
+          window.removeEventListener('message', handleMessage);
 
-            // Remove the message listener
-            window.removeEventListener('message', handleMessage);
+          // Automatically complete authentication with the received code
+          await completeAuthenticationWithCode(event.data.code);
 
-            // Automatically complete authentication with the received code
-            await completeAuthenticationWithCode(event.data.code);
-
-            // Close the popup if it's still open
-            if (authWindow && !authWindow.closed) {
-              authWindow.close();
-            }
+          // Close the popup if it's still open
+          if (authWindow && !authWindow.closed) {
+            authWindow.close();
           }
-        };
+        }
+      };
 
-        window.addEventListener('message', handleMessage);
+      window.addEventListener('message', handleMessage);
 
-        // Cleanup listener if popup is closed manually
-        const checkClosed = setInterval(() => {
-          if (authWindow?.closed) {
-            clearInterval(checkClosed);
-            window.removeEventListener('message', handleMessage);
-            setAuthenticating(false);
-          }
-        }, 1000);
-
-      } else {
-        const error = await response.text();
-        console.error('Authentication start failed:', error);
-        setAuthenticating(false);
-      }
+      // Cleanup listener if popup is closed manually
+      const checkClosed = setInterval(() => {
+        if (authWindow?.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleMessage);
+          setAuthenticating(false);
+        }
+      }, 1000);
     } catch (error) {
       console.error('Authentication request failed:', error);
       setAuthenticating(false);
@@ -146,22 +123,9 @@ export function UserOAuthPanel() {
     if (!session?.user?.email) return;
 
     try {
-      const response = await fetch('/api/admin/mcp-auth-complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: session.user.email,
-          authCode: code
-        })
-      });
-
-      if (response.ok) {
-        console.log('Authentication completed successfully!');
-        await fetchAuthStatus(); // Refresh status
-      } else {
-        const error = await response.text();
-        console.error('Authentication completion failed:', error);
-      }
+      await api.completeMcpAuth(session.user.email, code);
+      console.log('Authentication completed successfully!');
+      await fetchAuthStatus(); // Refresh status
     } catch (error) {
       console.error('Authentication completion request failed:', error);
     } finally {

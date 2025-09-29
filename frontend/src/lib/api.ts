@@ -223,6 +223,22 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ domain, description }),
     }),
+
+  // Admin/MCP endpoints
+  getMcpStatus: (): Promise<any> =>
+    apiRequest('/admin/mcp-status'),
+
+  startMcpAuth: (email: string): Promise<{ success: boolean; authUrl: string; email: string; scopes: string[]; instructions: string }> =>
+    apiRequest('/admin/mcp-auth-start', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  completeMcpAuth: (email: string, authCode: string): Promise<{ success: boolean; email: string; userId: number; authenticated: boolean; message: string }> =>
+    apiRequest('/admin/mcp-auth-complete', {
+      method: 'POST',
+      body: JSON.stringify({ email, authCode }),
+    }),
 };
 
 export { ApiError };
