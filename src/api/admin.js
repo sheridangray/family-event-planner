@@ -25,8 +25,47 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
     logger.info('🔍 Fetching user authentication statuses...');
     let userStatuses;
     try {
-      userStatuses = await database.getAllUserAuthStatus();
-      logger.info(`✅ Found ${userStatuses.length} user statuses`);
+      // Try the optimized method first
+      if (typeof database.getAllUserAuthStatus === 'function') {
+        logger.info('🎯 Using getAllUserAuthStatus method');
+        userStatuses = await database.getAllUserAuthStatus();
+        logger.info(`✅ Found ${userStatuses.length} user statuses`);
+      } else {
+        logger.warn('⚠️ getAllUserAuthStatus method not available, using fallback');
+        // Fallback: Get users manually and check authentication status
+        const allUsers = await database.getAllUsers(true);
+        logger.info(`📋 Found ${allUsers.length} users, checking authentication status`);
+
+        userStatuses = [];
+        for (const user of allUsers) {
+          try {
+            const isAuthenticated = await database.isUserAuthenticated(user.id, 'google');
+            const tokens = await database.getOAuthTokens(user.id, 'google');
+
+            userStatuses.push({
+              userId: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role || 'user',
+              isAuthenticated: isAuthenticated,
+              tokenExpiryDate: tokens?.expiry_date ? new Date(parseInt(tokens.expiry_date)) : null,
+              lastUpdated: tokens?.updated_at || null
+            });
+          } catch (userError) {
+            logger.error(`❌ Error checking auth for user ${user.email}:`, userError.message);
+            userStatuses.push({
+              userId: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role || 'user',
+              isAuthenticated: false,
+              tokenExpiryDate: null,
+              lastUpdated: null
+            });
+          }
+        }
+        logger.info(`✅ Generated ${userStatuses.length} user statuses via fallback`);
+      }
     } catch (dbError) {
       logger.error('💥 Database query failed:', dbError.message);
       logger.error('DB Error details:', dbError);
