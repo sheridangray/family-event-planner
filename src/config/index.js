@@ -1,6 +1,7 @@
 require('dotenv').config();
 
-const config = {
+// Static config for infrastructure and secrets (keep in environment)
+const staticConfig = {
   gmail: {
     parent1Email: process.env.PARENT1_EMAIL,
     parent2Email: process.env.PARENT2_EMAIL,
@@ -14,70 +15,100 @@ const config = {
     mcpCredentials: process.env.MCP_TWILIO_CREDENTIALS,
   },
   
-  location: {
-    homeAddress: process.env.HOME_ADDRESS,
-    maxDistanceMiles: parseInt(process.env.MAX_DISTANCE_MILES) || 30,
-  },
-  
-  schedule: {
-    weekdayEarliestTime: process.env.WEEKDAY_EARLIEST_TIME || '16:30',
-    weekendEarliestTime: process.env.WEEKEND_EARLIEST_TIME || '08:00',
-    weekendNapStart: process.env.WEEKEND_NAP_START || '12:00',
-    weekendNapEnd: process.env.WEEKEND_NAP_END || '14:00',
-  },
-  
-  preferences: {
-    minChildAge: parseInt(process.env.MIN_CHILD_AGE) || 2,
-    maxChildAge: parseInt(process.env.MAX_CHILD_AGE) || 4,
-    maxCostPerEvent: parseInt(process.env.MAX_COST_PER_EVENT) || 200,
-    minAdvanceDays: parseInt(process.env.MIN_ADVANCE_DAYS) || parseInt(process.env.MIN_ADVANCE_WEEKS) * 7 || 2,
-    maxAdvanceMonths: parseInt(process.env.MAX_ADVANCE_MONTHS) || 6,
-  },
-  
-  family: {
-    parent1Name: process.env.PARENT1_NAME,
-    parent2Name: process.env.PARENT2_NAME,
-    child1Name: process.env.CHILD1_NAME,
-    child1Age: parseInt(process.env.CHILD1_AGE) || 4,
-    child2Name: process.env.CHILD2_NAME,
-    child2Age: parseInt(process.env.CHILD2_AGE) || 2,
-    emergencyContact: process.env.EMERGENCY_CONTACT,
-  },
-  
   app: {
     port: parseInt(process.env.PORT) || 3000,
     nodeEnv: process.env.NODE_ENV || 'development',
     logLevel: process.env.LOG_LEVEL || 'info',
   },
+};
+
+// Deprecated: Legacy config object - USE createDatabaseConfig() instead
+// This is kept only for backward compatibility during migration period
+const config = {
+  gmail: staticConfig.gmail,
+  twilio: staticConfig.twilio,
+  app: staticConfig.app,
+  
+  // These settings are now loaded from database via createDatabaseConfig()
+  location: {
+    homeAddress: 'San Francisco',
+    maxDistanceMiles: 30,
+  },
+  
+  schedule: {
+    weekdayEarliestTime: '16:30',
+    weekendEarliestTime: '08:00',
+    weekendNapStart: '12:00',
+    weekendNapEnd: '14:00',
+  },
+  
+  preferences: {
+    minChildAge: 2,
+    maxChildAge: 4,
+    maxCostPerEvent: 200,
+    minAdvanceDays: 2,
+    maxAdvanceMonths: 6,
+  },
+  
+  family: {
+    parent1Name: 'Unknown',
+    parent2Name: 'Unknown',
+    child1Name: 'Unknown',
+    child1Age: 4,
+    child2Name: 'Unknown',
+    child2Age: 2,
+    emergencyContact: 'Unknown',
+  },
   
   discovery: {
-    eventsPerWeekMin: parseInt(process.env.EVENTS_PER_WEEK_MIN) || 8,
-    eventsPerWeekMax: parseInt(process.env.EVENTS_PER_WEEK_MAX) || 20,
-    eventsPerDayMax: parseInt(process.env.EVENTS_PER_DAY_MAX) || 3,
-    scanFrequencyHours: parseInt(process.env.SCAN_FREQUENCY_HOURS) || 6,
-    urgentScanFrequencyHours: parseInt(process.env.URGENT_SCAN_FREQUENCY_HOURS) || 1,
+    eventsPerWeekMin: 8,
+    eventsPerWeekMax: 20,
+    eventsPerDayMax: 3,
+    scanFrequencyHours: 6,
+    urgentScanFrequencyHours: 1,
   },
 };
+
+/**
+ * Create database-first config loader
+ * @param {Database} database - Database instance
+ * @param {Logger} logger - Logger instance
+ * @returns {Promise<Object>} Complete configuration object
+ */
+async function createDatabaseConfig(database, logger = null) {
+  const FamilyConfigService = require('../services/family-config');
+  const familyConfig = new FamilyConfigService(database, logger);
+  
+  try {
+    const dbConfig = await familyConfig.getFamilyConfig();
+    
+    if (logger) {
+      logger.info('Configuration loaded from database with environment variable fallbacks');
+    }
+    
+    return dbConfig;
+  } catch (error) {
+    if (logger) {
+      logger.warn('Failed to load database config, using environment variables:', error.message);
+    }
+    return config;
+  }
+}
 
 function validateConfig() {
   const required = [
     'PARENT1_EMAIL',
-    'PARENT2_EMAIL', 
-    'TWILIO_PHONE_TO',
-    'HOME_ADDRESS',
-    'PARENT1_NAME',
-    'PARENT2_NAME',
-    'CHILD1_NAME',
-    'CHILD2_NAME'
+    'PARENT2_EMAIL',
+    'TWILIO_PHONE_TO'
   ];
-  
+
   const missing = required.filter(key => !process.env[key]);
-  
+
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
-  
+
   return true;
 }
 
-module.exports = { config, validateConfig };
+module.exports = { config, validateConfig, createDatabaseConfig };
