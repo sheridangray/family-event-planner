@@ -52,12 +52,13 @@ router.get('/mcp-status', authenticateAPI, async (req, res) => {
     });
 
   } catch (error) {
-    req.app.locals.logger.error('❌ MCP status check error:', error.message);
-    req.app.locals.logger.error('Error stack:', error.stack);
+    req.app.locals.logger.error('❌ MCP status check error:', error.message || 'Unknown error');
+    req.app.locals.logger.error('Full error object:', JSON.stringify(error, null, 2));
+    req.app.locals.logger.error('Error stack:', error.stack || 'No stack trace available');
     res.status(500).json({
       success: false,
       error: 'Failed to check MCP service status',
-      details: error.message
+      details: error.message || 'Unknown error'
     });
   }
 });
