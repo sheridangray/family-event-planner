@@ -1,37 +1,44 @@
 "use client";
 
-import { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function OAuthCallback() {
-  const searchParams = useSearchParams();
+  const [code, setCode] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const code = searchParams.get('code');
-    const error = searchParams.get('error');
-    const state = searchParams.get('state');
+    // Parse URL parameters on client side only
+    const urlParams = new URLSearchParams(window.location.search);
+    const authCode = urlParams.get('code');
+    const authError = urlParams.get('error');
+    const state = urlParams.get('state');
 
-    console.log('OAuth callback received:', { code: code?.substring(0, 20) + '...', error, state });
+    setCode(authCode);
+    setError(authError);
+    setLoading(false);
 
-    if (error) {
-      console.error('OAuth callback error:', error);
+    console.log('OAuth callback received:', { code: authCode?.substring(0, 20) + '...', error: authError, state });
+
+    if (authError) {
+      console.error('OAuth callback error:', authError);
       // Send error to parent window
       if (window.opener) {
         window.opener.postMessage({
           type: 'oauth_error',
-          error: error
+          error: authError
         }, window.location.origin);
       }
       return;
     }
 
-    if (code) {
+    if (authCode) {
       console.log('Sending OAuth code to parent window');
       // Send success code to parent window
       if (window.opener) {
         window.opener.postMessage({
           type: 'oauth_success',
-          code: code
+          code: authCode
         }, window.location.origin);
       }
     } else {
@@ -43,10 +50,26 @@ export default function OAuthCallback() {
         }, window.location.origin);
       }
     }
-  }, [searchParams]);
+  }, []);
 
-  const code = searchParams.get('code');
-  const error = searchParams.get('error');
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full bg-white shadow rounded-lg p-6">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+              <svg className="animate-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+            <h1 className="mt-3 text-lg font-medium text-gray-900">Processing OAuth...</h1>
+            <p className="mt-2 text-sm text-gray-600">Please wait while we process your authentication.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
