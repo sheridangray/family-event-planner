@@ -55,6 +55,8 @@ services:
         value: 584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      - key: FRONTEND_URL
+        value: https://sheridangray.com
       - key: WEBHOOK_BASE_URL
         value: https://family-event-planner-backend.onrender.com
       - key: GOOGLE_CLOUD_PROJECT_ID
