@@ -56,8 +56,8 @@ class EmailNotificationClient {
       
       let emailResult;
       try {
-        this.logger.debug(`Sending email to ${recipient} with subject: ${subject}`);
-        emailResult = await this.gmailClient.sendEmail([recipient], subject, emailBody);
+        this.logger.debug(`Sending email to ${recipient} with subject: ${subject} using user ID: ${this.userId}`);
+        emailResult = await this.gmailClient.sendEmail(this.userId, [recipient], subject, emailBody);
         this.logger.debug('Email sent successfully, result:', emailResult);
       } catch (error) {
         this.logger.error('Error sending email via Gmail client:', error.message, { stack: error.stack });
