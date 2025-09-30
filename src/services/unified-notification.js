@@ -31,11 +31,24 @@ class UnifiedNotificationService {
    */
   async _initializeSingleUserEmailManager() {
     try {
-      const emailManager = new EmailApprovalManager(this.logger, this.database, this.calendarManager);
+      // Get the user ID for the email sender (parent1)
+      const { config } = require('../config');
+      const senderEmail = config.gmail.parent1Email;
+      
+      this.logger.info(`Looking up user ID for sender email: ${senderEmail}`);
+      const senderId = await this.database.getUserIdByEmail(senderEmail);
+      
+      if (!senderId) {
+        throw new Error(`No user found in database for email: ${senderEmail}. Please ensure user exists in database.`);
+      }
+      
+      this.logger.info(`Found sender user ID: ${senderId} for email: ${senderEmail}`);
+      
+      const emailManager = new EmailApprovalManager(this.logger, this.database, this.calendarManager, senderId);
       await emailManager.init();
       this.emailManagers.set('default', emailManager);
       this.emailAvailable = true;
-      this.logger.info('Single-user email notifications available');
+      this.logger.info(`Single-user email notifications available (sending from user ${senderId})`);
     } catch (error) {
       this.logger.error('Single-user email initialization failed:', error.message);
       this.emailAvailable = false;

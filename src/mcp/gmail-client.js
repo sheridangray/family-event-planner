@@ -401,7 +401,8 @@ class GmailClient {
 
           // Set credentials and refresh
           this.auth.setCredentials(tokens);
-          const { credentials: newTokens } = await this.auth.refreshAccessToken();
+          const { credentials: newTokens } =
+            await this.auth.refreshAccessToken();
           await this._saveTokensToDatabase(userId, newTokens);
 
           this.logger.info(

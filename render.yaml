@@ -16,8 +16,8 @@ services:
         sync: false
       - key: GOOGLE_OAUTH_TOKEN
         sync: false
-      
-      # Twilio MCP Configuration  
+
+      # Twilio MCP Configuration
       - key: TWILIO_PHONE_TO
         value: +12063909727
       - key: MCP_TWILIO_CREDENTIALS
@@ -49,7 +49,6 @@ services:
       - key: API_KEY
         value: fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA
 
-
       # Google OAuth (temporary - used only for initial setup)
       - key: GOOGLE_CLIENT_ID
         value: 584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com
@@ -80,7 +79,7 @@ services:
           name: family-event-planner-db
           property: connectionString
 
-  # Frontend Service  
+  # Frontend Service
   - type: web
     name: family-event-planner-frontend
     env: node
@@ -95,7 +94,7 @@ services:
       - key: NEXT_PUBLIC_API_KEY
         value: fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA
 
-      # NextAuth Configuration  
+      # NextAuth Configuration
       - key: NEXTAUTH_URL
         value: https://family-event-planner-frontend.onrender.com
       # When ready to switch to custom domain, change NEXTAUTH_URL to:
@@ -110,7 +109,7 @@ services:
         value: 584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      
+
       # Allowed email addresses for family access
       - key: ALLOWED_EMAILS
         value: "joyce.yan.zhang@gmail.com,sheridan.gray@gmail.com"

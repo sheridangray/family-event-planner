@@ -1087,7 +1087,8 @@ class PostgresDatabase {
   async isUserAuthenticated(userId, provider = 'google') {
     try {
       const sql = `
-        SELECT expiry_date FROM oauth_tokens 
+        SELECT access_token, refresh_token, expiry_date 
+        FROM oauth_tokens 
         WHERE user_id = $1 AND provider = $2
       `;
       const result = await this.pool.query(sql, [userId, provider]);
@@ -1096,12 +1097,36 @@ class PostgresDatabase {
         return false;
       }
       
+      const token = result.rows[0];
+      
       // Check if token is not expired (with 5 minute buffer)
-      const expiryDate = result.rows[0].expiry_date;
       const now = Date.now();
       const buffer = 5 * 60 * 1000; // 5 minutes
+      const isValid = now < (token.expiry_date - buffer);
       
-      return now < (expiryDate - buffer);
+      // If expired but we have a refresh token, trigger auto-refresh via GmailClient
+      if (!isValid && token.refresh_token) {
+        try {
+          const { GmailClient } = require('../mcp/gmail-client');
+          const Database = require('../database');
+          
+          // Get logger from global or use console
+          const logger = global.appLogger || console;
+          
+          const database = new Database();
+          await database.init();
+          const gmailClient = new GmailClient(logger, database);
+          
+          // This will auto-refresh and save to database
+          const refreshed = await gmailClient.isUserAuthenticated(userId);
+          return refreshed;
+        } catch (refreshError) {
+          console.error(`Failed to auto-refresh token for user ${userId}:`, refreshError.message);
+          return false;
+        }
+      }
+      
+      return isValid;
     } catch (error) {
       return false;
     }
@@ -1110,12 +1135,7 @@ class PostgresDatabase {
   async getAllUserAuthStatus() {
     const sql = `
       SELECT u.id, u.email, u.name, u.role,
-             ot.expiry_date, ot.updated_at,
-             CASE 
-               WHEN ot.expiry_date IS NULL THEN false
-               WHEN ot.expiry_date < (EXTRACT(EPOCH FROM NOW()) * 1000 + 300000) THEN false
-               ELSE true
-             END as is_authenticated
+             ot.expiry_date, ot.updated_at, ot.refresh_token
       FROM users u
       LEFT JOIN oauth_tokens ot ON u.id = ot.user_id AND ot.provider = 'google'
       WHERE u.active = true
@@ -1123,15 +1143,23 @@ class PostgresDatabase {
     `;
     
     const result = await this.pool.query(sql);
-    return result.rows.map(row => ({
-      userId: row.id,
-      email: row.email,
-      name: row.name,
-      role: row.role,
-      isAuthenticated: row.is_authenticated,
-      tokenExpiryDate: row.expiry_date ? new Date(parseInt(row.expiry_date)) : null,
-      lastUpdated: row.updated_at
-    }));
+    
+    // Use the auto-refresh version of isUserAuthenticated for each user
+    const statusPromises = result.rows.map(async (row) => {
+      const isAuthenticated = row.expiry_date ? await this.isUserAuthenticated(row.id, 'google') : false;
+      
+      return {
+        userId: row.id,
+        email: row.email,
+        name: row.name,
+        role: row.role,
+        isAuthenticated: isAuthenticated,
+        tokenExpiryDate: row.expiry_date ? new Date(parseInt(row.expiry_date)) : null,
+        lastUpdated: row.updated_at
+      };
+    });
+    
+    return await Promise.all(statusPromises);
   }
 
   async getUserIdByEmail(email) {
