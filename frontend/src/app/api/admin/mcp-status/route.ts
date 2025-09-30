@@ -6,9 +6,11 @@ const API_KEY = process.env.BACKEND_API_KEY || "fep_secure_api_key_2024_$7mK9pL2
 
 export async function GET(req: NextRequest) {
   try {
-    // Check authentication
+    // Check authentication - allow both family members to view MCP status
     const session = await auth();
-    if (!session?.user?.email || session.user.email !== "sheridan.gray@gmail.com") {
+    const allowedEmails = ['sheridan.gray@gmail.com', 'joyce.yan.zhang@gmail.com'];
+    
+    if (!session?.user?.email || !allowedEmails.includes(session.user.email)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

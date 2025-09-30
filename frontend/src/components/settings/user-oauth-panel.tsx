@@ -35,8 +35,11 @@ export function UserOAuthPanel() {
   }, []);
 
   const fetchAuthStatus = async () => {
+    console.log('[OAuth Status] Fetching authentication status...');
+    
     try {
       const data = await api.getMcpStatus();
+      console.log('[OAuth Status] MCP status response:', data);
 
       // Create a status entry for each parent email
       const parentStatuses = parentEmails.map(email => {
@@ -58,37 +61,87 @@ export function UserOAuthPanel() {
         }
       });
 
+      console.log('[OAuth Status] Parsed statuses:', parentStatuses);
       setAllServices(parentStatuses);
     } catch (error) {
-      console.error('Failed to fetch MCP status:', error);
-      // Set error status for all parents
-      setAllServices(parentEmails.map(email => ({
-        email,
-        authenticated: false,
-        error: `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      })));
+      console.error('[OAuth Status] Failed to fetch MCP status:', error);
+      
+      // Fallback: Try to get individual user status
+      try {
+        console.log('[OAuth Status] Trying fallback user-specific status...');
+        const userStatus = await api.getUserOAuthStatus();
+        console.log('[OAuth Status] User status response:', userStatus);
+        
+        if (userStatus.success && userStatus.status) {
+          // Create status array with current user's status
+          const statusArray = parentEmails.map(email => {
+            if (email === session?.user?.email) {
+              return userStatus.status;
+            }
+            return {
+              email,
+              authenticated: false,
+              error: 'Unable to view other user status'
+            };
+          });
+          
+          console.log('[OAuth Status] Using fallback statuses:', statusArray);
+          setAllServices(statusArray);
+        } else {
+          throw new Error('Fallback status check returned invalid data');
+        }
+      } catch (fallbackError) {
+        console.error('[OAuth Status] Fallback status check also failed:', fallbackError);
+        
+        // Set error status for all parents
+        setAllServices(parentEmails.map(email => ({
+          email,
+          authenticated: false,
+          error: `Unable to fetch status: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })));
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const startAuthentication = async () => {
-    if (!session?.user?.email) return;
+    if (!session?.user?.email) {
+      console.error('[OAuth] Cannot start authentication: No user email in session');
+      return;
+    }
 
+    console.log('[OAuth] Starting authentication flow for:', session.user.email);
     setAuthenticating(true);
+    
     try {
+      console.log('[OAuth] Requesting auth URL from backend...');
       const authData = await api.startMcpAuth(session.user.email);
+      console.log('[OAuth] Auth URL received:', authData.authUrl ? 'Yes' : 'No');
+      console.log('[OAuth] Required scopes:', authData.scopes);
+      
       setAuthUrl(authData.authUrl);
 
       // Open auth URL in new window
+      console.log('[OAuth] Opening authentication popup...');
       const authWindow = window.open(authData.authUrl, '_blank', 'width=600,height=700');
+
+      if (!authWindow) {
+        console.error('[OAuth] Failed to open popup window - popup blocker may be active');
+        setAuthenticating(false);
+        return;
+      }
 
       // Listen for the OAuth callback message
       const handleMessage = async (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) return;
+        if (event.origin !== window.location.origin) {
+          console.warn('[OAuth] Ignoring message from different origin:', event.origin);
+          return;
+        }
 
         if (event.data?.type === 'oauth_success' && event.data?.code) {
-          console.log('Received OAuth code from popup');
+          console.log('[OAuth] ✅ Received OAuth code from popup');
+          console.log('[OAuth] Code length:', event.data.code.length);
 
           // Remove the message listener
           window.removeEventListener('message', handleMessage);
@@ -98,8 +151,13 @@ export function UserOAuthPanel() {
 
           // Close the popup if it's still open
           if (authWindow && !authWindow.closed) {
+            console.log('[OAuth] Closing authentication popup');
             authWindow.close();
           }
+        } else if (event.data?.type === 'oauth_error') {
+          console.error('[OAuth] ❌ OAuth error from popup:', event.data.error);
+          window.removeEventListener('message', handleMessage);
+          setAuthenticating(false);
         }
       };
 
@@ -108,28 +166,60 @@ export function UserOAuthPanel() {
       // Cleanup listener if popup is closed manually
       const checkClosed = setInterval(() => {
         if (authWindow?.closed) {
+          console.log('[OAuth] Popup closed by user');
           clearInterval(checkClosed);
           window.removeEventListener('message', handleMessage);
           setAuthenticating(false);
         }
       }, 1000);
     } catch (error) {
-      console.error('Authentication request failed:', error);
+      console.error('[OAuth] ❌ Authentication request failed:', error);
+      if (error instanceof Error) {
+        console.error('[OAuth] Error message:', error.message);
+        console.error('[OAuth] Error stack:', error.stack);
+      }
       setAuthenticating(false);
     }
   };
 
   const completeAuthenticationWithCode = async (code: string) => {
-    if (!session?.user?.email) return;
+    if (!session?.user?.email) {
+      console.error('[OAuth Complete] Cannot complete: No user email in session');
+      return;
+    }
+
+    console.log('[OAuth Complete] Starting completion for:', session.user.email);
+    console.log('[OAuth Complete] Authorization code length:', code.length);
 
     try {
-      await api.completeMcpAuth(session.user.email, code);
-      console.log('Authentication completed successfully!');
-      await fetchAuthStatus(); // Refresh status
+      console.log('[OAuth Complete] Sending completion request to backend...');
+      const result = await api.completeMcpAuth(session.user.email, code);
+      
+      console.log('[OAuth Complete] ✅ Backend response:', result);
+      
+      if (result.success) {
+        console.log('[OAuth Complete] Authentication successful! User ID:', result.userId);
+        console.log('[OAuth Complete] Refreshing authentication status...');
+        
+        // Give the backend a moment to save tokens
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        await fetchAuthStatus();
+        console.log('[OAuth Complete] ✅ Status refresh complete');
+      } else {
+        console.error('[OAuth Complete] ❌ Authentication failed:', result);
+      }
     } catch (error) {
-      console.error('Authentication completion request failed:', error);
+      console.error('[OAuth Complete] ❌ Completion request failed:', error);
+      if (error instanceof Error) {
+        console.error('[OAuth Complete] Error details:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
     } finally {
       setAuthenticating(false);
+      console.log('[OAuth Complete] Authentication flow finished');
     }
   };
 

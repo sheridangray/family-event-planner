@@ -239,6 +239,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, authCode }),
     }),
+
+  // User-specific OAuth endpoints
+  getUserOAuthStatus: (): Promise<{ success: boolean; status: { email: string; authenticated: boolean; lastAuthenticated?: string; error?: string } }> =>
+    apiRequest('/user/oauth-status'),
 };
 
 export { ApiError };
