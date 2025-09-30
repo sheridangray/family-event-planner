@@ -46,7 +46,16 @@ class GmailClient {
       
       // Create OAuth2 client
       const { client_secret, client_id, redirect_uris } = credentials.installed;
-      this.auth = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+
+      // Use frontend OAuth callback URL if available, otherwise fall back to backend
+      const frontendUrl = process.env.FRONTEND_URL || 'https://sheridangray.com';
+      const redirectUri = `${frontendUrl}/auth/oauth-callback`;
+
+      this.logger.info(`🔍 FRONTEND_URL env var: ${process.env.FRONTEND_URL}`);
+      this.logger.info(`🔍 Computed frontendUrl: ${frontendUrl}`);
+      this.logger.info(`🔍 Computed redirectUri: ${redirectUri}`);
+      this.logger.info(`🔗 Using OAuth redirect URI: ${redirectUri}`);
+      this.auth = new google.auth.OAuth2(client_id, client_secret, redirectUri);
       
       // Set up Gmail and Calendar APIs
       this.gmail = google.gmail({ version: 'v1', auth: this.auth });
