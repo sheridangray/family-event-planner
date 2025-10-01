@@ -83,10 +83,16 @@ class BaseScraper {
   }
 
   generateEventId(title, date, location) {
-    const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    // Limit component lengths to keep total ID under 255 chars
+    // This prevents database errors when storing event IDs in VARCHAR(255) columns
+    const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 80);
     const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
-    const cleanLocation = location ? location.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'unknown';
-    return `${this.name.toLowerCase().replace(/\s+/g, '')}-${cleanTitle}-${dateStr}-${cleanLocation}`;
+    const cleanLocation = location ? location.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 80) : 'unknown';
+    const scraperName = this.name.toLowerCase().replace(/\s+/g, '').substring(0, 30);
+    
+    // Total format: {scraper}-{title}-{date}-{location}
+    // Max length: 30 + 80 + 10 + 80 + 3 separators = 203 chars (well under 255)
+    return `${scraperName}-${cleanTitle}-${dateStr}-${cleanLocation}`;
   }
 
   parseDate(dateString) {
