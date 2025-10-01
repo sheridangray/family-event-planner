@@ -65,7 +65,7 @@ Enterprise Family Event Planner
 │   │   ├── User Preferences │ Interaction History
 │   │   └── OAuth Tokens │ Multi-User Support
 │   ├── Automation & Monitoring
-│   │   ├── SMS Approvals │ Discovery Runs
+│   │   ├── Notifications │ Discovery Runs
 │   │   ├── Scraper Management │ Error Logs
 │   │   └── Performance Metrics │ Audit Trails
 │   └── Advanced Features
@@ -117,8 +117,8 @@ Enterprise Family Event Planner
 - **Dynamic Scoring Updates**: Real-time recalculation based on changing event conditions
 
 ### 📧 **Professional Email Workflow**
-- **Gmail OAuth Integration**: Secure, production-grade email service
-- **Smart Recipient Routing**: Environment-aware routing (Joyce production / Sheridan development)
+- **Gmail OAuth Integration**: Secure, production-grade email service with multi-user support
+- **Smart Recipient Routing**: Environment-aware routing for family members
 - **Rich Event Details**: Comprehensive venue information, ratings, costs, age appropriateness, special requirements
 - **Streamlined Approval Process**: Simple email reply "YES" or "NO" for instant processing
 - **Automated Calendar Creation**: OAuth-based Google Calendar event creation with attendees and reminders
@@ -180,7 +180,7 @@ Enterprise Family Event Planner
 
 ### 🔐 **Enterprise Security & Access Control**
 - **Google OAuth Integration**: Production-grade authentication with NextAuth.js
-- **Family-Only Access Control**: Restricted access to authorized family members (Joyce and Sheridan)
+- **Family-Only Access Control**: Restricted access to authorized family members
 - **Multi-User Session Management**: Secure JWT token handling with automatic refresh
 - **Role-Based Permissions**: Granular access control for different family member roles
 - **End-to-End Encryption**: HTTPS everywhere with secure header implementation
@@ -229,28 +229,6 @@ Enterprise Family Event Planner
   - Point-in-time recovery capabilities
   - Data encryption at rest and in transit
   - GDPR/CCPA compliant data handling and retention
-
-### 🔐 **Security Infrastructure**
-- **Network Security**: 
-  - HTTPS everywhere with strict transport security
-  - Security headers (CSP, HSTS, X-Frame-Options, etc.)
-  - CORS policy enforcement with origin validation
-  - Rate limiting and DDoS protection
-- **Authentication & Authorization**: 
-  - Google OAuth 2.0 with PKCE for secure authentication
-  - JWT token management with automatic refresh
-  - Family-only access control with email validation
-  - Session management with secure cookie handling
-- **Infrastructure Security**: 
-  - Container security with non-root user execution
-  - Environment variable encryption and secure storage
-  - Database security with connection encryption
-  - API key rotation and secure credential management
-- **Compliance & Privacy**: 
-  - GDPR compliance with data minimization principles
-  - CCPA compliance with privacy controls
-  - COPPA compliance for children's data protection
-  - Regular security assessments and penetration testing
 
 ## 🏗️ **Enterprise Technical Stack**
 
@@ -380,7 +358,7 @@ Enterprise Family Event Planner
 - **Node.js 20+** with npm
 - **PostgreSQL 16** database
 - **Google Cloud Project** with Calendar & Gmail APIs
-- **MCP Credentials** for Gmail integration
+- **Gmail OAuth credentials** for email integration
 
 ### 🔧 **Backend Setup**
 ```bash
@@ -416,56 +394,66 @@ npm run dev
 ### 🌐 **Production Deployment (Render)**
 Both backend and frontend auto-deploy from the `main` branch:
 - **Backend**: https://family-event-planner-backend.onrender.com
-- **Frontend**: https://family-event-planner-frontend.onrender.com
+- **Frontend**: https://sheridangray.com
 
 ## ⚙️ **Configuration**
 
 ### Environment Variables (`.env`)
-```bash
-# 👥 Family Configuration
-PARENT1_EMAIL=joyce.yan.zhang@gmail.com
-PARENT2_EMAIL=sheridan.gray@gmail.com
-PARENT1_NAME=Joyce Zhang
-PARENT2_NAME=Sheridan Gray
-CHILD1_NAME=Apollo Gray
-CHILD1_AGE=4
-CHILD2_NAME=Athena Gray  
-CHILD2_AGE=2
 
-# 🔐 Google OAuth & APIs
+#### **🔐 Core Authentication & APIs**
+```bash
+# Google OAuth & Gmail Integration
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
 MCP_GMAIL_CREDENTIALS_JSON={"installed":{...}}
 GOOGLE_OAUTH_TOKEN={"access_token":"..."}
-GOOGLE_CLIENT_ID=your_client_id
-GOOGLE_CLIENT_SECRET=your_client_secret
 
-# 📍 Location & Scheduling
-HOME_ADDRESS=San Francisco, CA
-MAX_DISTANCE_MILES=30
-WEEKDAY_EARLIEST_TIME=16:30
-WEEKEND_EARLIEST_TIME=08:00
-WEEKEND_NAP_START=12:00
-WEEKEND_NAP_END=14:00
+# Frontend Configuration
+FRONTEND_URL=https://sheridangray.com
+BACKEND_API_URL=https://family-event-planner-backend.onrender.com
+API_KEY=your_secure_api_key
 
-# 🎯 Event Preferences  
-MIN_CHILD_AGE=2
-MAX_CHILD_AGE=4
-MAX_COST_PER_EVENT=200
-MIN_ADVANCE_DAYS=2
-MAX_ADVANCE_MONTHS=6
+# NextAuth Configuration (Frontend)
+NEXTAUTH_URL=https://sheridangray.com
+NEXTAUTH_SECRET=your_nextauth_secret
+AUTH_TRUST_HOST=true
+ALLOWED_EMAILS=joyce.yan.zhang@gmail.com,sheridan.gray@gmail.com
+```
 
-# 🔍 Discovery Settings
-EVENTS_PER_WEEK_MIN=8
-EVENTS_PER_WEEK_MAX=20
-EVENTS_PER_DAY_MAX=3
-SCAN_FREQUENCY_HOURS=6
-
-# 🗄️ Database
+#### **🗄️ Database & Infrastructure**
+```bash
+# PostgreSQL Database
 DATABASE_URL=postgresql://user:pass@localhost:5432/family_event_planner
 
-# 🔑 API Keys
+# Application Settings
+NODE_ENV=production
+PORT=10000
+LOG_LEVEL=info
+```
+
+#### **🔑 External API Keys**
+```bash
+# LLM API for Age Evaluation
 TOGETHER_AI_API_KEY=your_llm_api_key
+
+# Weather API for Outdoor Event Filtering
 WEATHER_API_KEY=your_weather_key
-API_KEY=your_secure_api_key
+
+# Gmail Webhook Security
+GMAIL_WEBHOOK_JWT_SECRET=your_jwt_secret
+```
+
+#### **📧 Legacy Configuration (Deprecated)**
+*Note: Most family configuration has been moved to the database and is managed through the admin interface.*
+
+```bash
+# Family Emails (Required for OAuth)
+PARENT1_EMAIL=joyce.yan.zhang@gmail.com
+PARENT2_EMAIL=sheridan.gray@gmail.com
+
+# Twilio SMS (Legacy - Email is primary)
+TWILIO_PHONE_TO=+12063909727
+MCP_TWILIO_CREDENTIALS=your_twilio_credentials
 ```
 
 ## 🔄 **Automated Workflows**
@@ -743,7 +731,7 @@ External API Fails → Graceful fallback to manual processes
 - **Regular Backups**: Automated database backups with encryption
 
 ### Access Control
-- **Family-Only Access**: Restricted to Joyce and Sheridan email addresses
+- **Family-Only Access**: Restricted to authorized family members
 - **OAuth Authentication**: Google-based secure login system
 - **Session Management**: Secure JWT tokens with expiration
 - **API Key Protection**: Rate limiting and request validation
@@ -816,29 +804,6 @@ GET /api/automation/status
 - **Test safety scenarios** - verify payment protection works
 - **Code review required** - all changes reviewed for safety
 
-## 📈 **Roadmap & Future Enhancements**
-
-### Short Term (Next 3 months)
-- [ ] **Enhanced Mobile Experience**: Native mobile app with push notifications
-- [ ] **Smart Recommendations**: ML-powered personalization based on attendance history
-- [ ] **Event Reminders**: SMS/push notifications 1 hour before events
-- [ ] **Weather Integration**: Automatic event suggestions based on weather forecasts
-- [ ] **Social Features**: Share events with other Bay Area families
-
-### Medium Term (3-6 months)  
-- [ ] **Multi-City Support**: Expand beyond Bay Area to other family-friendly cities
-- [ ] **Advanced Calendar Intelligence**: Optimize scheduling based on travel time and preferences
-- [ ] **Venue Partnerships**: Direct integration with major venues for priority access
-- [ ] **Cost Optimization**: Budget tracking and cost-per-event analytics
-- [ ] **Event Reviews**: Family feedback system for event quality
-
-### Long Term (6+ months)
-- [ ] **AI Event Creation**: Generate custom events based on family interests
-- [ ] **Community Platform**: Connect with other families for group events
-- [ ] **Virtual Events**: Integration with online family activities and classes
-- [ ] **Travel Events**: Weekend getaways and vacation planning
-- [ ] **Educational Tracking**: Monitor children's learning and development through events
-
 ## 🏆 **Enterprise System Summary**
 
 ### **🎯 Production Status: CERTIFIED FOR ENTERPRISE DEPLOYMENT**
@@ -871,7 +836,7 @@ This Family Event Planner has evolved from a personal automation project into a 
 ## 📄 **License & Usage**
 
 ### **Personal/Family Use**
-This project is designed and optimized for **personal/family use** with comprehensive safety measures specifically configured for the Gray/Zhang family's event discovery needs.
+This project is designed and optimized for **personal/family use** with comprehensive safety measures specifically configured for the Gray family's event discovery needs.
 
 ### **Enterprise Adaptation**
 The system's **enterprise-grade architecture** makes it suitable for:
@@ -896,7 +861,7 @@ The system's **enterprise-grade architecture** makes it suitable for:
 
 ## 🌟 **Developer Acknowledgments**
 
-**🎉 Built with ❤️ for Apollo (4) and Athena (2) by the Gray family**
+**🎉 Built with ❤️ for the Gray family**
 
 ### **Technology Stack Excellence**
 - **Backend**: Node.js 20+ with enterprise patterns and safety-first architecture
@@ -919,4 +884,4 @@ The system's **enterprise-grade architecture** makes it suitable for:
 
 ---
 
-*Last updated: December 2024 | System version: 3.0.0 | Certification: Enterprise Ready*
+*Last updated: January 2025 | System version: 3.1.0 | Certification: Enterprise Ready*
