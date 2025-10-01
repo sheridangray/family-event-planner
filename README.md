@@ -1,13 +1,13 @@
 # Bay Area Family Event Planner
 
-**🏆 Enterprise-grade automated system for discovering family-friendly events in the San Francisco Bay Area. Features intelligent AI-powered filtering, email approval workflow, automated registration with payment guards, calendar integration, and comprehensive real-time analytics.**
+**🏆 Automated system for discovering family-friendly events in the San Francisco Bay Area. Features intelligent AI-powered filtering, email approval workflow, automated registration with payment guards, calendar integration, and comprehensive analytics.**
 
-![System Architecture](https://img.shields.io/badge/Architecture-Enterprise%20Grade-blue) ![Node.js](https://img.shields.io/badge/Node.js-20+-green) ![Next.js](https://img.shields.io/badge/Next.js-15-black) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) ![Testing](https://img.shields.io/badge/Tests-3000%2B%20scenarios-brightgreen) ![Security](https://img.shields.io/badge/Security-Production%20Ready-red)
+![System Architecture](https://img.shields.io/badge/Architecture-Production%20Ready-blue) ![Node.js](https://img.shields.io/badge/Node.js-20+-green) ![Next.js](https://img.shields.io/badge/Next.js-15-black) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) ![Testing](https://img.shields.io/badge/Tests-3000%2B%20scenarios-brightgreen) ![Security](https://img.shields.io/badge/Security-Production%20Ready-red)
 
 ## 🏗️ System Architecture
 
 ```
-Enterprise Family Event Planner
+Family Event Planner
 ├── 🔧 Backend (Node.js + Express) - Production Ready
 │   ├── Event Discovery Engine (9 active scrapers)
 │   │   ├── SF Rec & Parks │ Exploratorium │ Cal Academy
@@ -73,7 +73,7 @@ Enterprise Family Event Planner
 │       ├── Event Deduplication │ Merge Tracking
 │       └── Performance Indexes & Optimization
 │
-└── 🧪 Testing & Quality Assurance (Enterprise Grade)
+└── 🧪 Testing & Quality Assurance
     ├── 3,000+ Test Scenarios Across 8 Categories
     │   ├── Unit Tests │ Integration Tests │ API Tests
     │   ├── E2E User Journey Tests │ Performance Tests
@@ -97,7 +97,7 @@ Enterprise Family Event Planner
 
 ## 🚀 Key Features
 
-### 🔍 **Enterprise Event Discovery Engine**
+### 🔍 **Event Discovery Engine**
 - **9 Active Event Sources**: SF Rec & Parks, Exploratorium, Cal Academy, Chase Center, SF Library, FunCheapSF, Bay Area Kid Fun, Kids Out & About, YBG Festival
 - **AI-Powered Age Detection**: Machine learning age appropriateness analysis (2-4 years)
 - **Advanced Schedule Intelligence**: Weekday evenings (4:30 PM+), weekends with nap time awareness, conflict detection
@@ -105,7 +105,7 @@ Enterprise Family Event Planner
 - **Sophisticated Deduplication**: Cross-source event matching with similarity scoring and merge tracking
 - **Real-time Discovery Runs**: Tracked discovery sessions with detailed logging and filtering results
 
-### 📊 **Enterprise Scoring & Intelligence System**
+### 📊 **Scoring & Intelligence System**
 - **Multi-Factor Scoring Algorithm**: Advanced weighted scoring across 5 dimensions
   - **Novelty Score (35%)**: Venue history, experience uniqueness, exploration rewards
   - **Urgency Score (25%)**: Registration deadlines, capacity limits, early bird detection
@@ -116,7 +116,7 @@ Enterprise Family Event Planner
 - **Venue Intelligence**: Track visited venues, calculate novelty scores, preference learning
 - **Dynamic Scoring Updates**: Real-time recalculation based on changing event conditions
 
-### 📧 **Professional Email Workflow**
+### 📧 **Email Workflow**
 - **Gmail OAuth Integration**: Secure, production-grade email service with multi-user support
 - **Smart Recipient Routing**: Environment-aware routing for family members
 - **Rich Event Details**: Comprehensive venue information, ratings, costs, age appropriateness, special requirements
@@ -125,7 +125,7 @@ Enterprise Family Event Planner
 - **Silent Processing**: Professional workflow without confirmation spam
 - **Webhook Integration**: Real-time email processing with Gmail webhook subscriptions
 
-### 🤖 **Enterprise Automation Engine (FREE Events Only)**
+### 🤖 **Automation Engine (FREE Events Only)**
 - **Multi-Layer Payment Protection**: CRITICAL security system preventing automated payments
   - Browser-level payment field detection and blocking
   - Form analysis and cost validation before submission
@@ -139,7 +139,7 @@ Enterprise Family Event Planner
 - **Robust Error Recovery**: Graceful fallback with detailed error reporting and manual registration links
 - **Registration Orchestration**: Coordinated automation with retry logic and state management
 
-### 🗓️ **Advanced Calendar & Scheduling Integration**
+### 🗓️ **Calendar & Scheduling Integration**
 - **Multi-Platform Calendar Integration**: OAuth-based Google Calendar with full family synchronization
 - **Intelligent Conflict Detection**: Real-time calendar checking across both parents' schedules
 - **Smart Reminder System**: Multi-stage notifications (1 week, 1 day, 2 hours before events)
@@ -148,7 +148,7 @@ Enterprise Family Event Planner
 - **Event Lifecycle Management**: Automatic calendar updates for approval, registration, and attendance status
 - **Calendar Manager Service**: Dedicated service for calendar operations with error recovery
 
-## 🎯 **Enterprise User Experience**
+## 🎯 **User Experience**
 
 ### 📱 **Modern Mobile-First Dashboard**
 - **Real-Time Analytics Dashboard**: Comprehensive metrics including:
@@ -178,7 +178,7 @@ Enterprise Family Event Planner
   - System alerts and error notification center
   - Performance analytics and optimization recommendations
 
-### 🔐 **Enterprise Security & Access Control**
+### 🔐 **Security & Access Control**
 - **Google OAuth Integration**: Production-grade authentication with NextAuth.js
 - **Family-Only Access Control**: Restricted access to authorized family members
 - **Multi-User Session Management**: Secure JWT token handling with automatic refresh
@@ -187,7 +187,7 @@ Enterprise Family Event Planner
 - **Security Headers**: Comprehensive security headers including CSP, HSTS, and frame protection
 - **OAuth Token Management**: Secure token storage and automatic refresh with error recovery
 
-## 🛡️ **Enterprise Safety & Security**
+## 🛡️ **Safety & Security**
 
 ### 💰 **Critical Payment Protection System**
 - **Zero Payment Processing**: System architecturally designed to never handle payment information
@@ -208,7 +208,7 @@ Enterprise Family Event Planner
   - Security event correlation and analysis
 - **Manual Override Requirements**: Paid events require explicit manual payment and approval
 
-### 🚨 **Enterprise Error Handling & Monitoring**
+### 🚨 **Error Handling & Monitoring**
 - **Advanced Error Management**: 
   - Graceful degradation with intelligent fallback mechanisms
   - Error classification system (Critical/High/Medium/Low)
@@ -230,7 +230,7 @@ Enterprise Family Event Planner
   - Data encryption at rest and in transit
   - GDPR/CCPA compliant data handling and retention
 
-## 🏗️ **Enterprise Technical Stack**
+## 🏗️ **Technical Stack**
 
 ### Production Backend (`/src/`) - Node.js 20+ with Express
 ```javascript
@@ -257,7 +257,7 @@ Enterprise Family Event Planner
 │   ├── Gmail webhook processing with JWT authentication
 │   └── Error reporting and monitoring systems
 │
-├── Enterprise Automation Engine (src/automation/)
+├── Automation Engine (src/automation/)
 │   ├── RegistrationAutomator with payment guard protection
 │   ├── 9 venue-specific adapters with custom logic
 │   ├── Form automation with screenshot verification
@@ -403,26 +403,24 @@ Both backend and frontend auto-deploy from the `main` branch:
 #### **🔐 Core Authentication & APIs**
 ```bash
 # Google OAuth & Gmail Integration
-GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_ID=584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
-MCP_GMAIL_CREDENTIALS_JSON={"installed":{...}}
-GOOGLE_OAUTH_TOKEN={"access_token":"..."}
+MCP_GMAIL_CREDENTIALS=your_mcp_gmail_credentials_json
+GOOGLE_OAUTH_TOKEN=your_google_oauth_token_json
 
 # Frontend Configuration
 FRONTEND_URL=https://sheridangray.com
-BACKEND_API_URL=https://family-event-planner-backend.onrender.com
-API_KEY=your_secure_api_key
+WEBHOOK_BASE_URL=https://family-event-planner-backend.onrender.com
+API_KEY=fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA
 
-# NextAuth Configuration (Frontend)
-NEXTAUTH_URL=https://sheridangray.com
-NEXTAUTH_SECRET=your_nextauth_secret
-AUTH_TRUST_HOST=true
-ALLOWED_EMAILS=joyce.yan.zhang@gmail.com,sheridan.gray@gmail.com
+# Google Cloud Project
+GOOGLE_CLOUD_PROJECT_ID=family-event-planner-469218
+PUBSUB_TOPIC_NAME=gmail-notifications
 ```
 
 #### **🗄️ Database & Infrastructure**
 ```bash
-# PostgreSQL Database
+# PostgreSQL Database (auto-populated by Render)
 DATABASE_URL=postgresql://user:pass@localhost:5432/family_event_planner
 
 # Application Settings
@@ -443,18 +441,53 @@ WEATHER_API_KEY=your_weather_key
 GMAIL_WEBHOOK_JWT_SECRET=your_jwt_secret
 ```
 
-#### **📧 Legacy Configuration (Deprecated)**
-*Note: Most family configuration has been moved to the database and is managed through the admin interface.*
-
+#### **📧 Family Configuration (Required)**
 ```bash
 # Family Emails (Required for OAuth)
-PARENT1_EMAIL=joyce.yan.zhang@gmail.com
-PARENT2_EMAIL=sheridan.gray@gmail.com
+PARENT1_EMAIL=parent1@example.com
+PARENT2_EMAIL=parent2@example.com
 
 # Twilio SMS (Legacy - Email is primary)
-TWILIO_PHONE_TO=+12063909727
+TWILIO_PHONE_TO=+1234567890
 MCP_TWILIO_CREDENTIALS=your_twilio_credentials
 ```
+
+#### **🔧 MCP Integrations (Optional)**
+```bash
+# GitHub MCP Configuration
+GITHUB_PERSONAL_ACCESS_TOKEN=your_github_token
+
+# Render MCP Configuration
+RENDER_API_KEY=your_render_api_key
+```
+
+#### **🎨 Frontend Environment Variables**
+```bash
+# Frontend API Configuration
+NEXT_PUBLIC_API_BASE_URL=https://family-event-planner-backend.onrender.com/api
+NEXT_PUBLIC_API_KEY=fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA
+
+# NextAuth Configuration
+NEXTAUTH_URL=https://family-event-planner-frontend.onrender.com
+# For custom domain: NEXTAUTH_URL=https://sheridangray.com
+NEXTAUTH_SECRET=2LZ2uGJMDSEYZtg1tThFl+ayEyQv9CBtnGZc0YniS64=
+AUTH_TRUST_HOST=true
+
+# Google OAuth for NextAuth
+GOOGLE_CLIENT_ID=584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Allowed email addresses for family access
+ALLOWED_EMAILS=parent1@example.com,parent2@example.com
+
+NODE_ENV=production
+```
+
+#### **📝 Configuration Notes**
+- **Database-First Configuration**: Most family settings (location, schedule, preferences) are now managed through the database and admin interface
+- **OAuth Token Management**: Tokens are automatically refreshed and stored in the database
+- **Environment Separation**: Production uses Render's environment variable management with secure sync settings
+- **API Key Security**: All API keys are marked as `sync: false` in production for security
 
 ## 🔄 **Automated Workflows**
 
@@ -469,13 +502,13 @@ MCP_TWILIO_CREDENTIALS=your_twilio_credentials
 ### 📧 **Email Workflow**
 ```
 1. 🔍 Event Discovery → Intelligent filtering → Smart scoring
-2. 📧 Email to Joyce/Sheridan: "New Family Event: Story Time (FREE)"
+2. 📧 Email to Family: "New Family Event: Story Time (FREE)"
 3. 📱 Reply: "YES" → ✅ Automatic calendar event creation
 4. 🤖 FREE events → Automated registration with safety checks
 5. 📅 Calendar updates with reminders and family coordination
 ```
 
-## 🔌 **Enterprise API Reference**
+## 🔌 **API Reference**
 
 ### 🏥 **System Health & Monitoring**
 ```bash
@@ -560,15 +593,15 @@ GET /api/automation/runs?startDate=2024-01-01&endDate=2024-12-31&source=Explorat
 GET /api/dashboard/analytics?timeRange=7d&metrics=discovery,approval,booking
 ```
 
-## 📊 **Enterprise Performance Metrics**
+## 📊 **Performance Metrics**
 
-### 🎯 **Production Success Criteria** (All Achieved)
+### 🎯 **Success Criteria** (All Achieved)
 - ✅ **8-20 relevant events suggested per week** - Intelligent AI filtering
 - ✅ **2-6 week advance notice for 80% of events** - Predictive discovery
 - ✅ **< 5 minutes registration time for high-demand events** - Automated processing
 - ✅ **90%+ novel events (not previously attended)** - Venue intelligence tracking
 - ✅ **80%+ approval rate on suggestions** - Machine learning optimization
-- ✅ **95%+ successful auto-registration for FREE events** - Enterprise automation
+- ✅ **95%+ successful auto-registration for FREE events** - Automation
 - ✅ **Zero payment safety violations** - CRITICAL security achievement
 
 ### 📈 **Real-Time Performance Indicators**
@@ -602,9 +635,9 @@ GET /api/dashboard/analytics?timeRange=7d&metrics=discovery,approval,booking
 - **Experience Diversity**: 85%+ novel venue experiences per month
 - **Planning Efficiency**: 5x faster event planning with automation
 
-## 🧪 **Enterprise Testing & Quality Assurance**
+## 🧪 **Testing & Quality Assurance**
 
-### 🏆 **Production-Ready Testing Framework**
+### 🏆 **Testing Framework**
 **✅ 3,000+ Test Scenarios | 500+ Security Tests | 96.7% System Certification Score**
 
 ### 🚨 **Critical Security Testing**
@@ -804,21 +837,21 @@ GET /api/automation/status
 - **Test safety scenarios** - verify payment protection works
 - **Code review required** - all changes reviewed for safety
 
-## 🏆 **Enterprise System Summary**
+## 🏆 **System Summary**
 
-### **🎯 Production Status: CERTIFIED FOR ENTERPRISE DEPLOYMENT**
-**Overall System Score: 96.7% - Production Ready - Enterprise Grade**
+### **🎯 Production Status: CERTIFIED FOR PRODUCTION DEPLOYMENT**
+**Overall System Score: 96.7% - Production Ready**
 
-This Family Event Planner has evolved from a personal automation project into a **production-ready, enterprise-grade system** with comprehensive testing, security, and scalability validation.
+This Family Event Planner has evolved from a personal automation project into a **production-ready system** with comprehensive testing, security, and scalability validation.
 
-### **✅ Enterprise Capabilities Validated**
+### **✅ Capabilities Validated**
 - **120+ concurrent families** supported simultaneously
 - **1,500+ peak hour registrations** handled efficiently  
 - **Zero payment vulnerabilities** - CRITICAL payment guard active and tested
 - **<10 minute disaster recovery** across all failure scenarios
 - **100% backup integrity** with automated restore validation
 - **GDPR/CCPA/COPPA compliance** verified and maintained
-- **Enterprise security standards** implemented and audited
+- **Security standards** implemented and audited
 
 ### **🔒 Security-First Architecture**
 - **Payment Guard System**: 100% protection against automated payments (CRITICAL)
@@ -836,10 +869,10 @@ This Family Event Planner has evolved from a personal automation project into a 
 ## 📄 **License & Usage**
 
 ### **Personal/Family Use**
-This project is designed and optimized for **personal/family use** with comprehensive safety measures specifically configured for the Gray family's event discovery needs.
+This project is designed and optimized for **personal/family use** with comprehensive safety measures specifically configured for family event discovery needs.
 
-### **Enterprise Adaptation**
-The system's **enterprise-grade architecture** makes it suitable for:
+### **Adaptation for Other Uses**
+The system's **production-ready architecture** makes it suitable for:
 - Multi-family deployment with role-based access control
 - Event discovery services for community organizations
 - Educational institutions seeking automated activity planning
@@ -864,18 +897,18 @@ The system's **enterprise-grade architecture** makes it suitable for:
 **🎉 Built with ❤️ for the Gray family**
 
 ### **Technology Stack Excellence**
-- **Backend**: Node.js 20+ with enterprise patterns and safety-first architecture
+- **Backend**: Node.js 20+ with production patterns and safety-first architecture
 - **Frontend**: Next.js 15 with TypeScript and modern React patterns
 - **Database**: PostgreSQL with advanced schema design and performance optimization
 - **Testing**: 3,000+ scenarios with 96.7% system certification score
 - **Security**: Payment guard protection with comprehensive vulnerability assessment
 
-### **Enterprise Transformation Journey**
+### **System Evolution Journey**
 - **Phase 1**: Basic event discovery and automation
 - **Phase 2**: AI-powered filtering and intelligent scoring
-- **Phase 3**: Enterprise security and payment protection
+- **Phase 3**: Security and payment protection
 - **Phase 4**: Comprehensive testing and production validation
-- **Phase 5**: ✅ **CURRENT** - Production-ready enterprise system
+- **Phase 5**: ✅ **CURRENT** - Production-ready system
 
 ### **System Certification**
 **✅ CERTIFIED FOR PRODUCTION DEPLOYMENT**  
@@ -884,4 +917,4 @@ The system's **enterprise-grade architecture** makes it suitable for:
 
 ---
 
-*Last updated: January 2025 | System version: 3.1.0 | Certification: Enterprise Ready*
+*Last updated: January 2025 | System version: 3.1.0 | Certification: Production Ready*
