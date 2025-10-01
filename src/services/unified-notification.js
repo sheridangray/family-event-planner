@@ -331,7 +331,7 @@ class UnifiedNotificationService {
     if (method !== "email" && method !== null) {
       this.logger.warn(`Unsupported method '${method}', checking email`);
     }
-    
+
     try {
       const emailManager = await this._getEmailManager();
       return emailManager.shouldSendEvent();

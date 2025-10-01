@@ -1,6 +1,6 @@
-const { Pool } = require('pg');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require("pg");
+const fs = require("fs");
+const path = require("path");
 
 class PostgresDatabase {
   constructor() {
@@ -9,17 +9,22 @@ class PostgresDatabase {
 
   async init() {
     const connectionString = process.env.DATABASE_URL;
-    
+
     if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable is required for PostgreSQL');
+      throw new Error(
+        "DATABASE_URL environment variable is required for PostgreSQL"
+      );
     }
 
     this.pool = new Pool({
       connectionString,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      ssl:
+        process.env.NODE_ENV === "production"
+          ? { rejectUnauthorized: false }
+          : false,
     });
 
-    console.log('Connected to PostgreSQL database');
+    console.log("Connected to PostgreSQL database");
     await this.createTables();
   }
 
@@ -190,8 +195,8 @@ class PostgresDatabase {
     `;
 
     await this.pool.query(createTablesSQL);
-    console.log('Database tables created successfully');
-    
+    console.log("Database tables created successfully");
+
     // Run migrations for existing databases to add missing columns
     await this.runMigrations();
   }
@@ -216,9 +221,9 @@ class PostgresDatabase {
         -- Add discovery run tracking field
         ALTER TABLE events ADD COLUMN IF NOT EXISTS discovery_run_id INTEGER;
       `;
-      
+
       await this.pool.query(addColumnsSQL);
-      
+
       // Add indexes after columns are created
       const addIndexesSQL = `
         -- Create indexes for new columns
@@ -227,9 +232,9 @@ class PostgresDatabase {
         CREATE INDEX IF NOT EXISTS idx_events_merge_count ON events(merge_count);
         CREATE INDEX IF NOT EXISTS idx_events_discovery_run_id ON events(discovery_run_id);
       `;
-      
+
       await this.pool.query(addIndexesSQL);
-      
+
       // Update existing events to have default values for new columns
       const updateDefaultsSQL = `
         UPDATE events SET 
@@ -238,12 +243,15 @@ class PostgresDatabase {
           fingerprint = id
         WHERE sources IS NULL;
       `;
-      
+
       await this.pool.query(updateDefaultsSQL);
-      
-      console.log('Database migrations completed successfully');
+
+      console.log("Database migrations completed successfully");
     } catch (error) {
-      console.warn('Migration warning (may be expected if columns already exist):', error.message);
+      console.warn(
+        "Migration warning (may be expected if columns already exist):",
+        error.message
+      );
     }
   }
 
@@ -254,29 +262,32 @@ class PostgresDatabase {
    */
   validateEventData(event) {
     const validated = { ...event };
-    
+
     // Required fields validation
-    if (!validated.id || typeof validated.id !== 'string') {
-      throw new Error('Event ID is required and must be a string');
+    if (!validated.id || typeof validated.id !== "string") {
+      throw new Error("Event ID is required and must be a string");
     }
-    if (!validated.source || typeof validated.source !== 'string') {
-      throw new Error('Event source is required and must be a string');
+    if (!validated.source || typeof validated.source !== "string") {
+      throw new Error("Event source is required and must be a string");
     }
-    if (!validated.title || typeof validated.title !== 'string') {
-      throw new Error('Event title is required and must be a string');
+    if (!validated.title || typeof validated.title !== "string") {
+      throw new Error("Event title is required and must be a string");
     }
     if (!validated.date) {
-      throw new Error('Event date is required');
+      throw new Error("Event date is required");
     }
-    
+
     // String field length limits based on database schema
     validated.id = String(validated.id).substring(0, 255);
     validated.source = String(validated.source).substring(0, 100);
     validated.title = String(validated.title).substring(0, 2000); // TEXT field, reasonable limit
-    
+
     // Optional string fields with truncation
     if (validated.location?.address) {
-      validated.location.address = String(validated.location.address).substring(0, 2000);
+      validated.location.address = String(validated.location.address).substring(
+        0,
+        2000
+      );
     }
     if (validated.registrationUrl || validated.registration_url) {
       const url = validated.registrationUrl || validated.registration_url;
@@ -288,9 +299,12 @@ class PostgresDatabase {
     if (validated.imageUrl) {
       validated.imageUrl = String(validated.imageUrl).substring(0, 2000);
     }
-    
+
     // Numeric field validation
-    if (validated.location?.lat !== null && validated.location?.lat !== undefined) {
+    if (
+      validated.location?.lat !== null &&
+      validated.location?.lat !== undefined
+    ) {
       const lat = parseFloat(validated.location.lat);
       if (isNaN(lat) || lat < -90 || lat > 90) {
         validated.location.lat = null; // Invalid latitude
@@ -298,8 +312,11 @@ class PostgresDatabase {
         validated.location.lat = lat;
       }
     }
-    
-    if (validated.location?.lng !== null && validated.location?.lng !== undefined) {
+
+    if (
+      validated.location?.lng !== null &&
+      validated.location?.lng !== undefined
+    ) {
       const lng = parseFloat(validated.location.lng);
       if (isNaN(lng) || lng < -180 || lng > 180) {
         validated.location.lng = null; // Invalid longitude
@@ -307,45 +324,64 @@ class PostgresDatabase {
         validated.location.lng = lng;
       }
     }
-    
+
     // Age range validation
-    if (validated.ageRange?.min !== null && validated.ageRange?.min !== undefined) {
+    if (
+      validated.ageRange?.min !== null &&
+      validated.ageRange?.min !== undefined
+    ) {
       const ageMin = parseInt(validated.ageRange.min);
-      validated.ageRange.min = isNaN(ageMin) || ageMin < 0 ? 0 : Math.min(ageMin, 100);
+      validated.ageRange.min =
+        isNaN(ageMin) || ageMin < 0 ? 0 : Math.min(ageMin, 100);
     }
-    
-    if (validated.ageRange?.max !== null && validated.ageRange?.max !== undefined) {
+
+    if (
+      validated.ageRange?.max !== null &&
+      validated.ageRange?.max !== undefined
+    ) {
       const ageMax = parseInt(validated.ageRange.max);
-      validated.ageRange.max = isNaN(ageMax) || ageMax < 0 ? 18 : Math.min(ageMax, 100);
+      validated.ageRange.max =
+        isNaN(ageMax) || ageMax < 0 ? 18 : Math.min(ageMax, 100);
     }
-    
+
     // Cost validation
     if (validated.cost !== null && validated.cost !== undefined) {
       const cost = parseFloat(validated.cost);
-      validated.cost = isNaN(cost) || cost < 0 ? 0 : Math.min(cost, 99999999.99); // DECIMAL(10,2) limit
+      validated.cost =
+        isNaN(cost) || cost < 0 ? 0 : Math.min(cost, 99999999.99); // DECIMAL(10,2) limit
     }
-    
+
     // Capacity validation
-    if (validated.currentCapacity?.available !== null && validated.currentCapacity?.available !== undefined) {
+    if (
+      validated.currentCapacity?.available !== null &&
+      validated.currentCapacity?.available !== undefined
+    ) {
       const available = parseInt(validated.currentCapacity.available);
-      validated.currentCapacity.available = isNaN(available) || available < 0 ? null : Math.min(available, 2147483647); // INTEGER limit
+      validated.currentCapacity.available =
+        isNaN(available) || available < 0
+          ? null
+          : Math.min(available, 2147483647); // INTEGER limit
     }
-    
-    if (validated.currentCapacity?.total !== null && validated.currentCapacity?.total !== undefined) {
+
+    if (
+      validated.currentCapacity?.total !== null &&
+      validated.currentCapacity?.total !== undefined
+    ) {
       const total = parseInt(validated.currentCapacity.total);
-      validated.currentCapacity.total = isNaN(total) || total < 0 ? null : Math.min(total, 2147483647); // INTEGER limit
+      validated.currentCapacity.total =
+        isNaN(total) || total < 0 ? null : Math.min(total, 2147483647); // INTEGER limit
     }
-    
+
     // Date validation
     try {
       validated.date = new Date(validated.date);
       if (isNaN(validated.date.getTime())) {
-        throw new Error('Invalid event date');
+        throw new Error("Invalid event date");
       }
     } catch (error) {
       throw new Error(`Invalid event date: ${error.message}`);
     }
-    
+
     // Registration opens date validation
     if (validated.registrationOpens) {
       try {
@@ -357,20 +393,30 @@ class PostgresDatabase {
         validated.registrationOpens = null;
       }
     }
-    
+
     // Status validation
-    const validStatuses = ['discovered', 'proposed', 'approved', 'registering', 'registered', 'manual_registration_sent', 'registration_failed', 'rejected', 'cancelled'];
+    const validStatuses = [
+      "discovered",
+      "proposed",
+      "approved",
+      "registering",
+      "registered",
+      "manual_registration_sent",
+      "registration_failed",
+      "rejected",
+      "cancelled",
+    ];
     if (validated.status && !validStatuses.includes(validated.status)) {
-      validated.status = 'discovered'; // Default to discovered if invalid
+      validated.status = "discovered"; // Default to discovered if invalid
     }
-    
+
     return validated;
   }
 
   async saveEvent(event) {
     // Validate and sanitize event data
     const validatedEvent = this.validateEventData(event);
-    
+
     const sql = `
       INSERT INTO events (
         id, source, title, date, location_address, location_lat, location_lng,
@@ -388,14 +434,28 @@ class PostgresDatabase {
         updated_at = CURRENT_TIMESTAMP
       RETURNING id
     `;
-    
+
     const params = [
-      validatedEvent.id, validatedEvent.source, validatedEvent.title, validatedEvent.date, validatedEvent.location?.address,
-      validatedEvent.location?.lat, validatedEvent.location?.lng, validatedEvent.ageRange?.min, validatedEvent.ageRange?.max,
-      validatedEvent.cost, validatedEvent.registrationUrl || validatedEvent.registration_url, validatedEvent.registrationOpens,
-      validatedEvent.currentCapacity?.available, validatedEvent.currentCapacity?.total,
-      validatedEvent.description, validatedEvent.imageUrl, validatedEvent.status || 'discovered',
-      validatedEvent.isRecurring || false, validatedEvent.previouslyAttended || false, validatedEvent.discovery_run_id || null
+      validatedEvent.id,
+      validatedEvent.source,
+      validatedEvent.title,
+      validatedEvent.date,
+      validatedEvent.location?.address,
+      validatedEvent.location?.lat,
+      validatedEvent.location?.lng,
+      validatedEvent.ageRange?.min,
+      validatedEvent.ageRange?.max,
+      validatedEvent.cost,
+      validatedEvent.registrationUrl || validatedEvent.registration_url,
+      validatedEvent.registrationOpens,
+      validatedEvent.currentCapacity?.available,
+      validatedEvent.currentCapacity?.total,
+      validatedEvent.description,
+      validatedEvent.imageUrl,
+      validatedEvent.status || "discovered",
+      validatedEvent.isRecurring || false,
+      validatedEvent.previouslyAttended || false,
+      validatedEvent.discovery_run_id || null,
     ];
 
     const result = await this.pool.query(sql, params);
@@ -415,10 +475,14 @@ class PostgresDatabase {
         total_score = EXCLUDED.total_score
       RETURNING id
     `;
-    
+
     const params = [
-      eventId, scores.noveltyScore, scores.urgencyScore, 
-      scores.socialScore, scores.matchScore, scores.totalScore
+      eventId,
+      scores.noveltyScore,
+      scores.urgencyScore,
+      scores.socialScore,
+      scores.matchScore,
+      scores.totalScore,
     ];
 
     const result = await this.pool.query(sql, params);
@@ -471,7 +535,14 @@ class PostgresDatabase {
   /**
    * Save a notification (email or SMS) to the unified notifications table
    */
-  async saveNotification(eventId, notificationType, recipient, subject, messageContent, messageId = null) {
+  async saveNotification(
+    eventId,
+    notificationType,
+    recipient,
+    subject,
+    messageContent,
+    messageId = null
+  ) {
     const sql = `
       INSERT INTO notifications (
         event_id, notification_type, recipient, subject, 
@@ -480,7 +551,14 @@ class PostgresDatabase {
       RETURNING id
     `;
 
-    const params = [eventId, notificationType, recipient, subject, messageContent, messageId];
+    const params = [
+      eventId,
+      notificationType,
+      recipient,
+      subject,
+      messageContent,
+      messageId,
+    ];
     const result = await this.pool.query(sql, params);
     return result.rows[0]?.id;
   }
@@ -496,7 +574,12 @@ class PostgresDatabase {
       WHERE id = $4
     `;
 
-    const result = await this.pool.query(sql, [response, responseStatus, responseStatus, notificationId]);
+    const result = await this.pool.query(sql, [
+      response,
+      responseStatus,
+      responseStatus,
+      notificationId,
+    ]);
     return result.rowCount;
   }
 
@@ -512,14 +595,14 @@ class PostgresDatabase {
       AND n.status IN ('sent', 'pending')
       AND n.created_at + INTERVAL '24 hours' > NOW()
     `;
-    
+
     const params = [recipient];
-    
+
     if (notificationType) {
       sql += ` AND n.notification_type = $2`;
       params.push(notificationType);
     }
-    
+
     sql += ` ORDER BY n.created_at DESC`;
 
     const result = await this.pool.query(sql, params);
@@ -535,7 +618,7 @@ class PostgresDatabase {
       WHERE event_id = $1 
       ORDER BY created_at DESC
     `;
-    
+
     const result = await this.pool.query(sql, [eventId]);
     return result.rows;
   }
@@ -554,7 +637,14 @@ class PostgresDatabase {
     return result.rowCount;
   }
 
-  async saveRegistration(eventId, success, confirmationNumber, errorMessage, screenshotPath, paymentInfo) {
+  async saveRegistration(
+    eventId,
+    success,
+    confirmationNumber,
+    errorMessage,
+    screenshotPath,
+    paymentInfo
+  ) {
     const sql = `
       INSERT INTO registrations (
         event_id, success, confirmation_number, error_message, 
@@ -564,8 +654,14 @@ class PostgresDatabase {
     `;
 
     const params = [
-      eventId, success, confirmationNumber, errorMessage, screenshotPath,
-      paymentInfo?.required || false, paymentInfo?.amount || 0, paymentInfo?.completed || false
+      eventId,
+      success,
+      confirmationNumber,
+      errorMessage,
+      screenshotPath,
+      paymentInfo?.required || false,
+      paymentInfo?.amount || 0,
+      paymentInfo?.completed || false,
     ];
 
     const result = await this.pool.query(sql, params);
@@ -598,21 +694,21 @@ class PostgresDatabase {
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id
     `;
-    
+
     const params = [
       member.name,
       member.email || null,
       member.phone || null,
       member.birthdate,
       member.role,
-      member.emergency_contact || false
+      member.emergency_contact || false,
     ];
-    
+
     const result = await this.pool.query(sql, params);
     return result.rows[0].id;
   }
 
-  async getRegistrationStats(timeframe = '24 hours') {
+  async getRegistrationStats(timeframe = "24 hours") {
     const sql = `
       SELECT 
         COUNT(*) as total_attempts,
@@ -625,20 +721,20 @@ class PostgresDatabase {
       FROM registrations 
       WHERE created_at >= NOW() - INTERVAL '${timeframe}'
     `;
-    
+
     const result = await this.pool.query(sql);
     const stats = result.rows[0] || {};
-    
+
     return {
       totalAttempts: parseInt(stats.total_attempts) || 0,
       successful: parseInt(stats.successful) || 0,
       failed: parseInt(stats.failed) || 0,
-      successRate: parseFloat(stats.success_rate) || 100
+      successRate: parseFloat(stats.success_rate) || 100,
     };
   }
 
   async getFamilyMembers(activeOnly = true) {
-    const sql = activeOnly 
+    const sql = activeOnly
       ? `SELECT * FROM family_members WHERE active = true ORDER BY role, birthdate`
       : `SELECT * FROM family_members ORDER BY role, birthdate`;
     const result = await this.pool.query(sql);
@@ -646,7 +742,7 @@ class PostgresDatabase {
   }
 
   async getFamilyMembersByRole(role, activeOnly = true) {
-    const sql = activeOnly 
+    const sql = activeOnly
       ? `SELECT * FROM family_members WHERE role = $1 AND active = true ORDER BY birthdate`
       : `SELECT * FROM family_members WHERE role = $1 ORDER BY birthdate`;
     const result = await this.pool.query(sql, [role]);
@@ -656,27 +752,34 @@ class PostgresDatabase {
   async updateFamilyMember(id, updates) {
     const setClause = Object.keys(updates)
       .map((key, index) => `${key} = $${index + 2}`)
-      .join(', ');
-    
+      .join(", ");
+
     const sql = `
       UPDATE family_members 
       SET ${setClause}, updated_at = CURRENT_TIMESTAMP 
       WHERE id = $1
       RETURNING id
     `;
-    
+
     const params = [id, ...Object.values(updates)];
     const result = await this.pool.query(sql, params);
     return result.rowCount;
   }
 
-  async recordEventMerge(primaryEventId, mergedEvent, similarityScore, mergeType) {
+  async recordEventMerge(
+    primaryEventId,
+    mergedEvent,
+    similarityScore,
+    mergeType
+  ) {
     // First check if the primary event exists to avoid foreign key constraint violations
     const checkEventSql = `SELECT id FROM events WHERE id = $1`;
     const eventExists = await this.pool.query(checkEventSql, [primaryEventId]);
-    
+
     if (eventExists.rows.length === 0) {
-      this.logger.warn(`Cannot record merge: primary event ${primaryEventId} does not exist in database`);
+      this.logger.warn(
+        `Cannot record merge: primary event ${primaryEventId} does not exist in database`
+      );
       return null; // Return null instead of failing
     }
 
@@ -687,13 +790,13 @@ class PostgresDatabase {
       ) VALUES ($1, $2, $3, $4, $5)
       RETURNING id
     `;
-    
+
     const params = [
       primaryEventId,
       mergedEvent.id,
       JSON.stringify(mergedEvent),
       similarityScore,
-      mergeType
+      mergeType,
     ];
 
     try {
@@ -703,7 +806,7 @@ class PostgresDatabase {
       this.logger.warn(`Failed to record event merge: ${error.message}`, {
         primaryEventId,
         mergedEventId: mergedEvent.id,
-        mergeType
+        mergeType,
       });
       return null; // Return null instead of throwing
     }
@@ -718,21 +821,22 @@ class PostgresDatabase {
     `;
 
     const result = await this.pool.query(sql, [eventId, limit]);
-    
-    return result.rows.map(row => ({
+
+    return result.rows.map((row) => ({
       ...row,
-      mergedEventData: JSON.parse(row.merged_event_data)
+      mergedEventData: JSON.parse(row.merged_event_data),
     }));
   }
 
   async getEventById(id) {
-    const sql = 'SELECT * FROM events WHERE id = $1';
+    const sql = "SELECT * FROM events WHERE id = $1";
     const result = await this.pool.query(sql, [id]);
     return result.rows[0] || null;
   }
 
   async getEventsInDateRange(startDate, endDate) {
-    const sql = 'SELECT * FROM events WHERE date BETWEEN $1 AND $2 ORDER BY date';
+    const sql =
+      "SELECT * FROM events WHERE date BETWEEN $1 AND $2 ORDER BY date";
     const result = await this.pool.query(sql, [startDate, endDate]);
     return result.rows;
   }
@@ -750,13 +854,15 @@ class PostgresDatabase {
   }
 
   async getApprovalsByStatus(status) {
-    const sql = 'SELECT * FROM sms_approvals WHERE status = $1 ORDER BY created_at DESC';
+    const sql =
+      "SELECT * FROM sms_approvals WHERE status = $1 ORDER BY created_at DESC";
     const result = await this.pool.query(sql, [status]);
     return result.rows;
   }
 
   async getRegistrationHistory(eventId) {
-    const sql = 'SELECT * FROM registrations WHERE event_id = $1 ORDER BY created_at DESC';
+    const sql =
+      "SELECT * FROM registrations WHERE event_id = $1 ORDER BY created_at DESC";
     const result = await this.pool.query(sql, [eventId]);
     return result.rows;
   }
@@ -775,19 +881,19 @@ class PostgresDatabase {
   }
 
   async hasVisitedVenue(venueName) {
-    const sql = 'SELECT visited FROM venues WHERE name = $1';
+    const sql = "SELECT visited FROM venues WHERE name = $1";
     const result = await this.pool.query(sql, [venueName]);
     return result.rows[0]?.visited || false;
   }
 
   async getVenueVisitCount(venueName) {
-    const sql = 'SELECT visit_count FROM venues WHERE name = $1';
+    const sql = "SELECT visit_count FROM venues WHERE name = $1";
     const result = await this.pool.query(sql, [venueName]);
     return result.rows[0]?.visit_count || 0;
   }
 
   async cleanupOldEvents(daysToKeep = 90) {
-    const sql = 'DELETE FROM events WHERE created_at < NOW() - INTERVAL $1 day';
+    const sql = "DELETE FROM events WHERE created_at < NOW() - INTERVAL $1 day";
     const result = await this.pool.query(sql, [daysToKeep]);
     return result.rowCount;
   }
@@ -825,14 +931,19 @@ class PostgresDatabase {
       RETURNING id
     `;
     const result = await this.pool.query(sql, [
-      member.name, member.email, member.phone, member.birthdate,
-      member.role, member.emergencyContact || false, member.active !== false
+      member.name,
+      member.email,
+      member.phone,
+      member.birthdate,
+      member.role,
+      member.emergencyContact || false,
+      member.active !== false,
     ]);
     return result.rows[0].id;
   }
 
   async getFamilyMemberById(id) {
-    const sql = 'SELECT * FROM family_members WHERE id = $1';
+    const sql = "SELECT * FROM family_members WHERE id = $1";
     const result = await this.pool.query(sql, [id]);
     return result.rows[0] || null;
   }
@@ -844,10 +955,10 @@ class PostgresDatabase {
       LIMIT $1
     `;
     const result = await this.pool.query(sql, [limit]);
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       ...row,
       event: JSON.parse(row.event_data),
-      metadata: row.metadata ? JSON.parse(row.metadata) : null
+      metadata: row.metadata ? JSON.parse(row.metadata) : null,
     }));
   }
 
@@ -867,8 +978,13 @@ class PostgresDatabase {
       RETURNING id
     `;
     const result = await this.pool.query(sql, [
-      location, date, weatherData.temperature, weatherData.condition,
-      weatherData.precipitation, weatherData.windSpeed, weatherData.isOutdoorFriendly
+      location,
+      date,
+      weatherData.temperature,
+      weatherData.condition,
+      weatherData.precipitation,
+      weatherData.windSpeed,
+      weatherData.isOutdoorFriendly,
     ]);
     return result.rows[0].id;
   }
@@ -880,18 +996,18 @@ class PostgresDatabase {
       AND fetched_at > NOW() - INTERVAL '6 hours'
     `;
     const result = await this.pool.query(sql, [location, date]);
-    
+
     if (result.rows.length === 0) {
       return null;
     }
-    
+
     const row = result.rows[0];
     return {
       temperature: parseFloat(row.temperature),
       condition: row.condition,
       precipitation: parseFloat(row.precipitation),
       windSpeed: parseFloat(row.wind_speed),
-      isOutdoorFriendly: row.is_outdoor_friendly
+      isOutdoorFriendly: row.is_outdoor_friendly,
     };
   }
 
@@ -902,12 +1018,12 @@ class PostgresDatabase {
   async close() {
     if (this.pool) {
       await this.pool.end();
-      console.log('Database connection closed');
+      console.log("Database connection closed");
     }
   }
 
   // Discovery Runs methods
-  async createDiscoveryRun(triggerType = 'manual') {
+  async createDiscoveryRun(triggerType = "manual") {
     const sql = `
       INSERT INTO discovery_runs (trigger_type, started_at, status)
       VALUES ($1, CURRENT_TIMESTAMP, 'running')
@@ -932,7 +1048,7 @@ class PostgresDatabase {
 
     const sql = `
       UPDATE discovery_runs 
-      SET ${updateFields.join(', ')}, completed_at = CURRENT_TIMESTAMP
+      SET ${updateFields.join(", ")}, completed_at = CURRENT_TIMESTAMP
       WHERE id = $${paramCounter}
     `;
     values.push(runId);
@@ -961,7 +1077,14 @@ class PostgresDatabase {
   }
 
   // Discovered Events methods
-  async saveDiscoveredEvent(discoveryRunId, scraperName, event, isDuplicate = false, duplicateOf = null, filterResults = null) {
+  async saveDiscoveredEvent(
+    discoveryRunId,
+    scraperName,
+    event,
+    isDuplicate = false,
+    duplicateOf = null,
+    filterResults = null
+  ) {
     const sql = `
       INSERT INTO discovered_events (
         discovery_run_id, scraper_name, event_id, event_title, event_date, 
@@ -980,7 +1103,7 @@ class PostgresDatabase {
       JSON.stringify(event),
       isDuplicate,
       duplicateOf,
-      filterResults ? JSON.stringify(filterResults) : null
+      filterResults ? JSON.stringify(filterResults) : null,
     ]);
     return result.rows[0].id;
   }
@@ -1007,21 +1130,23 @@ class PostgresDatabase {
 
   // ===== OAuth Token Management Methods =====
 
-  async getOAuthTokens(userId, provider = 'google') {
+  async getOAuthTokens(userId, provider = "google") {
     const sql = `
       SELECT * FROM oauth_tokens 
       WHERE user_id = $1 AND provider = $2
     `;
     const result = await this.pool.query(sql, [userId, provider]);
-    
+
     if (result.rows.length === 0) {
-      throw new Error(`No OAuth tokens found for user ${userId} with provider ${provider}`);
+      throw new Error(
+        `No OAuth tokens found for user ${userId} with provider ${provider}`
+      );
     }
-    
+
     const row = result.rows[0];
     return {
       ...row,
-      expiry_date: parseInt(row.expiry_date) // Ensure it's a number for JavaScript Date
+      expiry_date: parseInt(row.expiry_date), // Ensure it's a number for JavaScript Date
     };
   }
 
@@ -1039,17 +1164,17 @@ class PostgresDatabase {
         updated_at = NOW()
       RETURNING id
     `;
-    
+
     const result = await this.pool.query(sql, [
-      userId, 
-      provider, 
-      tokens.access_token, 
-      tokens.refresh_token, 
-      tokens.token_type || 'Bearer', 
-      tokens.scope, 
-      tokens.expiry_date
+      userId,
+      provider,
+      tokens.access_token,
+      tokens.refresh_token,
+      tokens.token_type || "Bearer",
+      tokens.scope,
+      tokens.expiry_date,
     ]);
-    
+
     return result.rows[0].id;
   }
 
@@ -1060,31 +1185,33 @@ class PostgresDatabase {
       WHERE user_id = $1 AND provider = $2
       RETURNING id
     `;
-    
+
     const result = await this.pool.query(sql, [
-      userId, 
-      provider, 
-      tokens.access_token, 
-      tokens.refresh_token, 
-      tokens.token_type || 'Bearer', 
-      tokens.scope, 
-      tokens.expiry_date
+      userId,
+      provider,
+      tokens.access_token,
+      tokens.refresh_token,
+      tokens.token_type || "Bearer",
+      tokens.scope,
+      tokens.expiry_date,
     ]);
-    
+
     if (result.rows.length === 0) {
-      throw new Error(`No OAuth tokens found to update for user ${userId} with provider ${provider}`);
+      throw new Error(
+        `No OAuth tokens found to update for user ${userId} with provider ${provider}`
+      );
     }
-    
+
     return result.rows[0].id;
   }
 
-  async deleteOAuthTokens(userId, provider = 'google') {
+  async deleteOAuthTokens(userId, provider = "google") {
     const sql = `DELETE FROM oauth_tokens WHERE user_id = $1 AND provider = $2`;
     const result = await this.pool.query(sql, [userId, provider]);
     return result.rowCount > 0;
   }
 
-  async isUserAuthenticated(userId, provider = 'google') {
+  async isUserAuthenticated(userId, provider = "google") {
     try {
       const sql = `
         SELECT access_token, refresh_token, expiry_date 
@@ -1092,40 +1219,43 @@ class PostgresDatabase {
         WHERE user_id = $1 AND provider = $2
       `;
       const result = await this.pool.query(sql, [userId, provider]);
-      
+
       if (result.rows.length === 0) {
         return false;
       }
-      
+
       const token = result.rows[0];
-      
+
       // Check if token is not expired (with 5 minute buffer)
       const now = Date.now();
       const buffer = 5 * 60 * 1000; // 5 minutes
-      const isValid = now < (token.expiry_date - buffer);
-      
+      const isValid = now < token.expiry_date - buffer;
+
       // If expired but we have a refresh token, trigger auto-refresh via GmailClient
       if (!isValid && token.refresh_token) {
         try {
-          const { GmailClient } = require('../mcp/gmail-client');
-          const Database = require('../database');
-          
+          const { GmailClient } = require("../mcp/gmail-client");
+          const Database = require("../database");
+
           // Get logger from global or use console
           const logger = global.appLogger || console;
-          
+
           const database = new Database();
           await database.init();
           const gmailClient = new GmailClient(logger, database);
-          
+
           // This will auto-refresh and save to database
           const refreshed = await gmailClient.isUserAuthenticated(userId);
           return refreshed;
         } catch (refreshError) {
-          console.error(`Failed to auto-refresh token for user ${userId}:`, refreshError.message);
+          console.error(
+            `Failed to auto-refresh token for user ${userId}:`,
+            refreshError.message
+          );
           return false;
         }
       }
-      
+
       return isValid;
     } catch (error) {
       return false;
@@ -1141,24 +1271,28 @@ class PostgresDatabase {
       WHERE u.active = true
       ORDER BY u.id
     `;
-    
+
     const result = await this.pool.query(sql);
-    
+
     // Use the auto-refresh version of isUserAuthenticated for each user
     const statusPromises = result.rows.map(async (row) => {
-      const isAuthenticated = row.expiry_date ? await this.isUserAuthenticated(row.id, 'google') : false;
-      
+      const isAuthenticated = row.expiry_date
+        ? await this.isUserAuthenticated(row.id, "google")
+        : false;
+
       return {
         userId: row.id,
         email: row.email,
         name: row.name,
         role: row.role,
         isAuthenticated: isAuthenticated,
-        tokenExpiryDate: row.expiry_date ? new Date(parseInt(row.expiry_date)) : null,
-        lastUpdated: row.updated_at
+        tokenExpiryDate: row.expiry_date
+          ? new Date(parseInt(row.expiry_date))
+          : null,
+        lastUpdated: row.updated_at,
       };
     });
-    
+
     return await Promise.all(statusPromises);
   }
 
@@ -1168,17 +1302,29 @@ class PostgresDatabase {
     return result.rows.length > 0 ? result.rows[0].id : null;
   }
 
-  async logOAuthActivity(userId, action, provider, success, errorMessage = null) {
+  async logOAuthActivity(
+    userId,
+    action,
+    provider,
+    success,
+    errorMessage = null
+  ) {
     const sql = `
       INSERT INTO oauth_audit_log (user_id, action, provider, success, error_message)
       VALUES ($1, $2, $3, $4, $5)
     `;
-    await this.pool.query(sql, [userId, action, provider, success, errorMessage]);
+    await this.pool.query(sql, [
+      userId,
+      action,
+      provider,
+      success,
+      errorMessage,
+    ]);
   }
 
   // ===== User Management Methods =====
 
-  async createUser(email, name, role = 'user') {
+  async createUser(email, name, role = "user") {
     const sql = `
       INSERT INTO users (email, name, role)
       VALUES ($1, $2, $3)
@@ -1201,7 +1347,7 @@ class PostgresDatabase {
   }
 
   async getAllUsers(activeOnly = true) {
-    const sql = activeOnly 
+    const sql = activeOnly
       ? `SELECT * FROM users WHERE active = true ORDER BY id`
       : `SELECT * FROM users ORDER BY id`;
     const result = await this.pool.query(sql);
