@@ -1,6 +1,6 @@
-const axios = require('axios');
-const puppeteer = require('puppeteer');
-const { v4: uuidv4 } = require('crypto').randomUUID || (() => uuidv4());
+const axios = require("axios");
+const puppeteer = require("puppeteer");
+const { v4: uuidv4 } = require("crypto").randomUUID || (() => uuidv4());
 
 class BaseScraper {
   constructor(name, url, logger) {
@@ -17,18 +17,21 @@ class BaseScraper {
         this.browser = await puppeteer.launch({
           headless: true,
           args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process'
-          ]
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-zygote",
+            "--single-process",
+          ],
         });
-        this.logger.debug('Browser initialized successfully');
+        this.logger.debug("Browser initialized successfully");
       } catch (error) {
-        this.logger.warn('Browser initialization failed, will use HTTP fallback:', error.message);
+        this.logger.warn(
+          "Browser initialization failed, will use HTTP fallback:",
+          error.message
+        );
         return null;
       }
     }
@@ -47,8 +50,9 @@ class BaseScraper {
       const response = await axios.get(url, {
         timeout: 30000,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        },
       });
       return response.data;
     } catch (error) {
@@ -59,22 +63,24 @@ class BaseScraper {
 
   async fetchWithPuppeteer(url, waitFor = null) {
     const browser = await this.initBrowser();
-    
+
     if (!browser) {
-      this.logger.warn('Browser unavailable, falling back to HTTP request');
+      this.logger.warn("Browser unavailable, falling back to HTTP request");
       return await this.fetchHTML(url);
     }
-    
+
     const page = await browser.newPage();
-    
+
     try {
-      await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-      
+      await page.setUserAgent(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+      );
+      await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+
       if (waitFor) {
         await page.waitForSelector(waitFor, { timeout: 10000 });
       }
-      
+
       const html = await page.content();
       return html;
     } finally {
@@ -85,11 +91,23 @@ class BaseScraper {
   generateEventId(title, date, location) {
     // Limit component lengths to keep total ID under 255 chars
     // This prevents database errors when storing event IDs in VARCHAR(255) columns
-    const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 80);
-    const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
-    const cleanLocation = location ? location.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 80) : 'unknown';
-    const scraperName = this.name.toLowerCase().replace(/\s+/g, '').substring(0, 30);
-    
+    const cleanTitle = title
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .toLowerCase()
+      .substring(0, 80);
+    const dateStr =
+      date instanceof Date ? date.toISOString().split("T")[0] : date;
+    const cleanLocation = location
+      ? location
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .toLowerCase()
+          .substring(0, 80)
+      : "unknown";
+    const scraperName = this.name
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .substring(0, 30);
+
     // Total format: {scraper}-{title}-{date}-{location}
     // Max length: 30 + 80 + 10 + 80 + 3 separators = 203 chars (well under 255)
     return `${scraperName}-${cleanTitle}-${dateStr}-${cleanLocation}`;
@@ -98,11 +116,14 @@ class BaseScraper {
   parseDate(dateString) {
     try {
       // Clean up the date string by removing extra whitespace and non-breaking spaces
-      const cleanDateString = dateString.replace(/\s+/g, ' ').replace(/\u00A0/g, ' ').trim();
-      
+      const cleanDateString = dateString
+        .replace(/\s+/g, " ")
+        .replace(/\u00A0/g, " ")
+        .trim();
+
       // Extract just the date part before the time if it contains time info
-      const dateOnly = cleanDateString.split(',').slice(0, 2).join(',');
-      
+      const dateOnly = cleanDateString.split(",").slice(0, 2).join(",");
+
       const date = new Date(dateOnly);
       if (isNaN(date.getTime())) {
         this.logger.warn(`Invalid date string: ${dateString}`);
@@ -116,32 +137,39 @@ class BaseScraper {
   }
 
   extractAge(text) {
-    const ageMatch = text.match(/(\d+)[\s-]*(?:to|through|\-|–)[\s-]*(\d+)[\s-]*(?:years?|yrs?)?/i);
+    const ageMatch = text.match(
+      /(\d+)[\s-]*(?:to|through|\-|–)[\s-]*(\d+)[\s-]*(?:years?|yrs?)?/i
+    );
     if (ageMatch) {
       return { min: parseInt(ageMatch[1]), max: parseInt(ageMatch[2]) };
     }
-    
-    const singleAgeMatch = text.match(/(?:ages?|for)[\s]*(\d+)[\s]*(?:years?|yrs?|\+)?/i);
+
+    const singleAgeMatch = text.match(
+      /(?:ages?|for)[\s]*(\d+)[\s]*(?:years?|yrs?|\+)?/i
+    );
     if (singleAgeMatch) {
       const age = parseInt(singleAgeMatch[1]);
       return { min: age, max: age + 2 };
     }
-    
+
     return { min: 0, max: 18 };
   }
 
   extractCost(text) {
     if (!text) return 0;
-    
-    if (text.toLowerCase().includes('free') || text.toLowerCase().includes('no cost')) {
+
+    if (
+      text.toLowerCase().includes("free") ||
+      text.toLowerCase().includes("no cost")
+    ) {
       return 0;
     }
-    
+
     const costMatch = text.match(/\$(\d+(?:\.\d{2})?)/);
     if (costMatch) {
       return parseFloat(costMatch[1]);
     }
-    
+
     return 0;
   }
 
@@ -157,19 +185,19 @@ class BaseScraper {
       registrationUrl: data.registrationUrl,
       registrationOpens: data.registrationOpens,
       currentCapacity: data.currentCapacity || {},
-      description: data.description || '',
+      description: data.description || "",
       imageUrl: data.imageUrl,
-      status: 'discovered',
+      status: "discovered",
       isRecurring: data.isRecurring || false,
       previouslyAttended: false,
-      rawContent: data.rawContent || null // Store raw content for LLM processing
+      rawContent: data.rawContent || null, // Store raw content for LLM processing
     };
 
     return event;
   }
 
   async scrape() {
-    throw new Error('scrape() method must be implemented by subclasses');
+    throw new Error("scrape() method must be implemented by subclasses");
   }
 }
 
