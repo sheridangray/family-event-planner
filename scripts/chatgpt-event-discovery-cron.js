@@ -70,25 +70,25 @@ function buildPrompt() {
 {
   "dateSearched": "${today}",
   "searchContext": {
-    "searchRadiusMiles": 25,
-    "baseLocation": "San Francisco, California",
+    "searchRadiusMiles": <SEARCH_RADIUS_MILES>,
+    "baseLocation": "<LOCATION>,
     "targetDate": "${targetDate}",
     "familyContext": {
-      "wife": { "name": "Joyce Zhang", "dob": "1987-02-24" },
+      "wife": { "name": "<WIFE_NAME>", "dob": "<WIFE_DOB>" },
       "children": [
-        { "name": "Apollo Gray", "dob": "2021-04-26" },
-        { "name": "Athena Gray", "dob": "2023-03-10" }
+        { "name": "<CHILD_1_NAME>", "dob": "<CHILD_1_DOB>" },
+        { "name": "<CHILD_2_NAME>", "dob": "<CHILD_2_DOB>" }
       ]
     },
     "filters": {
-      "kidCentricAgeRange": "2-6 years",
-      "strollerFriendly": true,
-      "weekdayAfter5pm": true,
-      "weekendAnytime": true,
-      "prioritizeMissionBay": true,
-      "considerWeather": true
+      "kidCentricAgeRange": "<KID_CENTRIC_AGE_RANGE>",
+      "strollerFriendly": <STROLLER_FRIENDLY>,
+      "weekdayAfter5pm": <WEEKDAY_AFTER_5PM>,
+      "weekendAnytime": <WEEKEND_ANYTIME>,
+      "prioritizeMissionBay": <PRIORITIZE_MISSION_BAY>,
+      "considerWeather": <CONSIDER_WEATHER>
     },
-    "calendarConflictsChecked": true
+    "calendarConflictsChecked": <CALENDAR_CONFLICTS_CHECKED>
   },
   "events": [
     {
@@ -109,7 +109,7 @@ function buildPrompt() {
           "adult": <ADULT_COST>,
           "child": <CHILD_COST>,
           "infantFree": <INFANT_FREE>,
-          "currency": "USD"
+          "currency": <CURRENCY>
         },
         "description": <DESCRIPTION>,
         "weather": {
@@ -117,18 +117,18 @@ function buildPrompt() {
           "riskLevel": <WEATHER_RISK_LEVEL>
         },
         "urls": {
-          "eventPage": <EVENT_PAGE>,
+          "eventPage": <EVENT_PAGE_URL>,
           "registration": <REGISTRATION_LINK>,
-          "addToCalendar": <GOOGLE_CALENDAR_LINK>
+          "addToCalendar": <GOOGLE_CALENDAR_URL>
         },
-        "calendarConflict": <CALENDAR_CONFLICT>
+        "calendarConflict": <CALENDAR_CONFLICT_FLAG>
       },
       "reasoning": <REASONING>
     }
   ],
   "metadata": {
-    "generatedBy": "OpenAI Event Discovery Cron Job",
-    "version": "1.0",
+    "generatedBy": "<GENERATED_BY>",
+    "version": "<VERSION_NUMBER>",
     "runtimeSeconds": <RUNTIME_SECONDS>
   }
 }
@@ -310,10 +310,18 @@ async function main() {
       throw new Error("Invalid JSON structure: missing required fields");
     }
 
-    const eventsCount = discoveryData.events?.length || 0;
-    console.log(`   ✅ Parsed successfully: ${eventsCount} events found`);
-
-    // Log event details
+        const eventsCount = discoveryData.events?.length || 0;
+        console.log(`   ✅ Parsed successfully: ${eventsCount} events found`);
+        
+        // Log full JSON response when running locally
+        if (process.env.NODE_ENV !== 'production') {
+          console.log("\n🔍 Full JSON Response (Local Debug):");
+          console.log("=====================================");
+          console.log(JSON.stringify(discoveryData, null, 2));
+          console.log("=====================================\n");
+        }
+        
+        // Log event details
     if (eventsCount > 0) {
       console.log("   📋 Event summary:");
       discoveryData.events.slice(0, 5).forEach((event, index) => {
