@@ -1,4 +1,6 @@
 const express = require("express");
+const { spawn } = require("child_process");
+const path = require("path");
 const router = express.Router();
 
 // Middleware to validate API key for ChatGPT requests
@@ -305,6 +307,95 @@ router.patch("/:id/mark-interested", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to update interested status",
+    });
+  }
+});
+
+// POST /api/chatgpt-event-discoveries/trigger - Manually trigger the discovery job
+router.post("/trigger", validateChatGPTApiKey, async (req, res) => {
+  try {
+    const { logger } = req.app.locals;
+
+    if (logger) {
+      logger.info("Manual trigger of ChatGPT event discovery job requested");
+    }
+
+    // Get the path to the cron script
+    const scriptPath = path.join(__dirname, "..", "..", "scripts", "chatgpt-event-discovery-cron.js");
+    
+    // Spawn the cron job script
+    const child = spawn("node", [scriptPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        NODE_ENV: process.env.NODE_ENV || "production"
+      }
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        if (logger) {
+          logger.info("ChatGPT event discovery job completed successfully");
+        }
+        res.json({
+          success: true,
+          message: "Discovery job triggered successfully",
+          output: stdout,
+        });
+      } else {
+        if (logger) {
+          logger.error(`ChatGPT event discovery job failed with code ${code}: ${stderr}`);
+        }
+        res.status(500).json({
+          success: false,
+          error: "Discovery job failed",
+          output: stdout,
+          errorOutput: stderr,
+        });
+      }
+    });
+
+    child.on("error", (error) => {
+      if (logger) {
+        logger.error("Error spawning ChatGPT event discovery job:", error);
+      }
+      res.status(500).json({
+        success: false,
+        error: "Failed to start discovery job",
+        details: error.message,
+      });
+    });
+
+    // Set a timeout to prevent hanging requests
+    setTimeout(() => {
+      if (!child.killed) {
+        child.kill();
+        res.status(408).json({
+          success: false,
+          error: "Discovery job timed out",
+        });
+      }
+    }, 30000); // 30 second timeout
+
+  } catch (error) {
+    const { logger } = req.app.locals;
+    if (logger) {
+      logger.error("Error triggering ChatGPT event discovery job:", error);
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to trigger discovery job",
     });
   }
 });

@@ -22,6 +22,8 @@ export default function ChatGPTSuggestionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isTriggering, setIsTriggering] = useState(false);
+  const [triggerMessage, setTriggerMessage] = useState<string | null>(null);
 
   const fetchDiscoveries = async () => {
     try {
@@ -109,6 +111,37 @@ export default function ChatGPTSuggestionsPage() {
     }
   };
 
+  const handleTriggerDiscovery = async () => {
+    try {
+      setIsTriggering(true);
+      setTriggerMessage(null);
+      
+      const response = await fetch('/api/chatgpt-event-discoveries/trigger', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setTriggerMessage('Discovery job triggered successfully! New events should appear shortly.');
+        // Refresh the discoveries list after a short delay
+        setTimeout(() => {
+          fetchDiscoveries();
+        }, 2000);
+      } else {
+        setTriggerMessage(`Error: ${data.error || 'Failed to trigger discovery job'}`);
+      }
+    } catch (err) {
+      console.error('Error triggering discovery job:', err);
+      setTriggerMessage(`Error: ${err instanceof Error ? err.message : 'Failed to trigger discovery job'}`);
+    } finally {
+      setIsTriggering(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-6">
@@ -154,16 +187,43 @@ export default function ChatGPTSuggestionsPage() {
             </div>
           </div>
           
-          <button
-            onClick={fetchDiscoveries}
-            disabled={isRefreshing}
-            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <ArrowPathIcon className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+          <div className="flex space-x-3">
+            <button
+              onClick={fetchDiscoveries}
+              disabled={isRefreshing}
+              className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ArrowPathIcon className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+            
+            <button
+              onClick={handleTriggerDiscovery}
+              disabled={isTriggering}
+              className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <SparklesIcon className={`h-4 w-4 mr-2 ${isTriggering ? 'animate-pulse' : ''}`} />
+              {isTriggering ? 'Generating...' : 'Generate New'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Trigger Message */}
+      {triggerMessage && (
+        <div className="mb-4">
+          <div className={`p-4 rounded-lg ${
+            triggerMessage.includes('Error') 
+              ? 'bg-red-50 border border-red-200 text-red-800' 
+              : 'bg-green-50 border border-green-200 text-green-800'
+          }`}>
+            <div className="flex items-center">
+              <SparklesIcon className="h-5 w-5 mr-2" />
+              <span className="font-medium">{triggerMessage}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
