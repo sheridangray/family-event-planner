@@ -118,7 +118,7 @@ services:
     name: chatgpt-event-discovery
     env: node
     plan: starter
-    schedule: "*/5 * * * *"
+    schedule: "0 9 * * *"
     buildCommand: npm install
     startCommand: node scripts/chatgpt-event-discovery-cron.js
     envVars:

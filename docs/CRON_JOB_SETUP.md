@@ -1,6 +1,6 @@
 # ChatGPT Event Discovery Cron Job Setup
 
-This guide explains how to set up and configure the automated ChatGPT event discovery cron job that runs every 5 minutes.
+This guide explains how to set up and configure the automated ChatGPT event discovery cron job that runs daily at 9:00 AM.
 
 ## 📋 Overview
 
@@ -9,7 +9,7 @@ The cron job automatically:
 2. **Posts results** to your backend API
 3. **Saves to database** for viewing in the UI
 
-**Schedule**: Runs every 5 minutes (`*/5 * * * *`)
+**Schedule**: Runs daily at 9:00 AM (`0 9 * * *`)
 
 ## 🚀 Quick Setup
 
@@ -149,14 +149,15 @@ The script validates:
 
 ### Cron Schedule
 
-Current schedule: **Every 5 minutes** (`*/5 * * * *`)
+Current schedule: **Daily at 9:00 AM** (`0 9 * * *`)
 
 To change the frequency, update `render.yaml`:
 
 ```yaml
-schedule: "*/5 * * * *"  # Every 5 minutes
-schedule: "0 * * * *"    # Every hour
-schedule: "0 9 * * *"    # Daily at 9:00 AM
+schedule: "0 9 * * *"    # Daily at 9:00 AM (current)
+schedule: "0 8 * * *"    # Daily at 8:00 AM
+schedule: "0 10 * * *"   # Daily at 10:00 AM
+schedule: "0 9 * * 1"    # Weekly on Mondays at 9:00 AM
 schedule: "0 */2 * * *"  # Every 2 hours
 ```
 
@@ -244,10 +245,10 @@ View execution logs in Render.com:
 
 ### Rate Limiting
 
-The backend API has rate limiting (5 requests/hour per IP). The cron runs every 5 minutes (12 times/hour), so:
-- ✅ Multiple cron jobs can share the limit
-- ⚠️ If you have multiple cron instances, you may hit limits
-- 📊 Consider reducing frequency if needed
+The backend API has rate limiting (5 requests/hour per IP). The cron runs daily at 9:00 AM (1 time/day), so:
+- ✅ Well within rate limits
+- ✅ No risk of hitting API limits
+- 📊 Plenty of headroom for additional usage
 
 ---
 
@@ -258,8 +259,8 @@ The backend API has rate limiting (5 requests/hour per IP). The cron runs every 
 **Model**: `gpt-4o-mini`
 - **Cost**: ~$0.15 per 1M input tokens, ~$0.60 per 1M output tokens
 - **Estimated per run**: ~$0.01-0.02
-- **Per day** (288 runs): ~$2.88-5.76
-- **Per month**: ~$86-173
+- **Per day** (1 run): ~$0.01-0.02
+- **Per month**: ~$0.30-0.60
 
 **To reduce costs**:
 1. Reduce frequency (every 15 minutes instead of 5)
@@ -269,9 +270,9 @@ The backend API has rate limiting (5 requests/hour per IP). The cron runs every 
 ### Render Cron Job Costs
 
 - **Free tier**: 750 hours/month
-- **Cron runs**: 288 times/day × 30 days = 8,640 runs/month
+- **Cron runs**: 1 time/day × 30 days = 30 runs/month
 - **Estimated runtime**: ~15 seconds per run
-- **Total time**: ~36 hours/month (well under free tier)
+- **Total time**: ~7.5 minutes/month (well under free tier)
 
 ---
 
@@ -317,7 +318,7 @@ The script authenticates with backend using:
 ## 🎉 Success!
 
 Once deployed, the cron job will:
-- ✅ Run automatically every 5 minutes
+- ✅ Run automatically daily at 9:00 AM
 - ✅ Generate fresh event discoveries
 - ✅ Save to your database
 - ✅ Appear in your UI at `/dashboard/chatgpt-suggestions`
