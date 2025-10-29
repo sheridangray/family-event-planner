@@ -79,6 +79,47 @@ class LLMAgeEvaluator {
     }
   }
 
+  async callTogetherAI(prompt, options = {}) {
+    try {
+      const {
+        model = 'meta-llama/Llama-3.2-3B-Instruct-Turbo',
+        max_tokens = 200,
+        temperature = 0.1,
+        systemMessage = 'You are a helpful assistant.'
+      } = options;
+
+      this.logger.debug(`Calling Together AI with model: ${model}`);
+
+      const response = await axios.post(this.baseUrl, {
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: systemMessage
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens,
+        temperature
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 second timeout for longer responses
+      });
+
+      return response.data.choices[0].message.content;
+
+    } catch (error) {
+      this.logger.error('Together AI call failed:', error.message);
+      throw error;
+    }
+  }
+
   buildEvaluationPrompt(event, childAges, rawContent = null) {
     const childAgeList = childAges.join(' and ');
     

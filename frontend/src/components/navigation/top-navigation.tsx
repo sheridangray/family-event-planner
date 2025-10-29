@@ -17,7 +17,8 @@ import {
   ChevronDownIcon,
   Bars3Icon,
   XMarkIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  SparklesIcon
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 
@@ -32,6 +33,7 @@ interface TopNavigationProps {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, current: false },
   { name: 'Events', href: '/dashboard/events', icon: ListBulletIcon, current: false },
+  { name: 'ChatGPT Suggestions', href: '/dashboard/chatgpt-suggestions', icon: SparklesIcon, current: false },
 ];
 
 export function TopNavigation({ user }: TopNavigationProps) {

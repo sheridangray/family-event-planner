@@ -1,0 +1,421 @@
+{
+  "timestamp": "2025-10-13T04:26:56.275Z",
+  "daysScraped": 3,
+  "durationSeconds": 716.21,
+  "totalEvents": 35,
+  "metrics": {
+    "eventsWithDetails": 0,
+    "eventsWithoutDetails": 35,
+    "eventsWithDescriptions": 10,
+    "eventsWithDefaultTime": 22,
+    "targetAgeEvents": 33
+  },
+  "ageRanges": {
+    "30-9": 2,
+    "2-8": 2,
+    "3-12": 26,
+    "4-14": 3,
+    "0-12": 2
+  },
+  "costs": {
+    "$25": 33,
+    "$0": 2
+  },
+  "times": {
+    "09:30": 1,
+    "10:15": 1,
+    "10:30": 3,
+    "11:00": 3,
+    "11:15": 2,
+    "10:00": 22,
+    "11:30": 2,
+    "13:00": 1
+  },
+  "events": [
+    {
+      "title": "The Academy is open for members only every Tuesday from 8:30-9:30 am and Sunday from 10-11 am.",
+      "date": "2025-10-12T16:30:00.000Z",
+      "ageRange": {
+        "min": 30,
+        "max": 9
+      },
+      "cost": 25,
+      "description": "Regular hours\nMonday-Saturday: 9:30 am-5 pm\nSunday: 11 am-5 pm Member hours\nTuesday: 8:30-9:30 am\nSunday: 10-11 am Add some life to your inbox.Subscribe to our NightLife newsletter.",
+      "registrationUrl": "https://www.calacademy.org/events/museum-hours/members-only-hours"
+    },
+    {
+      "title": "We Are All Connected Storytime",
+      "date": "2025-10-12T17:15:00.000Z",
+      "ageRange": {
+        "min": 2,
+        "max": 8
+      },
+      "cost": 25,
+      "description": "We Are All Connected Storytime\nDaily, 10:15 a.m.\nScience Today Station Literature-loving little ones will enjoy this interactive storytime all about humans' connections to each other and the natural w",
+      "registrationUrl": "https://www.calacademy.org/events/programs/we-are-all-connected-storytime"
+    },
+    {
+      "title": "Penguin Feeding",
+      "date": "2025-10-12T17:30:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "Download our Pocket Penguins app to stream the antics of our African penguin colony 24/7 on your smartphone or Apple TV.",
+      "registrationUrl": "https://www.calacademy.org/events/programs/penguin-feeding-6"
+    },
+    {
+      "title": "One Sky is a series of short films exploring cultural and indigenous astronomy perspectives.",
+      "date": "2025-10-12T17:30:00.000Z",
+      "ageRange": {
+        "min": 4,
+        "max": 14
+      },
+      "cost": 0,
+      "description": "Representation of the Thunderbird and Gila Monster by Melvin Bainbridge, via the One Sky Project. One Sky Project - Planetarium Film Shorts\nSundays: 10:30 am\nCapacity limited, reservations required Ex",
+      "registrationUrl": "https://www.calacademy.org/events/planetarium-show/one-sky-project-0"
+    },
+    {
+      "title": "One Sky Project",
+      "date": "2025-10-12T17:30:00.000Z",
+      "ageRange": {
+        "min": 4,
+        "max": 14
+      },
+      "cost": 0,
+      "description": "Representation of the Thunderbird and Gila Monster by Melvin Bainbridge, via the One Sky Project. One Sky Project - Planetarium Film Shorts\nSundays: 10:30 am\nCapacity limited, reservations required Ex",
+      "registrationUrl": "https://www.calacademy.org/events/planetarium-show/one-sky-project-0"
+    },
+    {
+      "title": "The Academy opens at 11 am today.",
+      "date": "2025-10-12T18:00:00.000Z",
+      "ageRange": {
+        "min": 30,
+        "max": 9
+      },
+      "cost": 25,
+      "description": "Regular Hours:\nDaily: 9:30 am – 5 pm\nSunday: 11 am – 5 pm Member Hours:\nTuesday: 8:30 – 9:30 am\nSunday: 10 – 11 am Add some life to your inbox.Subscribe to our NightLife newsletter.",
+      "registrationUrl": "https://www.calacademy.org/events/museum-hours/museum-opens-2"
+    },
+    {
+      "title": "Sing the praises of arthropods with a dynamic crew of puppet performers in this kid-friendly program! Daily 11am",
+      "date": "2025-10-12T18:00:00.000Z",
+      "ageRange": {
+        "min": 0,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "Children's Puppet Theater: Arthropod Opera\nDaily, 11:00 a.m.\nEast Garden Arthropods are a diverse group of animals with exoskeletons like crabs, spiders, and scorpions. They may be small, but they're ",
+      "registrationUrl": "https://www.calacademy.org/events/programs/childrens-puppet-theater-arthropod-opera-0"
+    },
+    {
+      "title": "Children's Puppet Theater: Arthropod Opera",
+      "date": "2025-10-12T18:00:00.000Z",
+      "ageRange": {
+        "min": 0,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "Children's Puppet Theater: Arthropod Opera\nDaily, 11:00 a.m.\nEast Garden Arthropods are a diverse group of animals with exoskeletons like crabs, spiders, and scorpions. They may be small, but they're ",
+      "registrationUrl": "https://www.calacademy.org/events/programs/childrens-puppet-theater-arthropod-opera-0"
+    },
+    {
+      "title": "Explore the outdoors with Junior Scientist Adventure! Daily 11:15 am",
+      "date": "2025-10-12T18:15:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "The Junior Scientist Adventure program is generously supported by Oracle.",
+      "registrationUrl": "https://www.calacademy.org/events/programs/junior-scientist-adventure-2"
+    },
+    {
+      "title": "Junior Scientist Adventure",
+      "date": "2025-10-12T18:15:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "The Junior Scientist Adventure program is generously supported by Oracle.",
+      "registrationUrl": "https://www.calacademy.org/events/programs/junior-scientist-adventure-2"
+    },
+    {
+      "title": "Take a high-speed tour of events—starting at the Big Bang—that set the stage for life, narrated by Jodie Foster.",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/planetarium-show/life-a-cosmic-story-17"
+    },
+    {
+      "title": "Life: A Cosmic Story",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/planetarium-show/life-a-cosmic-story-17"
+    },
+    {
+      "title": "Watch as a diver plunges into one of the world's deepest living coral reef tanks. Daily, 11:30 am and 1:30 pm.",
+      "date": "2025-10-12T18:30:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/coral-reef-dive-4"
+    },
+    {
+      "title": "Coral Reef Dive",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/coral-reef-dive-4"
+    },
+    {
+      "title": "Join us for an interactive playtime to build an artificial reefs using big foam blocks.",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/nature-engineers"
+    },
+    {
+      "title": "Nature Engineers",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/nature-engineers"
+    },
+    {
+      "title": "Explore asteroids, comets, and the hard-hitting stories of our cosmic origins.",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/planetarium-show/incoming-25"
+    },
+    {
+      "title": "Incoming!",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/planetarium-show/incoming-25"
+    },
+    {
+      "title": "Join us for an interactive experience introducing children to yoga through storytelling.",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/storytelling-stretches"
+    },
+    {
+      "title": "Storytelling Stretches",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/storytelling-stretches"
+    },
+    {
+      "title": "Help Dr. Otter diagnose and restore the health of the California kelp forest. 1:00pm Daily.",
+      "date": "2025-10-12T20:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/dr-otters-kelp-clinic-0"
+    },
+    {
+      "title": "Dr Otter's Kelp Clinic",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/dr-otters-kelp-clinic-0"
+    },
+    {
+      "title": "Watch as a diver plunges into the world's deepest living indoor coral reef exhibit. Daily, 11:30 am and 1:30 pm.",
+      "date": "2025-10-12T18:30:00.000Z",
+      "ageRange": {
+        "min": 4,
+        "max": 14
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/coral-reef-dive-3"
+    },
+    {
+      "title": "Become an ocean chemistry expert in this exploration of the connection between sea, sky, and you. Daily, 2 pm.",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/ocean-action-the-power-of-ph-4"
+    },
+    {
+      "title": "Ocean Action: The Power of pH!",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/ocean-action-the-power-of-ph-4"
+    },
+    {
+      "title": "Penguin Feeding",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/penguin-feeding-7"
+    },
+    {
+      "title": "Meet Claude, our alligator with albinism, and learn why his southeastern habitat is so unique. Daily, 3:30 p.m.",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/swamp-talk-0"
+    },
+    {
+      "title": "Swamp Talk",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/swamp-talk-0"
+    },
+    {
+      "title": "One Sky is a series of short films exploring cultural and indigenous astronomy perspectives.",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/planetarium-show/one-sky-project"
+    },
+    {
+      "title": "One Sky Project",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/planetarium-show/one-sky-project"
+    },
+    {
+      "title": "We Are All Connected Storytime",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 2,
+        "max": 8
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/we-are-all-connected-storytime"
+    },
+    {
+      "title": "The Academy opens at 11 am today.",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/museum-hours/museum-opens-2"
+    },
+    {
+      "title": "Sing the praises of arthropods with a dynamic crew of puppet performers in this kid-friendly program! Daily 11am",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/childrens-puppet-theater-arthropod-opera-0"
+    },
+    {
+      "title": "Children's Puppet Theater: Arthropod Opera",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/childrens-puppet-theater-arthropod-opera-0"
+    },
+    {
+      "title": "Junior Scientist Adventure",
+      "date": "2025-10-12T17:00:00.000Z",
+      "ageRange": {
+        "min": 3,
+        "max": 12
+      },
+      "cost": 25,
+      "description": "",
+      "registrationUrl": "https://www.calacademy.org/events/programs/junior-scientist-adventure-2"
+    }
+  ]
+}

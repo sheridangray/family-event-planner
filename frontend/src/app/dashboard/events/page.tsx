@@ -1,4 +1,5 @@
 import { AutomationHeader } from "@/components/automation/automation-header";
+import { LLMEventScanner } from "@/components/automation/llm-event-scanner";
 
 // Note: This page shows Discovery & Email Approval workflow, not auto-approval
 import { LatestDiscoveryRun } from "@/components/automation/latest-discovery-run";
@@ -11,6 +12,10 @@ export default function EventsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <AutomationHeader />
+      
+      {/* LLM Event Scanner - Top Priority */}
+      <LLMEventScanner />
+      
       {/* Top Section - Latest Discovery Run & System Health */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2">

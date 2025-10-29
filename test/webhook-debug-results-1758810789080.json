@@ -1,0 +1,81 @@
+{
+  "healthCheck": {
+    "success": true,
+    "data": {
+      "status": "ok",
+      "service": "gmail-webhooks",
+      "timestamp": "2025-09-25T14:33:07.197Z"
+    }
+  },
+  "basicConnectivity": {
+    "success": true,
+    "data": {
+      "status": "healthy",
+      "timestamp": "2025-09-25T14:33:07.325Z",
+      "uptime": 1024.917078027,
+      "errors": {
+        "total": 2,
+        "critical": 0,
+        "lastHour": 2,
+        "lastDay": 2,
+        "bySeverity": {
+          "low": 2
+        },
+        "components": {
+          "api": 2
+        }
+      },
+      "paymentGuard": {
+        "total": 0,
+        "byType": {},
+        "recent": []
+      },
+      "scheduler": {
+        "running": true,
+        "taskCount": 6,
+        "tasks": [
+          {
+            "name": "Event Discovery",
+            "frequency": "Every 6 hours"
+          },
+          {
+            "name": "Event Processing",
+            "frequency": "Daily at 9:00 AM"
+          },
+          {
+            "name": "Approval Timeouts",
+            "frequency": "Every 4 hours"
+          },
+          {
+            "name": "Registration Processing",
+            "frequency": "Every 30 minutes"
+          },
+          {
+            "name": "Calendar Sync",
+            "frequency": "Daily at 10:00 AM"
+          },
+          {
+            "name": "Health Checks",
+            "frequency": "Every 15 minutes"
+          }
+        ]
+      }
+    }
+  },
+  "webhookEndpoint": {
+    "success": false,
+    "error": "Request failed with status code 401",
+    "status": 401
+  },
+  "authenticationTest": {
+    "success": true,
+    "data": {
+      "success": true
+    }
+  },
+  "mockPubSubTest": {
+    "success": false,
+    "error": "Request failed with status code 401",
+    "status": 401
+  }
+}

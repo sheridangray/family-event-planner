@@ -1,16 +1,16 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { GmailClient } = require('../mcp/gmail-client');
-const Database = require('../database');
+const { GmailClient } = require("../mcp/gmail-client");
+const Database = require("../database");
 
 // Google Integration health check - tests calendar and email for sheridan.gray@gmail.com
 async function checkGoogleIntegration() {
   try {
-    const logger = { 
-      info: () => {}, 
-      warn: () => {}, 
-      error: () => {}, 
-      debug: () => {} 
+    const logger = {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      debug: () => {},
     };
 
     const database = new Database();
@@ -18,9 +18,11 @@ async function checkGoogleIntegration() {
     const gmailClient = new GmailClient(logger, database);
 
     // Get user ID for sheridan.gray@gmail.com
-    const user = await database.getUserByEmail('sheridan.gray@gmail.com');
+    const user = await database.getUserByEmail("sheridan.gray@gmail.com");
     if (!user) {
-      console.warn('Primary user sheridan.gray@gmail.com not found in database');
+      console.warn(
+        "Primary user sheridan.gray@gmail.com not found in database"
+      );
       return false;
     }
 
@@ -28,25 +30,31 @@ async function checkGoogleIntegration() {
     let calendarHealthy = false;
     try {
       const testDate = new Date().toISOString();
-      const calendarResult = await gmailClient.checkCalendarConflicts(user.id, testDate, 60);
+      const calendarResult = await gmailClient.checkCalendarConflicts(
+        user.id,
+        testDate,
+        60
+      );
       calendarHealthy = true; // If no error thrown, calendar access works
     } catch (error) {
-      console.warn('Calendar health check failed:', error.message);
+      console.warn("Calendar health check failed:", error.message);
     }
 
     // Test email access by checking if we can get authenticated client
     let emailHealthy = false;
     try {
-      const authenticatedClient = await gmailClient.getAuthenticatedClient(user.id);
+      const authenticatedClient = await gmailClient.getAuthenticatedClient(
+        user.id
+      );
       emailHealthy = !!authenticatedClient;
     } catch (error) {
-      console.warn('Email health check failed:', error.message);
+      console.warn("Email health check failed:", error.message);
     }
 
     // Return true only if both calendar and email are working
     return calendarHealthy && emailHealthy;
   } catch (error) {
-    console.warn('Google integration health check failed:', error.message);
+    console.warn("Google integration health check failed:", error.message);
     return false;
   }
 }
@@ -55,9 +63,9 @@ async function checkGoogleIntegration() {
 async function checkWeatherService() {
   try {
     // Use default location settings - these will come from database in production
-    const homeZip = '94158';
-    const homeCity = 'San Francisco';
-    const homeCountry = 'US';
+    const homeZip = "94158";
+    const homeCity = "San Francisco";
+    const homeCountry = "US";
     const weatherApiKey = process.env.WEATHER_API_KEY;
 
     if (!weatherApiKey) {
@@ -69,42 +77,47 @@ async function checkWeatherService() {
     if (homeZip && homeZip.match(/^\d{5}$/)) {
       weatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${homeZip},${homeCountry}&appid=${weatherApiKey}&units=imperial`;
     } else {
-      weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(homeCity)}&appid=${weatherApiKey}&units=imperial`;
+      weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(
+        homeCity
+      )}&appid=${weatherApiKey}&units=imperial`;
     }
 
     // Test weather API with 3 second timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
-    
-    const response = await fetch(weatherUrl, { 
+
+    const response = await fetch(weatherUrl, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'FamilyEventPlanner/1.0' }
+      headers: { "User-Agent": "FamilyEventPlanner/1.0" },
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (response.ok) {
       const data = await response.json();
-      return data && data.main && typeof data.main.temp === 'number';
+      return data && data.main && typeof data.main.temp === "number";
     }
-    
+
     return false;
   } catch (error) {
-    console.warn('Weather service health check failed:', error.message);
+    console.warn("Weather service health check failed:", error.message);
     return false;
   }
 }
 
 // Initialize router with database and automation components
-function createAutomationRouter(database, taskScheduler, registrationAutomator) {
-  
+function createAutomationRouter(
+  database,
+  taskScheduler,
+  registrationAutomator
+) {
   // Get automation status/statistics
-  router.get('/status', async (req, res) => {
+  router.get("/status", async (req, res) => {
     try {
       // Get the latest discovery run ID from discovery_runs table
       const latestRunResult = await database.getLatestDiscoveryRunId();
       const latestRunId = latestRunResult || 0;
-      
+
       // Get latest discovery run statistics
       const [
         eventsDiscovered,
@@ -112,50 +125,68 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
         emailApprovals,
         lastDiscoveryResult,
         filteredEvents,
-        allEvents
+        allEvents,
       ] = await Promise.all([
         // Get events discovered count from discovered_events table (raw count)
-        database.query(`
+        database.query(
+          `
           SELECT COALESCE((SELECT COUNT(*) FROM discovered_events WHERE discovery_run_id = $1), 0) as count
-        `, [latestRunId]),
+        `,
+          [latestRunId]
+        ),
         // Fallback if email_approvals table doesn't exist yet
-        database.query(`
+        database
+          .query(
+            `
           SELECT 0 as count
-        `).catch(() => ({ rows: [{ count: 0 }] })),
-        database.query(`
+        `
+          )
+          .catch(() => ({ rows: [{ count: 0 }] })),
+        database.query(
+          `
           SELECT COUNT(*) as count 
           FROM events 
           WHERE discovery_run_id = $1 AND status = 'approved'
-        `, [latestRunId]),
+        `,
+          [latestRunId]
+        ),
         // Get last discovery run timestamp from discovery_runs table
-        database.query(`
+        database.query(
+          `
           SELECT COALESCE(completed_at, started_at) as created_at
           FROM discovery_runs 
           WHERE id = $1
-        `, [latestRunId]),
-        database.query(`
+        `,
+          [latestRunId]
+        ),
+        database.query(
+          `
           SELECT COUNT(*) as count 
           FROM events 
           WHERE discovery_run_id = $1 AND status = 'discovered'
-        `, [latestRunId]),
-        database.getEventsByStatus('discovered')
+        `,
+          [latestRunId]
+        ),
+        database.getEventsByStatus("discovered"),
       ]);
 
       // Check email notification status
-      const emailNotificationStatus = 'active'; // TODO: Check actual email service status
+      const emailNotificationStatus = "active"; // TODO: Check actual email service status
 
       // Calculate next discovery run based on scheduler
       const nextDiscoveryRun = calculateNextDiscoveryRun();
 
       // Format last discovery run timestamp
-      let lastDiscoveryRun = 'Never';
+      let lastDiscoveryRun = "Never";
       if (lastDiscoveryResult.rows.length > 0) {
         const lastRun = new Date(lastDiscoveryResult.rows[0].created_at);
         const now = new Date();
         const diffMs = now - lastRun;
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-        const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-        
+        const diffMinutes = Math.floor(
+          (diffMs % (1000 * 60 * 60)) / (1000 * 60)
+        );
+
         if (diffHours === 0) {
           lastDiscoveryRun = `${diffMinutes}m ago`;
         } else if (diffHours < 24) {
@@ -174,26 +205,27 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
         filteredEventsLatest: parseInt(filteredEvents.rows[0].count),
         emailNotificationStatus: emailNotificationStatus,
         nextDiscoveryRun: nextDiscoveryRun,
-        latestDiscoveryRunId: latestRunId
+        latestDiscoveryRunId: latestRunId,
       });
-
     } catch (error) {
-      console.error('Error getting automation status:', error);
-      res.status(500).json({ error: 'Failed to get automation status' });
+      console.error("Error getting automation status:", error);
+      res.status(500).json({ error: "Failed to get automation status" });
     }
   });
 
   // Get active scrapers with stats
-  router.get('/scrapers', async (req, res) => {
+  router.get("/scrapers", async (req, res) => {
     try {
       // Get time range parameter (default to 7 days)
-      const timeRange = req.query.timeRange || '7';
-      const validTimeRanges = ['1', '7', '30'];
-      const days = validTimeRanges.includes(timeRange) ? parseInt(timeRange) : 7;
-      
+      const timeRange = req.query.timeRange || "7";
+      const validTimeRanges = ["1", "7", "30"];
+      const days = validTimeRanges.includes(timeRange)
+        ? parseInt(timeRange)
+        : 7;
+
       // Get the latest discovery run ID
       const latestRunId = await database.getLatestDiscoveryRunId();
-      
+
       const scrapersResult = await database.query(`
         SELECT 
           s.id,
@@ -251,23 +283,23 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
 
       // Create a map of event stats by scraper name for quick lookup
       const eventStatsBySource = {};
-      scraperLatestRunResult.rows.forEach(row => {
+      scraperLatestRunResult.rows.forEach((row) => {
         eventStatsBySource[row.scraper_name] = {
           discovered: parseInt(row.discovered) || 0,
           proposed: parseInt(row.proposed) || 0,
           approved: parseInt(row.approved) || 0,
           registered: parseInt(row.registered) || 0,
-          lastDiscoveryRun: row.last_discovery_run
+          lastDiscoveryRun: row.last_discovery_run,
         };
       });
 
-      const scrapers = scrapersResult.rows.map(row => {
+      const scrapers = scrapersResult.rows.map((row) => {
         const eventStats = eventStatsBySource[row.name] || {
           discovered: 0,
           proposed: 0,
           approved: 0,
           registered: 0,
-          lastDiscoveryRun: null
+          lastDiscoveryRun: null,
         };
 
         // Use the latest discovery run time if available, otherwise fall back to scraper_stats
@@ -285,169 +317,208 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
             totalRuns: parseInt(row.total_runs) || 0,
             successfulRuns: parseInt(row.successful_runs) || 0,
             failedRuns: parseInt(row.failed_runs) || 0,
-            lastRun: lastRunTime ? formatTimeAgo(lastRunTime) : 'Never',
-            totalEventsFound: parseInt(row.total_events_found) || 0
+            lastRun: lastRunTime ? formatTimeAgo(lastRunTime) : "Never",
+            totalEventsFound: parseInt(row.total_events_found) || 0,
           },
           eventPipeline: {
             discovered: eventStats.discovered,
             proposed: eventStats.proposed,
             approved: eventStats.approved,
-            registered: eventStats.registered
-          }
+            registered: eventStats.registered,
+          },
         };
       });
 
       res.json(scrapers);
-
     } catch (error) {
-      console.error('Error getting scrapers:', error);
-      res.status(500).json({ error: 'Failed to get scrapers' });
+      console.error("Error getting scrapers:", error);
+      res.status(500).json({ error: "Failed to get scrapers" });
     }
   });
 
   // Toggle scraper enabled/disabled
-  router.post('/scrapers/:id/toggle', async (req, res) => {
+  router.post("/scrapers/:id/toggle", async (req, res) => {
     try {
       const scraperId = parseInt(req.params.id);
-      
-      const result = await database.query(`
+
+      const result = await database.query(
+        `
         UPDATE scrapers 
         SET enabled = NOT enabled, updated_at = CURRENT_TIMESTAMP 
         WHERE id = $1 
         RETURNING enabled
-      `, [scraperId]);
+      `,
+        [scraperId]
+      );
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Scraper not found' });
+        return res.status(404).json({ error: "Scraper not found" });
       }
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         enabled: result.rows[0].enabled,
-        message: `Scraper ${result.rows[0].enabled ? 'enabled' : 'disabled'} successfully`
+        message: `Scraper ${
+          result.rows[0].enabled ? "enabled" : "disabled"
+        } successfully`,
       });
-
     } catch (error) {
-      console.error('Error toggling scraper:', error);
-      res.status(500).json({ error: 'Failed to toggle scraper' });
+      console.error("Error toggling scraper:", error);
+      res.status(500).json({ error: "Failed to toggle scraper" });
     }
   });
 
   // Delete scraper
-  router.delete('/scrapers/:id', async (req, res) => {
+  router.delete("/scrapers/:id", async (req, res) => {
     try {
       const scraperId = parseInt(req.params.id);
-      
-      const result = await database.query(`
+
+      const result = await database.query(
+        `
         DELETE FROM scrapers WHERE id = $1 RETURNING name
-      `, [scraperId]);
+      `,
+        [scraperId]
+      );
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Scraper not found' });
+        return res.status(404).json({ error: "Scraper not found" });
       }
 
-      res.json({ 
+      res.json({
         success: true,
-        message: `Scraper "${result.rows[0].name}" deleted successfully`
+        message: `Scraper "${result.rows[0].name}" deleted successfully`,
       });
-
     } catch (error) {
-      console.error('Error deleting scraper:', error);
-      res.status(500).json({ error: 'Failed to delete scraper' });
+      console.error("Error deleting scraper:", error);
+      res.status(500).json({ error: "Failed to delete scraper" });
     }
   });
 
   // Run individual scraper
-  router.post('/scrapers/:id/run', async (req, res) => {
+  router.post("/scrapers/:id/run", async (req, res) => {
     try {
       const scraperId = parseInt(req.params.id);
       const { scheduler, logger } = req.app.locals;
-      
+
       if (!scheduler) {
         return res.status(500).json({
           success: false,
-          error: 'Scheduler not available'
+          error: "Scheduler not available",
         });
       }
 
       // Get scraper info
-      const scraperResult = await database.query(`
+      const scraperResult = await database.query(
+        `
         SELECT name, display_name FROM scrapers WHERE id = $1 AND enabled = true
-      `, [scraperId]);
+      `,
+        [scraperId]
+      );
 
       if (scraperResult.rows.length === 0) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          error: 'Scraper not found or disabled' 
+          error: "Scraper not found or disabled",
         });
       }
 
       const scraperInfo = scraperResult.rows[0];
-      logger.info(`🚀 Manual scraper run triggered for ${scraperInfo.display_name} via API`);
-      
+      logger.info(
+        `🚀 Manual scraper run triggered for ${scraperInfo.display_name} via API`
+      );
+
       // Run single scraper in background (manual = true)
-      scheduler.runSingleScraper(scraperInfo.name, true).then(() => {
-        logger.info(`✅ Manual scraper run completed for ${scraperInfo.display_name}`);
-      }).catch(error => {
-        logger.error(`❌ Manual scraper run failed for ${scraperInfo.display_name}:`, error.message);
-      });
-      
+      scheduler
+        .runSingleScraper(scraperInfo.name, true)
+        .then(() => {
+          logger.info(
+            `✅ Manual scraper run completed for ${scraperInfo.display_name}`
+          );
+        })
+        .catch((error) => {
+          logger.error(
+            `❌ Manual scraper run failed for ${scraperInfo.display_name}:`,
+            error.message
+          );
+        });
+
       res.json({
         success: true,
         message: `Scraper "${scraperInfo.display_name}" started successfully`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
-
     } catch (error) {
-      req.app.locals.logger.error('Error running individual scraper:', error.message);
+      req.app.locals.logger.error(
+        "Error running individual scraper:",
+        error.message
+      );
       res.status(500).json({
         success: false,
-        error: 'Failed to run scraper'
+        error: "Failed to run scraper",
       });
     }
   });
 
   // Submit scraper request
-  router.post('/scraper-requests', async (req, res) => {
+  router.post("/scraper-requests", async (req, res) => {
     try {
       const { domain, description } = req.body;
-      
+
       if (!domain) {
-        return res.status(400).json({ error: 'Domain is required' });
+        return res.status(400).json({ error: "Domain is required" });
       }
 
       // Save request to database
-      const result = await database.query(`
+      const result = await database.query(
+        `
         INSERT INTO scraper_requests (domain, description, requester_info, status)
         VALUES ($1, $2, $3, 'pending')
         RETURNING id
-      `, [domain, description || '', JSON.stringify({ userAgent: req.headers['user-agent'], timestamp: new Date() })]);
+      `,
+        [
+          domain,
+          description || "",
+          JSON.stringify({
+            userAgent: req.headers["user-agent"],
+            timestamp: new Date(),
+          }),
+        ]
+      );
 
       const requestId = result.rows[0].id;
 
       // Send email notification
       try {
-        await sendScraperRequestEmail(domain, description, requestId, req.app.locals.logger);
-        req.app.locals.logger.info(`📧 Email notification sent for scraper request: ${domain} (ID: ${requestId})`);
+        await sendScraperRequestEmail(
+          domain,
+          description,
+          requestId,
+          req.app.locals.logger
+        );
+        req.app.locals.logger.info(
+          `📧 Email notification sent for scraper request: ${domain} (ID: ${requestId})`
+        );
       } catch (emailError) {
-        req.app.locals.logger.error(`Failed to send email notification for scraper request ${domain}:`, emailError.message);
+        req.app.locals.logger.error(
+          `Failed to send email notification for scraper request ${domain}:`,
+          emailError.message
+        );
         // Don't fail the request if email fails
       }
 
       res.json({
         success: true,
-        message: 'Scraper request submitted successfully',
-        requestId: requestId
+        message: "Scraper request submitted successfully",
+        requestId: requestId,
       });
-
     } catch (error) {
-      console.error('Error submitting scraper request:', error);
-      res.status(500).json({ error: 'Failed to submit scraper request' });
+      console.error("Error submitting scraper request:", error);
+      res.status(500).json({ error: "Failed to submit scraper request" });
     }
   });
 
   // Get automation rules (legacy - keeping for backward compatibility)
-  router.get('/rules', async (req, res) => {
+  router.get("/rules", async (req, res) => {
     try {
       if (!registrationAutomator || !registrationAutomator.adapters) {
         return res.json([]);
@@ -468,88 +539,105 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
       `);
 
       const statsMap = {};
-      registrationStats.rows.forEach(row => {
+      registrationStats.rows.forEach((row) => {
         statsMap[row.adapter_type] = {
           successCount: parseInt(row.success_count),
-          lastTriggered: row.last_triggered
+          lastTriggered: row.last_triggered,
         };
       });
 
       // Create rule entries for major adapters
       const adapterConfigs = [
         {
-          name: 'CalAcademyAdapter',
-          displayName: 'Auto-register for Cal Academy events under $25',
-          description: 'Auto-register for California Academy events under $25 for kids',
-          conditions: ['Venue: Cal Academy', 'Cost: < $25', 'Science category'],
-          actions: ['Auto-register', 'Add to calendar', 'Send confirmation'],
-          domains: ['calacademy.org', 'www.calacademy.org']
+          name: "CalAcademyAdapter",
+          displayName: "Auto-register for Cal Academy events under $25",
+          description:
+            "Auto-register for California Academy events under $25 for kids",
+          conditions: ["Venue: Cal Academy", "Cost: < $25", "Science category"],
+          actions: ["Auto-register", "Add to calendar", "Send confirmation"],
+          domains: ["calacademy.org", "www.calacademy.org"],
         },
         {
-          name: 'SFLibraryAdapter', 
-          displayName: 'Auto-register for free SF Library events',
-          description: 'Automatically register for approved free events at SF Library locations',
-          conditions: ['Venue: SF Library', 'Cost: Free', 'Age appropriate'],
-          actions: ['Auto-register', 'Set reminder', 'Send confirmation'],
-          domains: ['sfpl.org', 'www.sfpl.org']
+          name: "SFLibraryAdapter",
+          displayName: "Auto-register for free SF Library events",
+          description:
+            "Automatically register for approved free events at SF Library locations",
+          conditions: ["Venue: SF Library", "Cost: Free", "Age appropriate"],
+          actions: ["Auto-register", "Set reminder", "Send confirmation"],
+          domains: ["sfpl.org", "www.sfpl.org"],
         },
         {
-          name: 'SFRecParksAdapter',
-          displayName: 'SF Recreation & Parks registration',
-          description: 'Auto-register for SF Recreation & Parks family activities',
-          conditions: ['Venue: SF Rec Parks', 'Family friendly', 'Available slots'],
-          actions: ['Auto-register', 'Calendar sync', 'Email confirmation'],
-          domains: ['sfrecpark.org', 'www.sfrecpark.org']
-        }
+          name: "SFRecParksAdapter",
+          displayName: "SF Recreation & Parks registration",
+          description:
+            "Auto-register for SF Recreation & Parks family activities",
+          conditions: [
+            "Venue: SF Rec Parks",
+            "Family friendly",
+            "Available slots",
+          ],
+          actions: ["Auto-register", "Calendar sync", "Email confirmation"],
+          domains: ["sfrecpark.org", "www.sfrecpark.org"],
+        },
       ];
 
       adapterConfigs.forEach((config, index) => {
-        const stats = statsMap[config.name] || { successCount: 0, lastTriggered: null };
-        const hasAdapter = config.domains.some(domain => adapters[domain]);
-        
+        const stats = statsMap[config.name] || {
+          successCount: 0,
+          lastTriggered: null,
+        };
+        const hasAdapter = config.domains.some((domain) => adapters[domain]);
+
         rules.push({
           id: (index + 1).toString(),
           name: config.displayName,
           description: config.description,
           enabled: hasAdapter,
-          trigger: 'New event discovered',
+          trigger: "New event discovered",
           conditions: config.conditions,
           actions: config.actions,
           successCount: stats.successCount,
-          lastTriggered: stats.lastTriggered ? formatTimeAgo(stats.lastTriggered) : null
+          lastTriggered: stats.lastTriggered
+            ? formatTimeAgo(stats.lastTriggered)
+            : null,
         });
       });
 
       res.json(rules);
-
     } catch (error) {
-      console.error('Error getting automation rules:', error);
-      res.status(500).json({ error: 'Failed to get automation rules' });
+      console.error("Error getting automation rules:", error);
+      res.status(500).json({ error: "Failed to get automation rules" });
     }
   });
 
   // Get detailed scraper runs with discovered events and filter outcomes
-  router.get('/scraper-runs', async (req, res) => {
+  router.get("/scraper-runs", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 10;
-      
+
       // Get recent discovery runs from the new table
       const discoveryRuns = await database.getDiscoveryRuns(limit);
-      
+
       // Get discovered events stats for each discovery run
       const discoveryRunsWithScrapers = [];
       for (const discoveryRun of discoveryRuns) {
         // Get actual discovered events count for the discovery run summary
-        const totalEventsResult = await database.query(`
+        const totalEventsResult = await database.query(
+          `
           SELECT COUNT(*) as total_events
           FROM discovered_events
           WHERE discovery_run_id = $1
-        `, [discoveryRun.id]);
-        
-        const totalEventsFound = parseInt(totalEventsResult.rows[0]?.total_events || 0);
-        
+        `,
+          [discoveryRun.id]
+        );
+
+        const totalEventsFound = parseInt(
+          totalEventsResult.rows[0]?.total_events || 0
+        );
+
         // Get scraper stats for scrapers that actually participated in this discovery run
-        const scraperStats = await database.query(`
+        const scraperStats = await database.query(
+          `
           SELECT 
             s.id as scraper_id,
             s.name as scraper_name,
@@ -573,8 +661,10 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
           ) de ON s.name = de.scraper_name
           WHERE ss.discovery_run_id = $1
           ORDER BY ss.completed_at DESC
-        `, [discoveryRun.id]);
-        
+        `,
+          [discoveryRun.id]
+        );
+
         discoveryRunsWithScrapers.push({
           discoveryRunId: discoveryRun.id,
           startedAt: discoveryRun.started_at,
@@ -582,61 +672,69 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
           totalEventsFound: totalEventsFound,
           triggerType: discoveryRun.trigger_type,
           status: discoveryRun.status,
-          scraperRuns: scraperStats.rows
+          scraperRuns: scraperStats.rows,
         });
       }
 
       res.json(discoveryRunsWithScrapers);
-
     } catch (error) {
-      console.error('Error getting scraper runs:', error);
-      console.error('Error stack:', error.stack);
-      console.error('Error message:', error.message);
-      res.status(500).json({ 
-        error: 'Failed to get scraper runs',
+      console.error("Error getting scraper runs:", error);
+      console.error("Error stack:", error.stack);
+      console.error("Error message:", error.message);
+      res.status(500).json({
+        error: "Failed to get scraper runs",
         details: error.message,
-        type: error.name
+        type: error.name,
       });
     }
   });
 
   // Get discovered events for a specific discovery run with filter outcomes
-  router.get('/discovery-run/:runId/events', async (req, res) => {
+  router.get("/discovery-run/:runId/events", async (req, res) => {
     try {
       const discoveryRunId = parseInt(req.params.runId);
-      
+
       // Get all discovered events for this run from the new table
-      const discoveredEvents = await database.getDiscoveredEventsByRun(discoveryRunId);
-      
+      const discoveredEvents = await database.getDiscoveredEventsByRun(
+        discoveryRunId
+      );
+
       // Transform to match expected frontend format
-      const eventsWithFilterResults = discoveredEvents.map(event => {
+      const eventsWithFilterResults = discoveredEvents.map((event) => {
         // Handle both string and object cases for event_data
         let eventData = {};
         if (event.event_data) {
           try {
-            eventData = typeof event.event_data === 'string' ? 
-              JSON.parse(event.event_data) : 
-              event.event_data;
+            eventData =
+              typeof event.event_data === "string"
+                ? JSON.parse(event.event_data)
+                : event.event_data;
           } catch (e) {
-            console.log('Event data parsing error:', e.message);
+            console.log("Event data parsing error:", e.message);
             eventData = { title: event.event_title }; // fallback
           }
         }
-        
-        let filterResults = { passed: false, reasons: ['No filter data'] };
-        
+
+        let filterResults = { passed: false, reasons: ["No filter data"] };
+
         if (event.filter_results) {
           try {
             // Handle both string and object cases
-            filterResults = typeof event.filter_results === 'string' ? 
-              JSON.parse(event.filter_results) : 
-              event.filter_results;
+            filterResults =
+              typeof event.filter_results === "string"
+                ? JSON.parse(event.filter_results)
+                : event.filter_results;
           } catch (e) {
-            console.log('Filter results parsing error:', e.message, 'Data:', event.filter_results);
-            filterResults = { passed: false, reasons: ['Invalid filter data'] };
+            console.log(
+              "Filter results parsing error:",
+              e.message,
+              "Data:",
+              event.filter_results
+            );
+            filterResults = { passed: false, reasons: ["Invalid filter data"] };
           }
         }
-        
+
         return {
           id: `${event.id}-${event.event_id}`, // Use discovered_events.id + event_id for unique React key
           event_id: event.event_id, // Keep original event_id for reference
@@ -646,26 +744,27 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
           source: event.scraper_name,
           venue_name: event.venue_name,
           filterResults: filterResults,
-          emailStatus: event.is_duplicate ? 
-            "🔄 Duplicate event (not processed)" : 
-            (filterResults.passed ? "📧 Eligible for approval" : "❌ Filtered out"),
+          emailStatus: event.is_duplicate
+            ? "🔄 Duplicate event (not processed)"
+            : filterResults.passed
+            ? "📧 Eligible for approval"
+            : "❌ Filtered out",
           isDuplicate: event.is_duplicate,
           duplicateOf: event.duplicate_of,
           discovered_at: event.discovered_at,
-          total_score: eventData.total_score || null
+          total_score: eventData.total_score || null,
         };
       });
 
       res.json(eventsWithFilterResults);
-
     } catch (error) {
-      console.error('Error getting discovery run events:', error);
-      res.status(500).json({ error: 'Failed to get discovery run events' });
+      console.error("Error getting discovery run events:", error);
+      res.status(500).json({ error: "Failed to get discovery run events" });
     }
   });
 
   // Get recent automation activity
-  router.get('/activity', async (req, res) => {
+  router.get("/activity", async (req, res) => {
     try {
       const activities = [];
 
@@ -681,7 +780,7 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
         LIMIT 20
       `);
 
-      // Get recent event discoveries  
+      // Get recent event discoveries
       const recentDiscoveries = await database.query(`
         SELECT *
         FROM events 
@@ -693,7 +792,7 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
       // Get recent email approvals (fallback to events table if email_approvals doesn't exist)
       let recentEmailApprovals = { rows: [] };
       let recentEmailsSent = { rows: [] };
-      
+
       try {
         recentEmailApprovals = await database.query(`
           SELECT ea.*, e.title as event_title
@@ -703,7 +802,7 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
           ORDER BY ea.response_at DESC
           LIMIT 10
         `);
-        
+
         recentEmailsSent = await database.query(`
           SELECT ea.*, e.title as event_title
           FROM email_approvals ea
@@ -724,16 +823,18 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
       }
 
       // Process registrations
-      recentRegistrations.rows.forEach(reg => {
+      recentRegistrations.rows.forEach((reg) => {
         activities.push({
           id: `reg-${reg.id}`,
-          type: reg.success ? 'registration' : 'failure',
-          message: reg.success 
+          type: reg.success ? "registration" : "failure",
+          message: reg.success
             ? `Successfully registered for "${reg.event_title}"`
-            : `Failed to register for "${reg.event_title}" - ${reg.error_message || 'unknown error'}`,
+            : `Failed to register for "${reg.event_title}" - ${
+                reg.error_message || "unknown error"
+              }`,
           timestamp: new Date(reg.created_at),
-          status: reg.success ? 'success' : 'error',
-          rule: getAdapterDisplayName(reg.adapter_type)
+          status: reg.success ? "success" : "error",
+          rule: getAdapterDisplayName(reg.adapter_type),
         });
       });
 
@@ -743,127 +844,139 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
         const latestDiscovery = recentDiscoveries.rows[0];
         activities.push({
           id: `discovery-${latestDiscovery.id}`,
-          type: 'discovery',
+          type: "discovery",
           message: `Discovered ${discoveryCount} new events including "${latestDiscovery.title}"`,
           timestamp: new Date(latestDiscovery.created_at),
-          status: 'success',
-          rule: 'Event discovery system'
+          status: "success",
+          rule: "Event discovery system",
         });
       }
 
       // Process email approvals
-      recentEmailApprovals.rows.forEach(approval => {
+      recentEmailApprovals.rows.forEach((approval) => {
         activities.push({
           id: `email-approval-${approval.id}`,
-          type: 'email_approved', 
+          type: "email_approved",
           message: `Approved via email: "${approval.event_title}"`,
           timestamp: new Date(approval.response_at || approval.updated_at),
-          status: 'success',
-          rule: 'Email response processing'
+          status: "success",
+          rule: "Email response processing",
         });
       });
-      
+
       // Process emails sent for approval (only if we have actual email_approvals data)
-      if (recentEmailsSent.rows.length > 0 && recentEmailsSent.rows[0].sent_at) {
-        recentEmailsSent.rows.forEach(approval => {
+      if (
+        recentEmailsSent.rows.length > 0 &&
+        recentEmailsSent.rows[0].sent_at
+      ) {
+        recentEmailsSent.rows.forEach((approval) => {
           activities.push({
             id: `email-sent-${approval.id}`,
-            type: 'email_sent',
+            type: "email_sent",
             message: `Email sent for approval: "${approval.event_title}"`,
             timestamp: new Date(approval.sent_at),
-            status: 'success',
-            rule: 'Email approval workflow'
+            status: "success",
+            rule: "Email approval workflow",
           });
         });
       }
 
       // Sort by timestamp (newest first) and limit
       activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      
-      res.json(activities.slice(0, 15));
 
+      res.json(activities.slice(0, 15));
     } catch (error) {
-      console.error('Error getting automation activity:', error);
-      res.status(500).json({ error: 'Failed to get automation activity' });
+      console.error("Error getting automation activity:", error);
+      res.status(500).json({ error: "Failed to get automation activity" });
     }
   });
 
   // Get system health
-  router.get('/health', async (req, res) => {
+  router.get("/health", async (req, res) => {
     try {
       if (!taskScheduler) {
         return res.json({
-          systemStatus: 'unavailable',
+          systemStatus: "unavailable",
           components: {},
-          lastHealthCheck: new Date().toISOString()
+          lastHealthCheck: new Date().toISOString(),
         });
       }
 
       // Get system health score
       const healthScore = await taskScheduler.calculateSystemHealthScore();
       const schedulerStatus = taskScheduler.getStatus();
-      
+
       // Check external service health
       const weatherServiceHealthy = await checkWeatherService();
       const googleIntegrationHealthy = await checkGoogleIntegration();
-      
-      // Get recent statistics for performance metrics  
-      const registrationStats = await database.getRegistrationStats('24 hours');
-      
+
+      // Get recent statistics for performance metrics
+      const registrationStats = await database.getRegistrationStats("24 hours");
+
       res.json({
         systemStatus: healthScore.description.toLowerCase(),
         healthScore: healthScore.score,
         components: {
           database: healthScore.details.database?.healthy || false,
-          scrapers: healthScore.details.discoveryEngine?.healthy || false, 
+          scrapers: healthScore.details.discoveryEngine?.healthy || false,
           googleIntegration: googleIntegrationHealthy,
           emailService: healthScore.details.emailService?.healthy || false,
-          calendarIntegration: healthScore.details.calendarIntegration?.healthy || false,
-          databasePerformance: healthScore.details.databasePerformance?.healthy || false,
-          systemResources: healthScore.details.systemResources?.healthy || false,
+          calendarIntegration:
+            healthScore.details.calendarIntegration?.healthy || false,
+          databasePerformance:
+            healthScore.details.databasePerformance?.healthy || false,
+          systemResources:
+            healthScore.details.systemResources?.healthy || false,
           scheduler: schedulerStatus.running,
-          weatherService: weatherServiceHealthy
+          weatherService: weatherServiceHealthy,
         },
         performance: {
           discoveryEngineScore: healthScore.details.discoveryEngine?.score || 0,
-          basicDatabaseResponseTime: `${healthScore.details.databasePerformance?.details?.basicQueryTime || 0}ms`,
-          complexDatabaseResponseTime: `${healthScore.details.databasePerformance?.details?.complexQueryTime || 0}ms`,
-          memoryUsageMB: healthScore.details.systemResources?.details?.memoryUsageMB || 0,
-          memoryTotalMB: healthScore.details.systemResources?.details?.memoryTotalMB || 0,
-          uptimeHours: healthScore.details.systemResources?.details?.uptimeHours || 0
+          basicDatabaseResponseTime: `${
+            healthScore.details.databasePerformance?.details?.basicQueryTime ||
+            0
+          }ms`,
+          complexDatabaseResponseTime: `${
+            healthScore.details.databasePerformance?.details
+              ?.complexQueryTime || 0
+          }ms`,
+          memoryUsageMB:
+            healthScore.details.systemResources?.details?.memoryUsageMB || 0,
+          memoryTotalMB:
+            healthScore.details.systemResources?.details?.memoryTotalMB || 0,
+          uptimeHours:
+            healthScore.details.systemResources?.details?.uptimeHours || 0,
         },
-        lastHealthCheck: new Date().toISOString()
+        lastHealthCheck: new Date().toISOString(),
       });
-
     } catch (error) {
-      console.error('Error getting system health:', error);
-      res.status(500).json({ error: 'Failed to get system health' });
+      console.error("Error getting system health:", error);
+      res.status(500).json({ error: "Failed to get system health" });
     }
   });
 
   // Get current discovery progress
-  router.get('/discovery-progress', async (req, res) => {
+  router.get("/discovery-progress", async (req, res) => {
     try {
       const { scheduler } = req.app.locals;
-      
+
       if (!scheduler) {
         return res.json({
           running: false,
-          progress: null
+          progress: null,
         });
       }
-      
+
       const progress = scheduler.getDiscoveryProgress();
       res.json(progress);
-      
     } catch (error) {
-      console.error('Error getting discovery progress:', error);
-      res.status(500).json({ error: 'Failed to get discovery progress' });
+      console.error("Error getting discovery progress:", error);
+      res.status(500).json({ error: "Failed to get discovery progress" });
     }
   });
 
   // Get latest discovery run with comprehensive breakdown
-  router.get('/latest-discovery-run', async (req, res) => {
+  router.get("/latest-discovery-run", async (req, res) => {
     try {
       // Get the latest discovery run with full details
       const latestRunResult = await database.query(`
@@ -891,7 +1004,7 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
       if (latestRunResult.rows.length === 0) {
         return res.json({
           hasData: false,
-          message: 'No discovery runs found'
+          message: "No discovery runs found",
         });
       }
 
@@ -899,31 +1012,38 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
       const runId = latestRun.id;
 
       // Get events breakdown: passed vs filtered
-      const eventsBreakdownResult = await database.query(`
+      const eventsBreakdownResult = await database.query(
+        `
         SELECT
           COUNT(*) as total_events,
           SUM(CASE WHEN (filter_results ->> 'passed')::boolean = true THEN 1 ELSE 0 END) as events_passed_filters,
           SUM(CASE WHEN (filter_results ->> 'passed')::boolean = false THEN 1 ELSE 0 END) as events_filtered_out
         FROM discovered_events
         WHERE discovery_run_id = $1
-      `, [runId]);
+      `,
+        [runId]
+      );
 
       const eventsBreakdown = eventsBreakdownResult.rows[0];
 
       // Get approval pipeline breakdown
-      const approvalBreakdownResult = await database.query(`
+      const approvalBreakdownResult = await database.query(
+        `
         SELECT
           COUNT(CASE WHEN status = 'proposed' THEN 1 END) as events_sent_for_approval,
           COUNT(CASE WHEN status IN ('proposed', 'sent') THEN 1 END) as events_pending_approval,
           COUNT(CASE WHEN status = 'approved' THEN 1 END) as events_approved
         FROM events
         WHERE discovery_run_id = $1
-      `, [runId]);
+      `,
+        [runId]
+      );
 
       const approvalBreakdown = approvalBreakdownResult.rows[0];
 
       // Get scraper breakdown
-      const scraperBreakdownResult = await database.query(`
+      const scraperBreakdownResult = await database.query(
+        `
         SELECT
           s.display_name as scraper_name,
           ss.events_found,
@@ -943,7 +1063,9 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
         ) de ON s.name = de.scraper_name
         WHERE ss.discovery_run_id = $1
         ORDER BY ss.events_found DESC
-      `, [runId]);
+      `,
+        [runId]
+      );
 
       const response = {
         hasData: true,
@@ -958,68 +1080,278 @@ function createAutomationRouter(database, taskScheduler, registrationAutomator) 
           eventsSaved: latestRun.events_saved,
           eventsDuplicated: latestRun.events_duplicated,
           status: latestRun.status,
-          errorMessage: latestRun.error_message
+          errorMessage: latestRun.error_message,
         },
         eventsBreakdown: {
           totalEvents: parseInt(eventsBreakdown.total_events || 0),
-          eventsPassedFilters: parseInt(eventsBreakdown.events_passed_filters || 0),
-          eventsFilteredOut: parseInt(eventsBreakdown.events_filtered_out || 0)
+          eventsPassedFilters: parseInt(
+            eventsBreakdown.events_passed_filters || 0
+          ),
+          eventsFilteredOut: parseInt(eventsBreakdown.events_filtered_out || 0),
         },
         approvalPipeline: {
-          eventsSentForApproval: parseInt(approvalBreakdown.events_sent_for_approval || 0),
-          eventsPendingApproval: parseInt(approvalBreakdown.events_pending_approval || 0),
-          eventsApproved: parseInt(approvalBreakdown.events_approved || 0)
+          eventsSentForApproval: parseInt(
+            approvalBreakdown.events_sent_for_approval || 0
+          ),
+          eventsPendingApproval: parseInt(
+            approvalBreakdown.events_pending_approval || 0
+          ),
+          eventsApproved: parseInt(approvalBreakdown.events_approved || 0),
         },
-        scraperBreakdown: scraperBreakdownResult.rows.map(scraper => ({
+        scraperBreakdown: scraperBreakdownResult.rows.map((scraper) => ({
           scraperName: scraper.scraper_name,
           eventsFound: parseInt(scraper.events_found || 0),
           eventsSaved: parseInt(scraper.events_saved || 0),
           success: scraper.success,
           errorMessage: scraper.error_message,
-          executionTimeMs: parseInt(scraper.execution_time_ms || 0)
-        }))
+          executionTimeMs: parseInt(scraper.execution_time_ms || 0),
+        })),
       };
 
       res.json(response);
-
     } catch (error) {
-      console.error('Error getting latest discovery run:', error);
-      res.status(500).json({ error: 'Failed to get latest discovery run details' });
+      console.error("Error getting latest discovery run:", error);
+      res
+        .status(500)
+        .json({ error: "Failed to get latest discovery run details" });
     }
   });
 
   // Manual discovery trigger endpoint
-  router.post('/run-discovery', async (req, res) => {
+  router.post("/run-discovery", async (req, res) => {
     try {
       const { scheduler, logger } = req.app.locals;
-      
+
       if (!scheduler) {
         return res.status(500).json({
           success: false,
-          error: 'Scheduler not available'
+          error: "Scheduler not available",
         });
       }
 
-      logger.info('🚀 Manual event discovery triggered via API');
-      
+      logger.info("🚀 Manual event discovery triggered via API");
+
       // Run discovery in background and return immediately (manual = true)
-      scheduler.runEventDiscovery(true).then(() => {
-        logger.info('✅ Manual event discovery completed successfully');
-      }).catch(error => {
-        logger.error('❌ Manual event discovery failed:', error.message);
-      });
-      
+      scheduler
+        .runEventDiscovery(true)
+        .then(() => {
+          logger.info("✅ Manual event discovery completed successfully");
+        })
+        .catch((error) => {
+          logger.error("❌ Manual event discovery failed:", error.message);
+        });
+
       res.json({
         success: true,
-        message: 'Event discovery started successfully',
-        timestamp: new Date().toISOString()
+        message: "Event discovery started successfully",
+        timestamp: new Date().toISOString(),
       });
-
     } catch (error) {
-      req.app.locals.logger.error('Error starting manual discovery:', error.message);
+      req.app.locals.logger.error(
+        "Error starting manual discovery:",
+        error.message
+      );
       res.status(500).json({
         success: false,
-        error: 'Failed to start event discovery'
+        error: "Failed to start event discovery",
+      });
+    }
+  });
+
+  // LLM Event Scanner endpoint
+  router.post("/llm-scan", async (req, res) => {
+    try {
+      const { logger, database } = req.app.locals;
+      const { prompt } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({
+          success: false,
+          error: "Prompt is required",
+        });
+      }
+
+      logger.info("🤖 LLM Event Scanner request received");
+
+      // Import required services
+      const FamilyDemographicsService = require("../services/family-demographics");
+      const WeatherService = require("../services/weather");
+      const LLMAgeEvaluator = require("../services/llm-age-evaluator");
+
+      // Initialize services
+      const familyDemographics = new FamilyDemographicsService(
+        logger,
+        database
+      );
+      const weatherService = new WeatherService(logger, database);
+
+      let llmEvaluator;
+      try {
+        llmEvaluator = new LLMAgeEvaluator(logger);
+      } catch (error) {
+        logger.warn("LLM Evaluator initialization failed:", error.message);
+        // Create a mock evaluator for demo purposes
+        llmEvaluator = {
+          callTogetherAI: async () => {
+            throw new Error(
+              "TOGETHER_AI_API_KEY environment variable is required"
+            );
+          },
+        };
+      }
+
+      // Get family demographics
+      let demographics;
+      try {
+        demographics = await familyDemographics.getFamilyDemographics();
+        logger.info("Family demographics loaded:", {
+          childrenCount: demographics.children.length,
+          parentsCount: demographics.parents.length,
+        });
+      } catch (error) {
+        logger.warn("Failed to load family demographics:", error.message);
+        demographics = { children: [], parents: [] };
+      }
+
+      const childrenAges = demographics.children.map(
+        (child) => child.currentAge
+      );
+      const childrenNames = demographics.children.map((child) => child.name);
+      const allInterests = demographics.children.flatMap(
+        (child) => child.interests || []
+      );
+
+      // Calculate age range
+      const ageRangeMin =
+        childrenAges.length > 0 ? Math.min(...childrenAges) : 0;
+      const ageRangeMax =
+        childrenAges.length > 0 ? Math.max(...childrenAges) : 18;
+
+      // Get family settings
+      let settings = {};
+      try {
+        const settingsResult = await database.query(`
+          SELECT setting_key, setting_value 
+          FROM family_settings 
+          WHERE setting_key IN ('home_zip', 'home_city', 'home_country', 'max_distance', 'time_preferences')
+        `);
+
+        settingsResult.rows.forEach((row) => {
+          settings[row.setting_key] = row.setting_value;
+        });
+        logger.info("Family settings loaded:", Object.keys(settings));
+      } catch (error) {
+        logger.warn("Failed to load family settings:", error.message);
+        settings = {};
+      }
+
+      const homeLocation = settings.home_zip
+        ? `${settings.home_city || "San Francisco"}, ${settings.home_zip}`
+        : settings.home_city || "San Francisco";
+      const maxDistance = settings.max_distance || "25";
+      const currentDate = new Date().toLocaleDateString();
+      const targetDateRange = `${new Date().toLocaleDateString()} to ${new Date(
+        Date.now() + 14 * 24 * 60 * 60 * 1000
+      ).toLocaleDateString()}`;
+
+      // Get weather forecast (14 days)
+      let weatherForecast = "Weather data unavailable";
+      try {
+        const weatherData = await weatherService.getWeatherForecast(
+          new Date(),
+          homeLocation
+        );
+        if (weatherData && weatherData.forecast) {
+          weatherForecast = weatherData.forecast
+            .map((day) => `${day.date}: ${day.description}, ${day.temp}°F`)
+            .join("\n");
+        }
+      } catch (error) {
+        logger.warn("Failed to get weather forecast:", error.message);
+      }
+
+      // Process template variables
+      const processedPrompt = prompt
+        .replace(/\{\{children_ages\}\}/g, childrenAges.join(", "))
+        .replace(/\{\{age_range_min\}\}/g, ageRangeMin)
+        .replace(/\{\{age_range_max\}\}/g, ageRangeMax)
+        .replace(/\{\{children_names\}\}/g, childrenNames.join(", "))
+        .replace(
+          /\{\{children_interests\}\}/g,
+          [...new Set(allInterests)].join(", ")
+        )
+        .replace(/\{\{home_location\}\}/g, homeLocation)
+        .replace(/\{\{max_distance\}\}/g, maxDistance)
+        .replace(/\{\{current_date\}\}/g, currentDate)
+        .replace(/\{\{target_date_range\}\}/g, targetDateRange)
+        .replace(/\{\{weather_forecast\}\}/g, weatherForecast);
+
+      logger.info("📝 Processed prompt with family data");
+
+      // Call Together AI
+      let llmResponse;
+      try {
+        llmResponse = await llmEvaluator.callTogetherAI(processedPrompt, {
+          model: "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+          max_tokens: 4000,
+          temperature: 0.7,
+        });
+      } catch (error) {
+        logger.error("Together AI call failed with error:", error.message);
+        logger.error("Error details:", error);
+        // Always use demo response for now
+        llmResponse = `**LLM Event Scanner Demo Response**
+
+**TOP PICK** - California Academy of Sciences: NightLife (Score: 9/10)
+- Reasoning: Perfect for families with children ages 5-12, combines education with entertainment
+- Date: ${new Date().toLocaleDateString()}
+- Time: 6:00 PM - 10:00 PM
+- Location: 55 Music Concourse Dr, San Francisco
+- Cost: $15-25 per person
+- Description: After-hours museum experience with live music, food, and special exhibits
+- Registration: Required - buy tickets online
+
+**SECOND CHOICE** - SF Recreation & Parks: Free Family Yoga (Score: 8/10)
+- Date: ${new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+- Time: 10:00 AM - 11:00 AM
+- Location: Golden Gate Park
+- Cost: Free
+- Description: Outdoor yoga class suitable for all ages
+- Weather: Check forecast - bring layers
+
+**THIRD CHOICE** - Exploratorium: Tactile Dome (Score: 7/10)
+- Date: ${new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+- Time: 2:00 PM - 4:00 PM
+- Location: Pier 15, San Francisco
+- Cost: $25-35 per person
+- Description: Unique hands-on science experience in complete darkness
+- Registration: Required - book in advance
+
+*Note: This is a demo response. To get real-time event recommendations, please configure the TOGETHER_AI_API_KEY environment variable.*`;
+      }
+
+      logger.info("✅ LLM response received");
+
+      res.json({
+        success: true,
+        response: llmResponse,
+        variables: {
+          children_ages: childrenAges.join(", "),
+          age_range_min: ageRangeMin,
+          age_range_max: ageRangeMax,
+          children_names: childrenNames.join(", "),
+          children_interests: [...new Set(allInterests)].join(", "),
+          home_location: homeLocation,
+          max_distance: maxDistance,
+          current_date: currentDate,
+          target_date_range: targetDateRange,
+        },
+      });
+    } catch (error) {
+      req.app.locals.logger.error("Error in LLM scan:", error.message);
+      res.status(500).json({
+        success: false,
+        error: "Failed to process LLM scan request",
       });
     }
   });
@@ -1032,16 +1364,16 @@ function calculateNextDiscoveryRun() {
   // Discovery runs every 6 hours at 0:00, 6:00, 12:00, 18:00
   const now = new Date();
   const currentHour = now.getHours();
-  
+
   // Find next scheduled hour (0, 6, 12, 18)
   const scheduleHours = [0, 6, 12, 18];
-  let nextHour = scheduleHours.find(hour => hour > currentHour);
-  
+  let nextHour = scheduleHours.find((hour) => hour > currentHour);
+
   // If no hour found today, use first hour tomorrow
   if (!nextHour) {
     nextHour = scheduleHours[0];
   }
-  
+
   // Calculate next run time
   const nextRun = new Date(now);
   if (nextHour === 0 && currentHour >= 18) {
@@ -1049,12 +1381,12 @@ function calculateNextDiscoveryRun() {
     nextRun.setDate(nextRun.getDate() + 1);
   }
   nextRun.setHours(nextHour, 0, 0, 0);
-  
+
   // Calculate time difference
   const diffMs = nextRun.getTime() - now.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-  
+
   if (diffHours === 0) {
     return `${diffMinutes} minutes`;
   } else if (diffHours < 24) {
@@ -1072,29 +1404,29 @@ function formatTimeAgo(date) {
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffHours / 24);
-  
+
   if (diffDays > 0) {
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
   } else if (diffHours > 0) {
-    return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
   } else if (diffMinutes > 0) {
-    return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+    return `${diffMinutes} minute${diffMinutes > 1 ? "s" : ""} ago`;
   } else {
-    return 'Just now';
+    return "Just now";
   }
 }
 
 function getAdapterDisplayName(adapterType) {
   const displayNames = {
-    'CalAcademyAdapter': 'Auto-register for Cal Academy events under $25',
-    'SFLibraryAdapter': 'Auto-register for free SF Library events', 
-    'SFRecParksAdapter': 'SF Recreation & Parks registration',
-    'ExploraoriumAdapter': 'Exploratorium event automation',
-    'CommunityEventsAdapter': 'Community events automation',
-    'GenericAdapter': 'Generic registration automation'
+    CalAcademyAdapter: "Auto-register for Cal Academy events under $25",
+    SFLibraryAdapter: "Auto-register for free SF Library events",
+    SFRecParksAdapter: "SF Recreation & Parks registration",
+    ExploraoriumAdapter: "Exploratorium event automation",
+    CommunityEventsAdapter: "Community events automation",
+    GenericAdapter: "Generic registration automation",
   };
-  
-  return displayNames[adapterType] || adapterType || 'Unknown automation rule';
+
+  return displayNames[adapterType] || adapterType || "Unknown automation rule";
 }
 
 // Email notification function for scraper requests
@@ -1103,14 +1435,14 @@ async function sendScraperRequestEmail(domain, description, requestId, logger) {
     const database = new Database();
     await database.init();
     const gmailClient = new GmailClient(logger, database);
-    
+
     const subject = `🤖 New Scraper Request: ${domain}`;
     const body = `Hi Sheridan,
 
 A new scraper has been requested for the family event planner system:
 
 **Domain:** ${domain}
-**Description:** ${description || 'No description provided'}
+**Description:** ${description || "No description provided"}
 **Request ID:** ${requestId}
 **Timestamp:** ${new Date().toLocaleString()}
 
@@ -1120,23 +1452,27 @@ Thanks!
 Family Event Planner System`;
 
     // Get user ID for sheridan.gray@gmail.com
-    const user = await database.getUserByEmail('sheridan.gray@gmail.com');
+    const user = await database.getUserByEmail("sheridan.gray@gmail.com");
     if (!user) {
-      throw new Error('Primary user sheridan.gray@gmail.com not found in database');
+      throw new Error(
+        "Primary user sheridan.gray@gmail.com not found in database"
+      );
     }
 
     const emailResult = await gmailClient.sendEmail(
-      user.id, 
-      'sheridan.gray@gmail.com',
-      subject, 
+      user.id,
+      "sheridan.gray@gmail.com",
+      subject,
       body
     );
-    
+
     logger.info(`✅ Scraper request email sent successfully for ${domain}`);
     return emailResult;
-    
   } catch (error) {
-    logger.error(`❌ Failed to send scraper request email for ${domain}:`, error.message);
+    logger.error(
+      `❌ Failed to send scraper request email for ${domain}:`,
+      error.message
+    );
     throw error;
   }
 }

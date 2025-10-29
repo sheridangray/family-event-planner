@@ -1,14 +1,14 @@
-const SFRecParksScraper = require('./sf-rec-parks');
-const SFLibraryScraper = require('./sf-library');
-const CalAcademyScraper = require('./cal-academy');
-const ChaseCenterScraper = require('./chase-center');
-const FunCheapSFScraper = require('./funcheapsf');
-const BayAreaKidFunScraper = require('./bayareakidfun');
-const SanFranKidsOutAndAboutScraper = require('./sanfran-kidsoutandabout');
-const YBGFestivalScraper = require('./ybgfestival');
-const ExploratoriumScraper = require('./exploratorium');
-const EventDeduplicator = require('../utils/event-deduplicator');
-const EventFilter = require('../filters');
+const SFRecParksScraper = require("./sf-rec-parks");
+const SFLibraryScraper = require("./sf-library");
+const CalAcademyScraper = require("./cal-academy");
+const ChaseCenterScraper = require("./chase-center");
+const FunCheapSFScraper = require("./funcheapsf");
+const BayAreaKidFunScraper = require("./bayareakidfun");
+const SanFranKidsOutAndAboutScraper = require("./sanfran-kidsoutandabout");
+const YBGFestivalScraper = require("./ybgfestival");
+const ExploratoriumScraper = require("./exploratorium");
+const EventDeduplicator = require("../utils/event-deduplicator");
+const EventFilter = require("../filters");
 
 class ScraperManager {
   constructor(logger, database) {
@@ -30,23 +30,24 @@ class ScraperManager {
       new BayAreaKidFunScraper(this.logger),
       new SanFranKidsOutAndAboutScraper(this.logger),
       new YBGFestivalScraper(this.logger),
-      new ExploratoriumScraper(this.logger)
+      new ExploratoriumScraper(this.logger),
     ];
   }
 
   async scrapeAll(discoveryRunId = null) {
     const allRawEvents = [];
-    
+
     // First, collect all events from all scrapers
     for (const scraper of this.scrapers) {
       try {
         this.logger.info(`Starting scrape for ${scraper.name}`);
         const events = await scraper.scrape();
         allRawEvents.push(...events);
-        
+
         await scraper.closeBrowser();
-        this.logger.info(`Completed scraping ${scraper.name}: ${events.length} events found`);
-        
+        this.logger.info(
+          `Completed scraping ${scraper.name}: ${events.length} events found`
+        );
       } catch (error) {
         this.logger.error(`Error with scraper ${scraper.name}:`, error.message);
         await scraper.closeBrowser();
@@ -58,11 +59,11 @@ class ScraperManager {
     // DEBUGGING: Deduplication disabled - commented out for debugging
     // const deduplicationResult = await this.deduplicator.deduplicateEvents(allRawEvents);
     // const { uniqueEvents, mergeInformation } = deduplicationResult;
-    
+
     // Use raw events directly (no deduplication for debugging)
     const uniqueEvents = allRawEvents;
     const mergeInformation = [];
-    
+
     // Save all events to database (no deduplication during debugging)
     const savedEvents = [];
     for (const event of uniqueEvents) {
@@ -71,31 +72,42 @@ class ScraperManager {
         if (discoveryRunId) {
           event.discovery_run_id = discoveryRunId;
         }
-        
+
         const eventId = await this.database.saveEvent(event);
         if (eventId) {
           savedEvents.push(event);
-          this.logger.info(`Saved event: ${event.title} on ${event.date}${event.sources ? ` (sources: ${event.sources.join(', ')})` : ''} [ID: ${eventId}]${discoveryRunId ? ` [Run: ${discoveryRunId}]` : ''}`);
+          this.logger.info(
+            `Saved event: ${event.title} on ${event.date}${
+              event.sources ? ` (sources: ${event.sources.join(", ")})` : ""
+            } [ID: ${eventId}]${
+              discoveryRunId ? ` [Run: ${discoveryRunId}]` : ""
+            }`
+          );
         } else {
-          this.logger.warn(`Event save returned no ID: ${event.title} on ${event.date} [Source: ${event.source}]`);
+          this.logger.warn(
+            `Event save returned no ID: ${event.title} on ${event.date} [Source: ${event.source}]`
+          );
         }
       } catch (error) {
-        this.logger.error(`Error saving event "${event.title}" from ${event.source}:`, {
-          error: error.message,
-          stack: error.stack,
-          eventId: event.id,
-          eventData: {
-            title: event.title,
-            date: event.date,
-            source: event.source,
-            location: event.location?.address || 'No address',
-            cost: event.cost,
-            ageRange: event.ageRange
+        this.logger.error(
+          `Error saving event "${event.title}" from ${event.source}:`,
+          {
+            error: error.message,
+            stack: error.stack,
+            eventId: event.id,
+            eventData: {
+              title: event.title,
+              date: event.date,
+              source: event.source,
+              location: event.location?.address || "No address",
+              cost: event.cost,
+              ageRange: event.ageRange,
+            },
           }
-        });
+        );
       }
     }
-    
+
     // Record merge information after successful event saves
     for (const mergeInfo of mergeInformation) {
       try {
@@ -105,11 +117,21 @@ class ScraperManager {
           mergeInfo.similarityScore,
           mergeInfo.mergeType
         );
-        
+
         if (mergeId) {
-          this.logger.debug(`Recorded ${mergeInfo.mergeType} merge: "${mergeInfo.mergedEvent.title}" -> ${mergeInfo.primaryEventId} [Score: ${mergeInfo.similarityScore.toFixed(3)}, MergeID: ${mergeId}]`);
+          this.logger.debug(
+            `Recorded ${mergeInfo.mergeType} merge: "${
+              mergeInfo.mergedEvent.title
+            }" -> ${
+              mergeInfo.primaryEventId
+            } [Score: ${mergeInfo.similarityScore.toFixed(
+              3
+            )}, MergeID: ${mergeId}]`
+          );
         } else {
-          this.logger.debug(`Skipped recording ${mergeInfo.mergeType} merge for "${mergeInfo.mergedEvent.title}" - primary event ${mergeInfo.primaryEventId} not found in database`);
+          this.logger.debug(
+            `Skipped recording ${mergeInfo.mergeType} merge for "${mergeInfo.mergedEvent.title}" - primary event ${mergeInfo.primaryEventId} not found in database`
+          );
         }
       } catch (error) {
         this.logger.warn(`Failed to record event merge in database:`, {
@@ -118,29 +140,49 @@ class ScraperManager {
           mergedEventTitle: mergeInfo.mergedEvent.title,
           mergedEventSource: mergeInfo.mergedEvent.source,
           similarityScore: mergeInfo.similarityScore,
-          mergeType: mergeInfo.mergeType
+          mergeType: mergeInfo.mergeType,
         });
       }
     }
 
     // Log deduplication statistics
     const stats = this.deduplicator.getStats();
-    this.logger.info(`Deduplication complete: ${allRawEvents.length} raw -> ${uniqueEvents.length} unique -> ${savedEvents.length} saved`);
+    this.logger.info(
+      `Deduplication complete: ${allRawEvents.length} raw -> ${uniqueEvents.length} unique -> ${savedEvents.length} saved`
+    );
     this.logger.info(`Deduplication stats:`, stats);
 
     return savedEvents;
   }
 
-  async scrapeSource(sourceName, discoveryRunId = null) {
-    const scraper = this.scrapers.find(s => s.name === sourceName);
+  async scrapeSource(sourceName, discoveryRunId = null, options = {}) {
+    const scraper = this.scrapers.find((s) => s.name === sourceName);
     if (!scraper) {
       throw new Error(`Scraper not found: ${sourceName}`);
     }
 
     try {
-      this.logger.info(`Starting targeted scrape for ${scraper.name}${discoveryRunId ? ` (Discovery Run #${discoveryRunId})` : ''}`);
-      const rawEvents = await scraper.scrape();
-      
+      this.logger.info(
+        `Starting targeted scrape for ${scraper.name}${
+          discoveryRunId ? ` (Discovery Run #${discoveryRunId})` : ""
+        }`
+      );
+
+      // Determine daysToScrape based on options or scraper capability
+      const daysToScrape = options.daysToScrape;
+
+      // Cal Academy scraper supports multi-day scraping
+      const rawEvents =
+        scraper.name === "cal-academy" && daysToScrape !== undefined
+          ? await scraper.scrape(daysToScrape)
+          : await scraper.scrape();
+
+      if (scraper.name === "cal-academy" && daysToScrape !== undefined) {
+        this.logger.info(
+          `Scraped ${scraper.name} for ${daysToScrape} days: ${rawEvents.length} events found`
+        );
+      }
+
       // Run filtering to get filter results for each event (if we have a discovery run)
       let eventsWithFilters = [];
       if (discoveryRunId && rawEvents.length > 0) {
@@ -148,23 +190,32 @@ class ScraperManager {
           try {
             // Apply filters to capture detailed results for ALL events (not just passing ones)
             await this.eventFilter.evaluateAllEvents([event]);
-            
+
             // Get the filter results that were attached to the event during filtering
-            const filterResults = event.filterResults || { passed: false, reasons: ['No filter results captured'] };
-            
+            const filterResults = event.filterResults || {
+              passed: false,
+              reasons: ["No filter results captured"],
+            };
+
             eventsWithFilters.push({
               event,
-              filterResults
+              filterResults,
             });
           } catch (error) {
-            this.logger.warn(`Error filtering event for discovery log: ${event.title}:`, error.message);
+            this.logger.warn(
+              `Error filtering event for discovery log: ${event.title}:`,
+              error.message
+            );
             eventsWithFilters.push({
               event,
-              filterResults: { passed: false, reasons: [`Filter error: ${error.message}`] }
+              filterResults: {
+                passed: false,
+                reasons: [`Filter error: ${error.message}`],
+              },
             });
           }
         }
-        
+
         // Save all discovered events to discovered_events table
         for (const { event, filterResults } of eventsWithFilters) {
           try {
@@ -177,26 +228,29 @@ class ScraperManager {
               filterResults
             );
           } catch (error) {
-            this.logger.error(`Error saving discovered event "${event.title}":`, error.message);
+            this.logger.error(
+              `Error saving discovered event "${event.title}":`,
+              error.message
+            );
           }
         }
       }
-      
+
       // DEBUGGING: Deduplication disabled for single scraper - commented out for debugging
       // const deduplicationResult = await this.deduplicator.deduplicateEvents(rawEvents);
       // const { uniqueEvents, mergeInformation } = deduplicationResult;
-      
+
       // Use raw events directly (no deduplication for debugging)
       const uniqueEvents = rawEvents;
       const mergeInformation = [];
-      
+
       // Skip duplicate marking during debugging
       // if (discoveryRunId && mergeInformation.length > 0) {
       //   for (const mergeInfo of mergeInformation) {
       //     try {
       //       await this.database.query(`
-      //         UPDATE discovered_events 
-      //         SET is_duplicate = true, duplicate_of = $1 
+      //         UPDATE discovered_events
+      //         SET is_duplicate = true, duplicate_of = $1
       //         WHERE discovery_run_id = $2 AND event_id = $3
       //       `, [mergeInfo.primaryEventId, discoveryRunId, mergeInfo.mergedEvent.id]);
       //     } catch (error) {
@@ -204,45 +258,54 @@ class ScraperManager {
       //     }
       //   }
       // }
-      
+
       // Save only events that passed filters to main events table (for approval pipeline)
       const savedEvents = [];
       if (discoveryRunId && eventsWithFilters) {
         // Filter to only events that passed all filters
-        const eventsPassedFilters = eventsWithFilters.filter(({ filterResults }) => 
-          filterResults && filterResults.passed === true
+        const eventsPassedFilters = eventsWithFilters.filter(
+          ({ filterResults }) => filterResults && filterResults.passed === true
         );
-        
-        this.logger.info(`${eventsPassedFilters.length} events passed filters out of ${eventsWithFilters.length} total events`);
-        
+
+        this.logger.info(
+          `${eventsPassedFilters.length} events passed filters out of ${eventsWithFilters.length} total events`
+        );
+
         for (const { event, filterResults } of eventsPassedFilters) {
           try {
             // Assign discovery run ID if provided
             if (discoveryRunId) {
               event.discovery_run_id = discoveryRunId;
             }
-            
+
             const eventId = await this.database.saveEvent(event);
             if (eventId) {
               savedEvents.push(event);
-              this.logger.info(`Saved filtered event: ${event.title} on ${event.date} [ID: ${eventId}] [Run: ${discoveryRunId}] (passed filters)`);
+              this.logger.info(
+                `Saved filtered event: ${event.title} on ${event.date} [ID: ${eventId}] [Run: ${discoveryRunId}] (passed filters)`
+              );
             } else {
-              this.logger.warn(`Event save returned no ID: ${event.title} on ${event.date} [Source: ${event.source}]`);
+              this.logger.warn(
+                `Event save returned no ID: ${event.title} on ${event.date} [Source: ${event.source}]`
+              );
             }
           } catch (error) {
-            this.logger.error(`Error saving filtered event "${event.title}" from ${event.source}:`, {
-              error: error.message,
-              stack: error.stack,
-              eventId: event.id,
-              eventData: {
-                title: event.title,
-                date: event.date,
-                source: event.source,
-                location: event.location?.address || 'No address',
-                cost: event.cost,
-                ageRange: event.ageRange
+            this.logger.error(
+              `Error saving filtered event "${event.title}" from ${event.source}:`,
+              {
+                error: error.message,
+                stack: error.stack,
+                eventId: event.id,
+                eventData: {
+                  title: event.title,
+                  date: event.date,
+                  source: event.source,
+                  location: event.location?.address || "No address",
+                  cost: event.cost,
+                  ageRange: event.ageRange,
+                },
               }
-            });
+            );
           }
         }
       } else {
@@ -252,14 +315,19 @@ class ScraperManager {
             const eventId = await this.database.saveEvent(event);
             if (eventId) {
               savedEvents.push(event);
-              this.logger.info(`Saved event: ${event.title} on ${event.date} [ID: ${eventId}] (legacy mode)`);
+              this.logger.info(
+                `Saved event: ${event.title} on ${event.date} [ID: ${eventId}] (legacy mode)`
+              );
             }
           } catch (error) {
-            this.logger.error(`Error saving event "${event.title}":`, error.message);
+            this.logger.error(
+              `Error saving event "${event.title}":`,
+              error.message
+            );
           }
         }
       }
-      
+
       // Record merge information after successful event saves
       for (const mergeInfo of mergeInformation) {
         try {
@@ -269,11 +337,21 @@ class ScraperManager {
             mergeInfo.similarityScore,
             mergeInfo.mergeType
           );
-          
+
           if (mergeId) {
-            this.logger.debug(`Recorded ${mergeInfo.mergeType} merge: "${mergeInfo.mergedEvent.title}" -> ${mergeInfo.primaryEventId} [Score: ${mergeInfo.similarityScore.toFixed(3)}, MergeID: ${mergeId}]`);
+            this.logger.debug(
+              `Recorded ${mergeInfo.mergeType} merge: "${
+                mergeInfo.mergedEvent.title
+              }" -> ${
+                mergeInfo.primaryEventId
+              } [Score: ${mergeInfo.similarityScore.toFixed(
+                3
+              )}, MergeID: ${mergeId}]`
+            );
           } else {
-            this.logger.debug(`Skipped recording ${mergeInfo.mergeType} merge for "${mergeInfo.mergedEvent.title}" - primary event ${mergeInfo.primaryEventId} not found in database`);
+            this.logger.debug(
+              `Skipped recording ${mergeInfo.mergeType} merge for "${mergeInfo.mergedEvent.title}" - primary event ${mergeInfo.primaryEventId} not found in database`
+            );
           }
         } catch (error) {
           this.logger.warn(`Failed to record event merge in database:`, {
@@ -282,15 +360,16 @@ class ScraperManager {
             mergedEventTitle: mergeInfo.mergedEvent.title,
             mergedEventSource: mergeInfo.mergedEvent.source,
             similarityScore: mergeInfo.similarityScore,
-            mergeType: mergeInfo.mergeType
+            mergeType: mergeInfo.mergeType,
           });
         }
       }
-      
+
       await scraper.closeBrowser();
-      this.logger.info(`Completed scraping ${scraper.name}: ${rawEvents.length} raw -> ${uniqueEvents.length} unique -> ${savedEvents.length} saved`);
+      this.logger.info(
+        `Completed scraping ${scraper.name}: ${rawEvents.length} raw -> ${uniqueEvents.length} unique -> ${savedEvents.length} saved`
+      );
       return savedEvents;
-      
     } catch (error) {
       this.logger.error(`Error with scraper ${scraper.name}:`, error.message);
       await scraper.closeBrowser();
@@ -317,7 +396,7 @@ class ScraperManager {
    */
   resetDeduplicator() {
     this.deduplicator.reset();
-    this.logger.info('Deduplicator state reset');
+    this.logger.info("Deduplicator state reset");
   }
 }
 

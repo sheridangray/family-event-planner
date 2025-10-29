@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-09-26T20:38:39.400Z",
+  "gmailStatus": {
+    "success": false,
+    "error": "unauthorized_client"
+  },
+  "stopWatch": {
+    "success": false,
+    "error": "unauthorized_client"
+  },
+  "setupWatch": {
+    "success": false,
+    "error": "unauthorized_client"
+  },
+  "pubsubTest": {
+    "success": false,
+    "message": "Requires service account credentials"
+  }
+}

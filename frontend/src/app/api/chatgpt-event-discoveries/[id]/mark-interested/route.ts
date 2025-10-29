@@ -5,38 +5,44 @@ const BACKEND_API_URL = process.env.BACKEND_API_URL || "https://family-event-pla
 const API_KEY = process.env.BACKEND_API_KEY || "fep_secure_api_key_2024_$7mK9pL2nQ8xV3wR6zA";
 
 /**
- * User-specific OAuth status endpoint
- * Allows any authenticated user to check their own OAuth status
+ * PATCH /api/chatgpt-event-discoveries/:id/mark-interested - Mark event as interested
  */
-export async function GET(req: NextRequest) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const session = await auth();
     
-    if (!session?.user?.email) {
+    if (!session?.user) {
       return NextResponse.json({ 
         success: false,
         error: "Not authenticated" 
       }, { status: 401 });
     }
 
-    console.log(`[OAuth Status] Checking status for user: ${session.user.email}`);
+    const { id } = params;
+    const body = await req.json();
 
-    // Call backend to get user-specific authentication status
-    const response = await fetch(`${BACKEND_API_URL}/api/admin/user-auth-status`, {
-      headers: {
-        'x-api-key': API_KEY,
-        'x-user-email': session.user.email,
-        'Content-Type': 'application/json'
+    // Call backend API
+    const response = await fetch(
+      `${BACKEND_API_URL}/api/chatgpt-event-discoveries/${id}/mark-interested`,
+      {
+        method: 'PATCH',
+        headers: {
+          'x-api-key': API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
       }
-    });
+    );
 
     if (response.ok) {
       const data = await response.json();
-      console.log(`[OAuth Status] Backend response:`, data);
       return NextResponse.json(data);
     } else {
       const errorText = await response.text();
-      console.error(`[OAuth Status] Backend error:`, errorText);
+      console.error('[ChatGPT Discovery Mark Interested] Backend error:', errorText);
       return NextResponse.json({ 
         success: false,
         error: errorText 
@@ -44,12 +50,11 @@ export async function GET(req: NextRequest) {
     }
 
   } catch (error) {
-    console.error('[OAuth Status] API error:', error);
+    console.error('[ChatGPT Discovery Mark Interested] API error:', error);
     return NextResponse.json({ 
       success: false,
       error: 'Internal server error' 
     }, { status: 500 });
   }
 }
-
 

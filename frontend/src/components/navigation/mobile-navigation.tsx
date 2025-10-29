@@ -10,6 +10,7 @@ import {
   ChartBarIcon,
   Cog6ToothIcon,
   CpuChipIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -18,6 +19,7 @@ import {
   ChartBarIcon as ChartBarIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
   CpuChipIcon as CpuChipIconSolid,
+  SparklesIcon as SparklesIconSolid,
 } from "@heroicons/react/24/solid";
 
 const navigation = [
@@ -32,6 +34,12 @@ const navigation = [
     href: "/dashboard/events",
     icon: ListBulletIcon,
     activeIcon: ListBulletIconSolid,
+  },
+  {
+    name: "AI Picks",
+    href: "/dashboard/chatgpt-suggestions",
+    icon: SparklesIcon,
+    activeIcon: SparklesIconSolid,
   },
   {
     name: "Settings",

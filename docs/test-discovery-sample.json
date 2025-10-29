@@ -1,0 +1,192 @@
+{
+  "dateSearched": "2025-10-29T09:00:00Z",
+  "searchContext": {
+    "searchRadiusMiles": 25,
+    "baseLocation": "San Francisco, California",
+    "targetDate": "2025-11-12",
+    "familyContext": {
+      "wife": { "name": "Joyce Zhang", "dob": "1987-02-24" },
+      "children": [
+        { "name": "Apollo Gray", "dob": "2021-04-26" },
+        { "name": "Athena Gray", "dob": "2023-03-10" }
+      ]
+    },
+    "filters": {
+      "kidCentricAgeRange": "2-6 years",
+      "strollerFriendly": true,
+      "weekdayAfter5pm": true,
+      "weekendAnytime": true,
+      "prioritizeMissionBay": true,
+      "considerWeather": true
+    },
+    "calendarConflictsChecked": true
+  },
+  "events": [
+    {
+      "rank": 1,
+      "pickType": "TOP PICK",
+      "score": 10,
+      "event": {
+        "title": "California Academy of Sciences - Discovery Tidepool",
+        "date": "2025-11-12",
+        "startTime": "2025-11-12T10:00:00",
+        "endTime": "2025-11-12T12:00:00",
+        "location": {
+          "name": "California Academy of Sciences",
+          "address": "55 Music Concourse Drive, San Francisco, CA 94118",
+          "distanceMiles": 5.2
+        },
+        "cost": {
+          "adult": 39.95,
+          "child": 34.95,
+          "infantFree": true,
+          "currency": "USD"
+        },
+        "description": "Hands-on exploration of a living tidepool with touchable sea stars, anemones, and hermit crabs. Perfect for young learners to discover marine life in a safe, guided environment.",
+        "weather": {
+          "forecast": "Partly cloudy, 62°F",
+          "riskLevel": "low"
+        },
+        "urls": {
+          "eventPage": "https://www.calacademy.org/exhibits/discovery-tidepool",
+          "registration": "https://www.calacademy.org/tickets",
+          "addToCalendar": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=California+Academy+of+Sciences+-+Discovery+Tidepool&dates=20251112T100000/20251112T120000&details=Hands-on+exploration+of+a+living+tidepool&location=55+Music+Concourse+Drive,+San+Francisco,+CA+94118"
+        },
+        "calendarConflict": false
+      },
+      "reasoning": "Indoor activity with interactive learning perfect for Apollo (4.5 years) and Athena (2.5 years). Stroller-accessible facility, free for infants under 2, and located close to Mission Bay. Weekend timing works great for family schedules."
+    },
+    {
+      "rank": 2,
+      "pickType": "SECOND CHOICE",
+      "score": 9,
+      "event": {
+        "title": "Children's Creativity Museum - Imagination Lab",
+        "date": "2025-11-12",
+        "startTime": "2025-11-12T13:00:00",
+        "endTime": "2025-11-12T15:00:00",
+        "location": {
+          "name": "Children's Creativity Museum",
+          "address": "221 4th Street, San Francisco, CA 94103",
+          "distanceMiles": 3.1
+        },
+        "cost": {
+          "adult": 15.00,
+          "child": 15.00,
+          "infantFree": false,
+          "currency": "USD"
+        },
+        "description": "Interactive workshops where kids create animations, music videos, and digital art. Designed specifically for ages 2-12 with age-appropriate activities.",
+        "weather": {
+          "forecast": "Partly cloudy, 62°F",
+          "riskLevel": "low"
+        },
+        "urls": {
+          "eventPage": "https://creativity.org/experiences/",
+          "registration": "https://creativity.org/visit/",
+          "addToCalendar": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Children%27s+Creativity+Museum+-+Imagination+Lab&dates=20251112T130000/20251112T150000&details=Interactive+workshops+for+digital+creativity&location=221+4th+Street,+San+Francisco,+CA+94103"
+        },
+        "calendarConflict": false
+      },
+      "reasoning": "Highly rated for toddlers and preschoolers, fully indoor (weather-proof), and very close to home. Offers creative digital experiences that engage both Apollo and Athena at their developmental levels."
+    },
+    {
+      "rank": 3,
+      "pickType": "THIRD CHOICE",
+      "score": 8,
+      "event": {
+        "title": "Golden Gate Park Playground & Carousel",
+        "date": "2025-11-12",
+        "startTime": "2025-11-12T11:00:00",
+        "endTime": "2025-11-12T13:00:00",
+        "location": {
+          "name": "Koret Children's Quarter",
+          "address": "Bowling Green Drive, San Francisco, CA 94122",
+          "distanceMiles": 6.4
+        },
+        "cost": {
+          "adult": 0,
+          "child": 2.00,
+          "infantFree": true,
+          "currency": "USD"
+        },
+        "description": "San Francisco's oldest public playground featuring slides, swings, climbing structures, and a historic carousel. Wide pathways perfect for strollers.",
+        "weather": {
+          "forecast": "Partly cloudy, 62°F",
+          "riskLevel": "medium"
+        },
+        "urls": {
+          "eventPage": "https://sfrecpark.org/destination/golden-gate-park/koret-childrens-quarter/",
+          "addToCalendar": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Golden+Gate+Park+Playground+%26+Carousel&dates=20251112T110000/20251112T130000&details=Playground+and+carousel+fun&location=Bowling+Green+Drive,+San+Francisco,+CA+94122"
+        },
+        "calendarConflict": false
+      },
+      "reasoning": "Free outdoor option (weather permitting) with classic playground equipment ideal for active toddlers. Carousel adds special experience. Completely stroller-friendly. Medium weather risk due to outdoor location."
+    },
+    {
+      "rank": 4,
+      "pickType": "ALTERNATIVE",
+      "score": 7,
+      "event": {
+        "title": "SF Zoo - Little Paws Children's Area",
+        "date": "2025-11-12",
+        "startTime": "2025-11-12T10:00:00",
+        "endTime": "2025-11-12T14:00:00",
+        "location": {
+          "name": "San Francisco Zoo",
+          "address": "Sloat Boulevard & Great Highway, San Francisco, CA 94132",
+          "distanceMiles": 9.8
+        },
+        "cost": {
+          "adult": 28.00,
+          "child": 22.00,
+          "infantFree": true,
+          "currency": "USD"
+        },
+        "description": "Interactive children's area with farm animals, educational exhibits, and a playground. Stroller-friendly paths throughout the zoo.",
+        "urls": {
+          "eventPage": "https://www.sfzoo.org/visit/",
+          "registration": "https://www.sfzoo.org/tickets/",
+          "addToCalendar": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=SF+Zoo+-+Little+Paws+Children%27s+Area&dates=20251112T100000/20251112T140000&details=Visit+the+children%27s+area+with+farm+animals&location=Sloat+Boulevard+%26+Great+Highway,+San+Francisco,+CA+94132"
+        },
+        "calendarConflict": false
+      },
+      "reasoning": "Great animal encounters for kids, but farther from Mission Bay (9.8 miles). Partially outdoor so weather could be a factor. Free for infants and offers engaging experiences for both kids."
+    },
+    {
+      "rank": 5,
+      "pickType": "ALTERNATIVE",
+      "score": 7,
+      "event": {
+        "title": "Randall Museum - Toddler Time",
+        "date": "2025-11-12",
+        "startTime": "2025-11-12T10:30:00",
+        "endTime": "2025-11-12T11:30:00",
+        "location": {
+          "name": "Randall Museum",
+          "address": "199 Museum Way, San Francisco, CA 94114",
+          "distanceMiles": 4.7
+        },
+        "cost": {
+          "adult": 0,
+          "child": 0,
+          "infantFree": true,
+          "currency": "USD"
+        },
+        "description": "Free toddler-focused program with crafts, songs, and stories. Indoor facility with live animals and hands-on science activities.",
+        "urls": {
+          "eventPage": "https://randallmuseum.org/programs/toddler-time/",
+          "addToCalendar": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Randall+Museum+-+Toddler+Time&dates=20251112T103000/20251112T113000&details=Free+toddler+program+with+crafts+and+activities&location=199+Museum+Way,+San+Francisco,+CA+94114"
+        },
+        "calendarConflict": false
+      },
+      "reasoning": "Completely free, age-appropriate programming specifically for toddlers. Indoor setting eliminates weather concerns. Shorter duration (1 hour) perfect for young attention spans."
+    }
+  ],
+  "metadata": {
+    "generatedBy": "GPT-5 Event Discovery Agent",
+    "version": "1.0",
+    "runtimeSeconds": 42
+  }
+}
+

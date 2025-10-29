@@ -182,6 +182,17 @@ class PostgresDatabase {
         FOREIGN KEY (discovery_run_id) REFERENCES discovery_runs(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS chatgpt_event_discoveries (
+        id SERIAL PRIMARY KEY,
+        date_searched TIMESTAMP NOT NULL,
+        target_date DATE NOT NULL,
+        search_context JSONB NOT NULL,
+        events JSONB NOT NULL,
+        metadata JSONB,
+        interested_event_ranks INTEGER[],
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
       CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
       CREATE INDEX IF NOT EXISTS idx_family_members_role ON family_members(role);
@@ -192,6 +203,8 @@ class PostgresDatabase {
       CREATE INDEX IF NOT EXISTS idx_event_interactions_event_id ON event_interactions(event_id);
       CREATE INDEX IF NOT EXISTS idx_event_interactions_type ON event_interactions(interaction_type);
       CREATE INDEX IF NOT EXISTS idx_event_interactions_date ON event_interactions(interaction_date);
+      CREATE INDEX IF NOT EXISTS idx_chatgpt_discoveries_date_searched ON chatgpt_event_discoveries(date_searched);
+      CREATE INDEX IF NOT EXISTS idx_chatgpt_discoveries_target_date ON chatgpt_event_discoveries(target_date);
     `;
 
     await this.pool.query(createTablesSQL);
