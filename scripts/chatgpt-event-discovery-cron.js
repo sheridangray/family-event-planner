@@ -57,6 +57,7 @@ function buildPrompt() {
 
   return `Search for fully kid-centric, family-friendly events within 25 miles of San Francisco, California, that occur 14 days from today (${targetDate}). Apply the following filters:
 - Events must be specifically kid-focused (ages ~2–6 welcome) with stroller-friendly or toddler-appropriate setup.
+- Do not hallucinate events that do not exist. All details must be available such as the title, date, time, location, and url.
 - Weekday events must start after 5:00 PM; weekend events may be any time.
 - Consider forecasted weather for outdoor events.
 - Check my Google Calendar for conflicts on that date and exclude/flag any conflicting time slots.
