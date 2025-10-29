@@ -30,7 +30,8 @@
     "test:production": "npm run test:security:critical && npm run test:performance && npm run test:load",
     "test:full": "npm run test:quick && npm run test:security && npm run test:e2e && npm run test:system",
     "test:pre-deploy": "npm run test:security:critical && npm run test:system",
-    "test:weekly": "npm run test:full && npm run test:load"
+    "test:weekly": "npm run test:full && npm run test:load",
+    "chatgpt-cron": "node scripts/chatgpt-event-discovery-cron.js"
   },
   "keywords": [
     "family",
@@ -54,6 +55,7 @@
     "googleapis": "^144.0.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^3.0.3",
+    "openai": "^4.76.0",
     "pg": "^8.11.3",
     "puppeteer": "^24.9.0",
     "twilio": "^4.23.0",

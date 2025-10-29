@@ -117,6 +117,28 @@ services:
       - key: NODE_ENV
         value: production
 
+  # ChatGPT Event Discovery Cron Job
+  - type: cron
+    name: chatgpt-event-discovery
+    env: node
+    plan: starter
+    schedule: "*/5 * * * *"
+    buildCommand: npm install
+    startCommand: node scripts/chatgpt-event-discovery-cron.js
+    envVars:
+      # OpenAI API Key
+      - key: OPEN_AI_API_KEY
+        sync: false
+      # Backend API Authentication
+      - key: CHATGPT_API_KEY
+        sync: false
+      # Backend API URL (optional, defaults to production)
+      - key: BACKEND_API_URL
+        value: https://family-event-planner-backend.onrender.com
+      # Node Environment
+      - key: NODE_ENV
+        value: production
+
 # Database
 databases:
   - name: family-event-planner-db
