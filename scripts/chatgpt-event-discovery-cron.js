@@ -223,8 +223,14 @@ async function postToBackend(discoveryData) {
 async function main() {
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
+  const processId = process.pid;
 
   console.log(`\n🚀 ChatGPT Event Discovery Cron Job - ${timestamp}`);
+  console.log("==========================================");
+  console.log(`📊 Process ID: ${processId}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`🔗 Backend URL: ${BACKEND_API_URL}`);
+  console.log(`🤖 OpenAI Model: gpt-4o-mini`);
   console.log("==========================================\n");
 
   try {
@@ -233,9 +239,11 @@ async function main() {
     const prompt = buildPrompt();
     const targetDate = getTargetDate();
     console.log(`   Target date: ${targetDate}`);
+    console.log(`   Prompt length: ${prompt.length} characters`);
 
     // Step 2: Call OpenAI API
     console.log("\n🤖 Calling OpenAI API...");
+    const openaiStartTime = Date.now();
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini", // Using gpt-4o-mini for cost efficiency, can upgrade to gpt-4o if needed
       messages: [
@@ -254,8 +262,19 @@ async function main() {
       max_tokens: 4000,
     });
 
+    const openaiDuration = ((Date.now() - openaiStartTime) / 1000).toFixed(2);
     const responseText = completion.choices[0].message.content;
     console.log(`   ✅ Received ${responseText.length} characters from OpenAI`);
+    console.log(`   ⏱️  OpenAI API call took: ${openaiDuration}s`);
+    console.log(
+      `   💰 Tokens used: ${completion.usage?.total_tokens || "unknown"}`
+    );
+    if (completion.usage) {
+      console.log(`      - Input tokens: ${completion.usage.prompt_tokens}`);
+      console.log(
+        `      - Output tokens: ${completion.usage.completion_tokens}`
+      );
+    }
 
     // Step 3: Parse JSON response
     console.log("\n📦 Parsing JSON response...");
@@ -263,10 +282,15 @@ async function main() {
     try {
       // Try parsing with response format
       discoveryData = JSON.parse(responseText);
+      console.log("   ✅ Direct JSON parsing successful");
     } catch (e) {
+      console.log(
+        "   ⚠️  Direct parsing failed, trying markdown extraction..."
+      );
       // Fallback: try extracting JSON from markdown
       try {
         discoveryData = parseJSONResponse(responseText);
+        console.log("   ✅ Markdown extraction successful");
       } catch (e2) {
         throw new Error(
           `Failed to parse JSON: ${
@@ -288,17 +312,51 @@ async function main() {
     const eventsCount = discoveryData.events?.length || 0;
     console.log(`   ✅ Parsed successfully: ${eventsCount} events found`);
 
+    // Log event details
+    if (eventsCount > 0) {
+      console.log("   📋 Event summary:");
+      discoveryData.events.slice(0, 5).forEach((event, index) => {
+        const eventTitle = event.event?.title || "Unknown";
+        const eventRank = event.rank || "N/A";
+        const eventScore = event.score || "N/A";
+        console.log(
+          `      ${
+            index + 1
+          }. [Rank ${eventRank}, Score ${eventScore}] ${eventTitle.substring(
+            0,
+            60
+          )}${eventTitle.length > 60 ? "..." : ""}`
+        );
+      });
+      if (eventsCount > 5) {
+        console.log(`      ... and ${eventsCount - 5} more events`);
+      }
+    }
+
     // Step 4: POST to backend
     console.log("\n📡 POSTing to backend API...");
+    const backendStartTime = Date.now();
     const backendResponse = await postToBackend(discoveryData);
+    const backendDuration = ((Date.now() - backendStartTime) / 1000).toFixed(2);
+    console.log(`   ⏱️  Backend API call took: ${backendDuration}s`);
 
     const runtimeSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
 
     console.log("\n✅ Success!");
     console.log(`   Discovery ID: ${backendResponse.discoveryId || "N/A"}`);
     console.log(`   Events saved: ${eventsCount}`);
-    console.log(`   Runtime: ${runtimeSeconds}s`);
     console.log(`   Target date: ${targetDate}`);
+    console.log(`   ──────────────────────────────────`);
+    console.log(`   ⏱️  Total runtime: ${runtimeSeconds}s`);
+    console.log(`      - OpenAI API: ${openaiDuration}s`);
+    console.log(`      - Backend API: ${backendDuration}s`);
+    console.log(
+      `      - Overhead: ${(
+        parseFloat(runtimeSeconds) -
+        parseFloat(openaiDuration) -
+        parseFloat(backendDuration)
+      ).toFixed(2)}s`
+    );
 
     // Update metadata with actual runtime
     if (backendResponse.discoveryId && discoveryData.metadata) {
@@ -306,15 +364,38 @@ async function main() {
     }
 
     console.log("\n✨ Cron job completed successfully!");
+    console.log(
+      `📊 Summary: ${eventsCount} events discovered in ${runtimeSeconds}s (PID ${processId})`
+    );
     process.exit(0);
   } catch (error) {
     const runtimeSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.error("\n❌ Error:", error.message);
+    console.error("\n❌ Error occurred:");
+    console.error(`   Message: ${error.message}`);
+    console.error(`   Type: ${error.constructor.name}`);
+    console.error(`   Runtime: ${runtimeSeconds}s`);
+    console.error(`   Process ID: ${processId}`);
+    console.error(`   Timestamp: ${new Date().toISOString()}`);
+
     if (error.stack) {
-      console.error("\nStack trace:", error.stack);
+      console.error("\n📋 Stack trace:");
+      console.error(error.stack);
     }
-    console.error(`\n⏱️  Runtime: ${runtimeSeconds}s`);
-    console.error("❌ Cron job failed!");
+
+    // Log additional context for debugging
+    console.error("\n🔍 Debug context:");
+    console.error(
+      `   OpenAI API Key: ${
+        OPENAI_API_KEY
+          ? "Set (" + OPENAI_API_KEY.substring(0, 10) + "...)"
+          : "Missing"
+      }`
+    );
+    console.error(`   ChatGPT API Key: ${CHATGPT_API_KEY ? "Set" : "Missing"}`);
+    console.error(`   Backend URL: ${BACKEND_API_URL}`);
+    console.error(`   Environment: ${process.env.NODE_ENV || "development"}`);
+
+    console.error("\n❌ Cron job failed!");
     process.exit(1);
   }
 }
