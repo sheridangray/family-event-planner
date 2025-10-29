@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.CHATGPT_API_KEY}`,
+        'x-api-key': process.env.CHATGPT_API_KEY || '',
       },
     });
 
