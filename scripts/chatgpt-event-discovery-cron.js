@@ -310,18 +310,18 @@ async function main() {
       throw new Error("Invalid JSON structure: missing required fields");
     }
 
-        const eventsCount = discoveryData.events?.length || 0;
-        console.log(`   ✅ Parsed successfully: ${eventsCount} events found`);
-        
-        // Log full JSON response when running locally
-        if (process.env.NODE_ENV !== 'production') {
-          console.log("\n🔍 Full JSON Response (Local Debug):");
-          console.log("=====================================");
-          console.log(JSON.stringify(discoveryData, null, 2));
-          console.log("=====================================\n");
-        }
-        
-        // Log event details
+    const eventsCount = discoveryData.events?.length || 0;
+    console.log(`   ✅ Parsed successfully: ${eventsCount} events found`);
+
+    // Log full JSON response when running locally
+    if (process.env.NODE_ENV !== "production") {
+      console.log("\n🔍 Full JSON Response (Local Debug):");
+      console.log("=====================================");
+      console.log(JSON.stringify(discoveryData, null, 2));
+      console.log("=====================================\n");
+    }
+
+    // Log event details
     if (eventsCount > 0) {
       console.log("   📋 Event summary:");
       discoveryData.events.slice(0, 5).forEach((event, index) => {
