@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { GmailClient } = require('../mcp/gmail-client');
 const UnifiedNotificationService = require('../services/unified-notification');
 const Database = require('../database');
+const FamilyEmailService = require('../services/family-email-service');
 
 class GmailWebhookHandler {
   constructor(logger, database, unifiedNotifications = null) {
@@ -12,6 +13,7 @@ class GmailWebhookHandler {
     this.gmailClient = null; // Will be set dynamically based on the email being processed
     this.notificationService = unifiedNotifications || new UnifiedNotificationService(logger, database);
     this.processedMessages = new Set(); // Prevent duplicate processing
+    this.familyEmailService = new FamilyEmailService(database, logger);
   }
 
   async init() {
@@ -322,8 +324,7 @@ class GmailWebhookHandler {
     // Check if sender is one of our family members first
     const from = headers.from || '';
     const cleanEmailAddress = this.extractEmailAddress(from);
-    const isFamilyMember = cleanEmailAddress === process.env.PARENT1_EMAIL || 
-                          cleanEmailAddress === process.env.PARENT2_EMAIL;
+    const isFamilyMember = await this.familyEmailService.isFamilyMemberEmail(cleanEmailAddress);
 
     if (!isFamilyMember) {
       this.logger.debug(`Email from non-family member: ${cleanEmailAddress} (original: ${from})`);

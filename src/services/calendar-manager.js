@@ -1,11 +1,14 @@
 const { google } = require('googleapis');
 const { config } = require('../config');
+const FamilyEmailService = require('./family-email-service');
 
 class CalendarManager {
-  constructor(logger) {
+  constructor(logger, database = null) {
     this.logger = logger;
     this.calendar = null;
     this.calendarId = null;
+    this.database = database;
+    this.familyEmailService = database ? new FamilyEmailService(database, logger) : null;
   }
 
   async init() {
@@ -281,15 +284,38 @@ class CalendarManager {
   /**
    * Get attendees list from family configuration
    */
-  getAttendees() {
+  async getAttendees() {
     const attendees = [];
     
-    if (config.gmail?.parent1Email) {
-      attendees.push({ email: config.gmail.parent1Email });
-    }
-    
-    if (config.gmail?.parent2Email && config.gmail.parent2Email !== config.gmail.parent1Email) {
-      attendees.push({ email: config.gmail.parent2Email });
+    if (this.familyEmailService) {
+      try {
+        const parentEmails = await this.familyEmailService.getParentEmails();
+        
+        if (parentEmails.parent1Email) {
+          attendees.push({ email: parentEmails.parent1Email });
+        }
+        
+        if (parentEmails.parent2Email && parentEmails.parent2Email !== parentEmails.parent1Email) {
+          attendees.push({ email: parentEmails.parent2Email });
+        }
+      } catch (error) {
+        this.logger.warn('Failed to load parent emails from database, using fallback:', error.message);
+        // Fallback to environment variables
+        if (config.gmail?.parent1Email) {
+          attendees.push({ email: config.gmail.parent1Email });
+        }
+        if (config.gmail?.parent2Email && config.gmail.parent2Email !== config.gmail.parent1Email) {
+          attendees.push({ email: config.gmail.parent2Email });
+        }
+      }
+    } else {
+      // Fallback to environment variables when database is not available
+      if (config.gmail?.parent1Email) {
+        attendees.push({ email: config.gmail.parent1Email });
+      }
+      if (config.gmail?.parent2Email && config.gmail.parent2Email !== config.gmail.parent1Email) {
+        attendees.push({ email: config.gmail.parent2Email });
+      }
     }
     
     return attendees;

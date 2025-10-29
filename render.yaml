@@ -8,10 +8,6 @@ services:
     startCommand: npm start
     envVars:
       # Gmail MCP Configuration
-      - key: PARENT1_EMAIL
-        value: joyce.yan.zhang@gmail.com
-      - key: PARENT2_EMAIL
-        value: sheridan.gray@gmail.com
       - key: MCP_GMAIL_CREDENTIALS
         sync: false
       - key: GOOGLE_OAUTH_TOKEN

@@ -1,6 +1,7 @@
 const RegistrationAutomator = require('../automation/registration');
 const CalendarManager = require('./calendar-manager');
 const { config } = require('../config');
+const FamilyEmailService = require('./family-email-service');
 
 class RegistrationOrchestrator {
   constructor(logger, database, emailClient = null) {
@@ -8,7 +9,8 @@ class RegistrationOrchestrator {
     this.database = database;
     this.registrationAutomator = new RegistrationAutomator(logger, database);
     this.emailClient = emailClient; // Accept injected email client to avoid circular dependency
-    this.calendarManager = new CalendarManager(logger);
+    this.calendarManager = new CalendarManager(logger, database);
+    this.familyEmailService = new FamilyEmailService(database, logger);
   }
 
   async init() {
@@ -382,11 +384,14 @@ class RegistrationOrchestrator {
     const parents = familyMembers.filter(member => member.role === 'parent');
     const children = familyMembers.filter(member => member.role === 'child');
 
+    // Get parent emails from database
+    const parentEmails = await this.familyEmailService.getParentEmailsWithFallback();
+
     return {
       parent1Name: parents[0]?.name || config.family.parent1Name,
-      parent1Email: config.gmail.parent1Email,
+      parent1Email: parentEmails.parent1Email,
       parent2Name: parents[1]?.name || config.family.parent2Name, 
-      parent2Email: config.gmail.parent2Email,
+      parent2Email: parentEmails.parent2Email,
       children: children.map(child => ({
         name: child.name,
         age: this.calculateAge(child.birthdate)
@@ -425,9 +430,20 @@ class RegistrationOrchestrator {
   /**
    * Get recipient email address
    */
-  getRecipientEmail() {
-    // Send all emails to parent1 (Sheridan) in both production and development
-    return config.gmail.parent1Email;
+  async getRecipientEmail() {
+    // Send all emails to primary parent from database
+    const primaryEmail = await this.familyEmailService.getPrimaryParentEmail();
+    if (primaryEmail) {
+      return primaryEmail;
+    }
+    
+    // Fallback to environment variable during migration
+    if (config.gmail?.parent1Email) {
+      this.logger.warn('Using fallback parent1Email from environment variables');
+      return config.gmail.parent1Email;
+    }
+    
+    throw new Error("No parent email addresses configured");
   }
 
   /**

@@ -97,8 +97,6 @@ async function createDatabaseConfig(database, logger = null) {
 
 function validateConfig() {
   const required = [
-    'PARENT1_EMAIL',
-    'PARENT2_EMAIL',
     'TWILIO_PHONE_TO'
   ];
 

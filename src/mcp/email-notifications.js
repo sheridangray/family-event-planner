@@ -1,5 +1,6 @@
 const { config } = require("../config");
 const RegistrationOrchestrator = require("../services/registration-orchestrator");
+const FamilyEmailService = require("../services/family-email-service");
 
 class EmailNotificationClient {
   constructor(logger, database, userId = null) {
@@ -8,6 +9,7 @@ class EmailNotificationClient {
     this.userId = userId; // User ID for multi-user support
     this.gmailClient = null;
     this.isInitialized = false;
+    this.familyEmailService = new FamilyEmailService(database, logger);
   }
 
   async init() {
@@ -134,9 +136,20 @@ class EmailNotificationClient {
     }
   }
 
-  getRecipientEmail() {
-    // Send all emails to parent1 (Sheridan) in both production and development
-    return config.gmail.parent1Email;
+  async getRecipientEmail() {
+    // Send all emails to primary parent from database
+    const primaryEmail = await this.familyEmailService.getPrimaryParentEmail();
+    if (primaryEmail) {
+      return primaryEmail;
+    }
+    
+    // Fallback to environment variable during migration
+    if (config.gmail?.parent1Email) {
+      this.logger.warn('Using fallback parent1Email from environment variables');
+      return config.gmail.parent1Email;
+    }
+    
+    throw new Error("No parent email addresses configured");
   }
 
   buildEmailSubject(event) {
