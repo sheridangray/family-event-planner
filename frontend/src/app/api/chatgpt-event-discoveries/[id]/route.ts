@@ -9,7 +9,7 @@ const API_KEY = process.env.BACKEND_API_KEY || "fep_secure_api_key_2024_$7mK9pL2
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -21,7 +21,7 @@ export async function GET(
       }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Call backend API
     const response = await fetch(
