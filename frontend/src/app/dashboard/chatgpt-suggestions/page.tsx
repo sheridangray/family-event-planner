@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { DiscoveryList } from "@/components/chatgpt/discovery-list";
 import { DiscoveryDetail } from "@/components/chatgpt/discovery-detail";
-import { SparklesIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
+import { SparklesIcon } from "@heroicons/react/24/outline";
 
 interface Discovery {
   id: number;
@@ -21,13 +21,11 @@ export default function ChatGPTSuggestionsPage() {
   const [selectedDiscovery, setSelectedDiscovery] = useState<Discovery | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isTriggering, setIsTriggering] = useState(false);
   const [triggerMessage, setTriggerMessage] = useState<string | null>(null);
 
-  const fetchDiscoveries = async () => {
+  const loadDiscoveries = async () => {
     try {
-      setIsRefreshing(true);
       const response = await fetch('/api/chatgpt-event-discoveries?limit=20&offset=0');
       
       if (!response.ok) {
@@ -51,12 +49,11 @@ export default function ChatGPTSuggestionsPage() {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchDiscoveries();
+    loadDiscoveries();
   }, []);
 
   const handleSelectDiscovery = (id: number) => {
@@ -129,7 +126,7 @@ export default function ChatGPTSuggestionsPage() {
         setTriggerMessage('Discovery job triggered successfully! New events should appear shortly.');
         // Refresh the discoveries list after a short delay
         setTimeout(() => {
-          fetchDiscoveries();
+          loadDiscoveries();
         }, 2000);
       } else {
         setTriggerMessage(`Error: ${data.error || 'Failed to trigger discovery job'}`);
@@ -160,7 +157,7 @@ export default function ChatGPTSuggestionsPage() {
           <h3 className="text-lg font-medium text-red-900 mb-2">Error Loading Discoveries</h3>
           <p className="text-red-700">{error}</p>
           <button
-            onClick={fetchDiscoveries}
+            onClick={loadDiscoveries}
             className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
             Try Again
@@ -187,25 +184,14 @@ export default function ChatGPTSuggestionsPage() {
             </div>
           </div>
           
-          <div className="flex space-x-3">
-            <button
-              onClick={fetchDiscoveries}
-              disabled={isRefreshing}
-              className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ArrowPathIcon className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              {isRefreshing ? 'Refreshing...' : 'Refresh'}
-            </button>
-            
-            <button
-              onClick={handleTriggerDiscovery}
-              disabled={isTriggering}
-              className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <SparklesIcon className={`h-4 w-4 mr-2 ${isTriggering ? 'animate-pulse' : ''}`} />
-              {isTriggering ? 'Generating...' : 'Generate New'}
-            </button>
-          </div>
+          <button
+            onClick={handleTriggerDiscovery}
+            disabled={isTriggering}
+            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <SparklesIcon className={`h-4 w-4 mr-2 ${isTriggering ? 'animate-pulse' : ''}`} />
+            {isTriggering ? 'Generating...' : 'Generate New'}
+          </button>
         </div>
       </div>
 
