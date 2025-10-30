@@ -55,9 +55,10 @@ function buildPrompt() {
   const targetDate = getTargetDate();
   const today = new Date().toISOString();
 
-  return `Search for fully kid-centric, family-friendly events within 25 miles of San Francisco, California, that occur 14 days from today (${targetDate}). Apply the following filters:
+  return `Use the web tool to search for real, publicly listed, up-to-date fully kid-centric, family-friendly events. Do not hallucinate or fabricate events — only include events with verifiable URLs.
+  Search for fully kid-centric, family-friendly events within 25 miles of San Francisco, California, that occur 14 days from today (${targetDate}). Apply the following filters:
 - Events must be specifically kid-focused (ages ~2–6 welcome) with stroller-friendly or toddler-appropriate setup.
-- Do not hallucinate events that do not exist. All details must be available such as the title, date, time, location, and url.
+- Do not generate fake events. All events must link to a real event page with sufficient details (title, time, address, etc).
 - Weekday events must start after 5:00 PM; weekend events may be any time.
 - Consider forecasted weather for outdoor events.
 - Check my Google Calendar for conflicts on that date and exclude/flag any conflicting time slots.
@@ -65,6 +66,7 @@ function buildPrompt() {
 - Highlight the Top 3 recommendations with detailed reasoning.
 - For each event, include a Google Calendar add link using the standard action=TEMPLATE URL with title, dates (local), and details.
 - If registration is available, include the registration URL.
+- If no events are found that meet the criteria, return an empty event list with a reasoning field explaining why.
 - Return the result as a JSON with the following structure:
 
 {
@@ -89,6 +91,15 @@ function buildPrompt() {
       "considerWeather": <CONSIDER_WEATHER>
     },
     "calendarConflictsChecked": <CALENDAR_CONFLICTS_CHECKED>
+  },
+  "noEventsFound": {
+    "found": <BOOLEAN>,
+    "reasoning": "<REASONING_WHY_NO_EVENTS_FOUND>",
+    "suggestions": [
+      "<SUGGESTION_1>",
+      "<SUGGESTION_2>",
+      "<SUGGESTION_3>"
+    ]
   },
   "events": [
     {
@@ -305,13 +316,34 @@ async function main() {
     if (
       !discoveryData.dateSearched ||
       !discoveryData.searchContext ||
-      !discoveryData.events
+      !discoveryData.events ||
+      !discoveryData.noEventsFound
     ) {
       throw new Error("Invalid JSON structure: missing required fields");
     }
 
     const eventsCount = discoveryData.events?.length || 0;
-    console.log(`   ✅ Parsed successfully: ${eventsCount} events found`);
+    const noEventsFound = discoveryData.noEventsFound?.found || false;
+
+    if (noEventsFound) {
+      console.log(`   ✅ Parsed successfully: No events found`);
+      console.log(
+        `   📝 Reasoning: ${
+          discoveryData.noEventsFound.reasoning || "No reasoning provided"
+        }`
+      );
+      if (
+        discoveryData.noEventsFound.suggestions &&
+        discoveryData.noEventsFound.suggestions.length > 0
+      ) {
+        console.log(`   💡 Suggestions:`);
+        discoveryData.noEventsFound.suggestions.forEach((suggestion, index) => {
+          console.log(`      ${index + 1}. ${suggestion}`);
+        });
+      }
+    } else {
+      console.log(`   ✅ Parsed successfully: ${eventsCount} events found`);
+    }
 
     // Log full JSON response when running locally
     if (process.env.NODE_ENV !== "production") {
@@ -353,7 +385,16 @@ async function main() {
 
     console.log("\n✅ Success!");
     console.log(`   Discovery ID: ${backendResponse.discoveryId || "N/A"}`);
-    console.log(`   Events saved: ${eventsCount}`);
+    if (noEventsFound) {
+      console.log(`   Result: No events found for ${targetDate}`);
+      console.log(
+        `   Reasoning: ${
+          discoveryData.noEventsFound.reasoning || "No reasoning provided"
+        }`
+      );
+    } else {
+      console.log(`   Events saved: ${eventsCount}`);
+    }
     console.log(`   Target date: ${targetDate}`);
     console.log(`   ──────────────────────────────────`);
     console.log(`   ⏱️  Total runtime: ${runtimeSeconds}s`);
@@ -373,9 +414,15 @@ async function main() {
     }
 
     console.log("\n✨ Cron job completed successfully!");
-    console.log(
-      `📊 Summary: ${eventsCount} events discovered in ${runtimeSeconds}s (PID ${processId})`
-    );
+    if (noEventsFound) {
+      console.log(
+        `📊 Summary: No events found for ${targetDate} in ${runtimeSeconds}s (PID ${processId})`
+      );
+    } else {
+      console.log(
+        `📊 Summary: ${eventsCount} events discovered in ${runtimeSeconds}s (PID ${processId})`
+      );
+    }
     process.exit(0);
   } catch (error) {
     const runtimeSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
