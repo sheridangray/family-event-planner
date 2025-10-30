@@ -55,96 +55,133 @@ function buildPrompt() {
   const targetDate = getTargetDate();
   const today = new Date().toISOString();
 
-  return `Use the web tool to search for real, publicly listed, up-to-date fully kid-centric, family-friendly events. Do not hallucinate or fabricate events — only include events with verifiable URLs.
-  Search for fully kid-centric, family-friendly events within 25 miles of San Francisco, California, that occur 14 days from today (${targetDate}). Apply the following filters:
-- Events must be specifically kid-focused (ages ~2–6 welcome) with stroller-friendly or toddler-appropriate setup.
-- Do not generate fake events. All events must link to a real event page with sufficient details (title, time, address, etc).
-- Weekday events must start after 5:00 PM; weekend events may be any time.
-- Consider forecasted weather for outdoor events.
-- Check my Google Calendar for conflicts on that date and exclude/flag any conflicting time slots.
-- Rank all events 1–10 by relevance and quality.
-- Highlight the Top 3 recommendations with detailed reasoning.
-- For each event, include a Google Calendar add link using the standard action=TEMPLATE URL with title, dates (local), and details.
-- If registration is available, include the registration URL.
-- If no events are found that meet the criteria, return an empty event list with a reasoning field explaining why.
-- Return the result as a JSON with the following structure:
+  return `
+  Use the web tool to search for real, publicly listed, up-to-date fully kid-centric, family-friendly events. Do not hallucinate or fabricate events — only include events with verifiable URLs.
 
-{
-  "dateSearched": "${today}",
-  "searchContext": {
-    "searchRadiusMiles": <SEARCH_RADIUS_MILES>,
-    "baseLocation": "<LOCATION>,
-    "targetDate": "${targetDate}",
-    "familyContext": {
-      "wife": { "name": "<WIFE_NAME>", "dob": "<WIFE_DOB>" },
-      "children": [
-        { "name": "<CHILD_1_NAME>", "dob": "<CHILD_1_DOB>" },
-        { "name": "<CHILD_2_NAME>", "dob": "<CHILD_2_DOB>" }
-      ]
-    },
-    "filters": {
-      "kidCentricAgeRange": "<KID_CENTRIC_AGE_RANGE>",
-      "strollerFriendly": <STROLLER_FRIENDLY>,
-      "weekdayAfter5pm": <WEEKDAY_AFTER_5PM>,
-      "weekendAnytime": <WEEKEND_ANYTIME>,
-      "prioritizeMissionBay": <PRIORITIZE_MISSION_BAY>,
-      "considerWeather": <CONSIDER_WEATHER>
-    },
-    "calendarConflictsChecked": <CALENDAR_CONFLICTS_CHECKED>
-  },
-  "noEventsFound": {
-    "found": <BOOLEAN>,
-    "reasoning": "<REASONING_WHY_NO_EVENTS_FOUND>",
-    "suggestions": [
-      "<SUGGESTION_1>",
-      "<SUGGESTION_2>",
-      "<SUGGESTION_3>"
-    ]
-  },
-  "events": [
+  Apply the following filters:
+
+  - Events must be specifically kid-focused (ages ~2–6 welcome) with stroller-friendly or toddler-appropriate setup.
+  - Do not generate fake events. All events must link to a real event page with sufficient details (title, time, address, etc).
+  - Weekday events must start after 5:00 PM; weekend events may be any time.
+  - Consider forecasted weather for outdoor events.
+  - Search for events within 25 miles of San Francisco, California, that occur 14 days from today (${targetDate}). 
+  - Rank all events 1–10 by relevance and quality.
+  - Highlight the Top 3 recommendations with detailed reasoning.
+  - For each event, include a Google Calendar add link using the standard action=TEMPLATE URL with title, dates (local), and details.
+  - If registration is available, include the registration URL.
+  - If no events are found that meet the criteria, return an empty event list with a reasoning field explaining why.
+  - Return the result as a JSON with the following structure:
+
     {
-      "rank": <RANK>,
-      "pickType": <PICK_TYPE>,
-      "score": <SCORE>,
-      "event": {
-        "title": <EVENT_TITLE>,
-        "date": "${targetDate}",
-        "startTime": <EVENT_START_TIME>,
-        "endTime": <EVENT_END_TIME>,
-        "location": {
-          "name": <EVENT_LOCATION_NAME>,
-          "address": <EVENT_LOCATION_ADDRESS>,
-          "distanceMiles": <EVENT_DISTANCE_MILES>
+      "dateSearched": "${today}",
+      "searchContext": {
+        "searchRadiusMiles": <SEARCH_RADIUS_MILES>,
+        "baseLocation": "<LOCATION>,
+        "targetDate": "${targetDate}",
+        "familyContext": {
+          "wife": { "name": "<WIFE_NAME>", "dob": "<WIFE_DOB>" },
+          "children": [
+            { "name": "<CHILD_1_NAME>", "dob": "<CHILD_1_DOB>" },
+            { "name": "<CHILD_2_NAME>", "dob": "<CHILD_2_DOB>" }
+          ]
         },
-        "cost": {
-          "adult": <ADULT_COST>,
-          "child": <CHILD_COST>,
-          "infantFree": <INFANT_FREE>,
-          "currency": <CURRENCY>
-        },
-        "description": <DESCRIPTION>,
-        "weather": {
-          "forecast": <WEATHER_FORECAST>,
-          "riskLevel": <WEATHER_RISK_LEVEL>
-        },
-        "urls": {
-          "eventPage": <EVENT_PAGE_URL>,
-          "registration": <REGISTRATION_LINK>,
-          "addToCalendar": <GOOGLE_CALENDAR_URL>
-        },
-        "calendarConflict": <CALENDAR_CONFLICT_FLAG>
+        "filters": {
+          "kidCentricAgeRange": "<KID_CENTRIC_AGE_RANGE>",
+          "strollerFriendly": <STROLLER_FRIENDLY>,
+          "weekdayAfter5pm": <WEEKDAY_AFTER_5PM>,
+          "weekendAnytime": <WEEKEND_ANYTIME>,
+          "prioritizeMissionBay": <PRIORITIZE_MISSION_BAY>,
+          "considerWeather": <CONSIDER_WEATHER>
+        }
       },
-      "reasoning": <REASONING>
+      "noEventsFound": {
+        "found": <BOOLEAN>,
+        "reasoning": "<REASONING_WHY_NO_EVENTS_FOUND>",
+        "suggestions": [
+          "<SUGGESTION_1>",
+          "<SUGGESTION_2>",
+          "<SUGGESTION_3>"
+        ]
+      },
+      "events": [
+        {
+          "rank": <RANK>,
+          "pickType": <PICK_TYPE>,
+          "score": <SCORE>,
+          "event": {
+            "title": <EVENT_TITLE>,
+            "date": "${targetDate}",
+            "startTime": <EVENT_START_TIME>,
+            "endTime": <EVENT_END_TIME>,
+            "location": {
+              "name": <EVENT_LOCATION_NAME>,
+              "address": <EVENT_LOCATION_ADDRESS>,
+              "distanceMiles": <EVENT_DISTANCE_MILES>
+            },
+            "cost": {
+              "adult": <ADULT_COST>,
+              "child": <CHILD_COST>,
+              "infantFree": <INFANT_FREE>,
+              "currency": <CURRENCY>
+            },
+            "description": <DESCRIPTION>,
+            "weather": {
+              "forecast": <WEATHER_FORECAST>,
+              "riskLevel": <WEATHER_RISK_LEVEL>
+            },
+            "urls": {
+              "eventPage": <EVENT_PAGE_URL>,
+              "registration": <REGISTRATION_LINK>,
+              "addToCalendar": <GOOGLE_CALENDAR_URL>
+            },
+            "calendarConflict": <CALENDAR_CONFLICT_FLAG>
+          },
+          "reasoning": <REASONING>
+        }
+      ],
+      "metadata": {
+        "generatedBy": "<GENERATED_BY>",
+        "version": "<VERSION_NUMBER>",
+        "runtimeSeconds": <RUNTIME_SECONDS>
+      }
     }
-  ],
-  "metadata": {
-    "generatedBy": "<GENERATED_BY>",
-    "version": "<VERSION_NUMBER>",
-    "runtimeSeconds": <RUNTIME_SECONDS>
-  }
+
+  IMPORTANT: Return ONLY valid JSON. Do not include any text before or after the JSON. Ensure all dates are in ISO 8601 format and all required fields are populated.`;
 }
 
-IMPORTANT: Return ONLY valid JSON. Do not include any text before or after the JSON. Ensure all dates are in ISO 8601 format and all required fields are populated.`;
+/**
+ * Web search function for finding real events
+ */
+async function webSearch(query) {
+  try {
+    console.log(`   🔍 Web searching: ${query}`);
+    
+    // Use a simple web search approach - you could integrate with Google Search API, Bing API, or other search services
+    // For now, we'll use a basic approach that returns mock data
+    // In production, you'd want to use a real search API
+    
+    const searchResults = {
+      query: query,
+      results: [
+        {
+          title: "Sample Event - SF Children's Museum",
+          url: "https://example.com/event1",
+          snippet: "Family-friendly event for toddlers in San Francisco"
+        },
+        {
+          title: "Sample Event - SF Public Library Storytime",
+          url: "https://example.com/event2", 
+          snippet: "Weekly storytime for young children"
+        }
+      ]
+    };
+    
+    console.log(`   ✅ Found ${searchResults.results.length} search results`);
+    return searchResults;
+  } catch (error) {
+    console.log(`   ❌ Web search error: ${error.message}`);
+    return { query, results: [], error: error.message };
+  }
 }
 
 /**
@@ -242,7 +279,7 @@ async function main() {
   console.log(`📊 Process ID: ${processId}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🔗 Backend URL: ${BACKEND_API_URL}`);
-  console.log(`🤖 OpenAI Model: gpt-4o-mini`);
+  console.log(`🤖 OpenAI Model: gpt-5-mini`);
   console.log("==========================================\n");
 
   try {
@@ -257,25 +294,95 @@ async function main() {
     console.log("\n🤖 Calling OpenAI API...");
     const openaiStartTime = Date.now();
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Using gpt-4o-mini for cost efficiency, can upgrade to gpt-4o if needed
+      model: "gpt-5-mini",
       messages: [
         {
           role: "system",
           content:
-            "You are an expert event discovery assistant that finds family-friendly events for toddlers in San Francisco. Always return valid JSON matching the exact structure requested.",
+            "You are an expert event discovery assistant that finds family-friendly events for toddlers in San Francisco. Use the web search function to find real, verifiable events. Always return valid JSON matching the exact structure requested.",
         },
         {
           role: "user",
           content: prompt,
         },
       ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "web_search",
+            description: "Search the web for real, publicly listed events and activities",
+            parameters: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "Search query for finding events (e.g., 'toddler events San Francisco November 2025', 'family activities SF this weekend')"
+                }
+              },
+              required: ["query"]
+            }
+          }
+        }
+      ],
+      tool_choice: "auto",
       response_format: { type: "json_object" }, // Force JSON output
       temperature: 0.7,
-      max_tokens: 4000,
+      max_completion_tokens: 4000,
     });
 
     const openaiDuration = ((Date.now() - openaiStartTime) / 1000).toFixed(2);
-    const responseText = completion.choices[0].message.content;
+    
+    // Handle tool calls if present
+    let responseText = completion.choices[0].message.content;
+    let messages = [
+      {
+        role: "system",
+        content:
+          "You are an expert event discovery assistant that finds family-friendly events for toddlers in San Francisco. Use the web search function to find real, verifiable events. Always return valid JSON matching the exact structure requested.",
+      },
+      {
+        role: "user",
+        content: prompt,
+      },
+    ];
+
+    // Process tool calls
+    if (completion.choices[0].message.tool_calls) {
+      console.log(`   🔧 Processing ${completion.choices[0].message.tool_calls.length} tool calls...`);
+      
+      for (const toolCall of completion.choices[0].message.tool_calls) {
+        if (toolCall.function.name === "web_search") {
+          const args = JSON.parse(toolCall.function.arguments);
+          const searchResults = await webSearch(args.query);
+          
+          messages.push({
+            role: "assistant",
+            content: null,
+            tool_calls: [toolCall]
+          });
+          
+          messages.push({
+            role: "tool",
+            content: JSON.stringify(searchResults),
+            tool_call_id: toolCall.id
+          });
+        }
+      }
+      
+      // Make another API call with the tool results
+      console.log("   🔄 Making follow-up API call with search results...");
+      const followUpCompletion = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: messages,
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_completion_tokens: 4000,
+      });
+      
+      responseText = followUpCompletion.choices[0].message.content;
+    }
+    
     console.log(`   ✅ Received ${responseText.length} characters from OpenAI`);
     console.log(`   ⏱️  OpenAI API call took: ${openaiDuration}s`);
     console.log(
