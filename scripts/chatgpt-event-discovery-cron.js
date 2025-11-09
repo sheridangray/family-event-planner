@@ -21,12 +21,8 @@ const http = require("http");
 
 // Configuration
 const OPENAI_API_KEY = process.env.OPEN_AI_API_KEY;
-const CHATGPT_API_KEY =
-  process.env.CHATGPT_API_KEY ||
-  "chatgpt_d34a5deb43e66c59b1a94997a641f8ec3eb2f7c6cdc6fb619d462c21961f4475";
-const BACKEND_API_URL =
-  process.env.BACKEND_API_URL ||
-  "https://family-event-planner-backend.onrender.com";
+const CHATGPT_API_KEY = process.env.CHATGPT_API_KEY;
+const BACKEND_API_URL = process.env.BACKEND_API_URL;
 
 // Validate environment
 if (!OPENAI_API_KEY) {
@@ -56,7 +52,7 @@ function buildPrompt() {
   const today = new Date().toISOString();
 
   return `
-  Use the web tool to search for real, publicly listed, up-to-date fully kid-centric, family-friendly events. Do not hallucinate or fabricate events — only include events with verifiable URLs.
+  Use the integrated Google Custom Search API to search for real, publicly listed, up-to-date fully kid-centric, family-friendly events. Do not hallucinate or fabricate events — only include events with verifiable URLs.
 
   Apply the following filters:
 
@@ -153,39 +149,38 @@ function buildPrompt() {
  * Web search function for finding real events
  */
 async function webSearch(query) {
+  const apiKey = process.env.GOOGLE_CLIENT_ID;
+  const cseId = process.env.GOOGLE_CSE_ID;
+  const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cseId}&q=${encodeURIComponent(
+    query
+  )}&num=5`;
+
   try {
-    console.log(`   🔍 Web searching: ${query}`);
-    
-    // Use a simple web search approach - you could integrate with Google Search API, Bing API, or other search services
-    // For now, we'll use a basic approach that returns mock data
-    // In production, you'd want to use a real search API
-    
-    const searchResults = {
-      query: query,
-      results: [
-        {
-          title: "Sample Event - SF Children's Museum",
-          url: "https://example.com/event1",
-          snippet: "Family-friendly event for toddlers in San Francisco"
-        },
-        {
-          title: "Sample Event - SF Public Library Storytime",
-          url: "https://example.com/event2", 
-          snippet: "Weekly storytime for young children"
-        }
-      ]
-    };
-    
-    console.log(`   ✅ Found ${searchResults.results.length} search results`);
-    return searchResults;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.items) {
+      console.log(`   ⚠️ No search results for query: ${query}`);
+      return { query, results: [] };
+    }
+
+    const results = data.items.map((item) => ({
+      title: item.title,
+      url: item.link,
+      snippet: item.snippet,
+      displayLink: item.displayLink,
+    }));
+
+    console.log(`   ✅ Found ${results.length} results for "${query}"`);
+    return { query, results };
   } catch (error) {
-    console.log(`   ❌ Web search error: ${error.message}`);
+    console.error(`   ❌ Web search error: ${error.message}`);
     return { query, results: [], error: error.message };
   }
 }
 
 /**
- * Parse JSON from OpenAI response, handling code blocks
+ * Parse JSON from OpenAI response, handling code blocks and multiple objects
  */
 function parseJSONResponse(responseText) {
   // Remove markdown code blocks if present
@@ -196,14 +191,56 @@ function parseJSONResponse(responseText) {
   jsonText = jsonText.replace(/^```\s*/i, "");
   jsonText = jsonText.replace(/\s*```$/i, "");
 
-  // Find JSON object boundaries
+  // Try to find and parse the first complete JSON object
   const firstBrace = jsonText.indexOf("{");
-  const lastBrace = jsonText.lastIndexOf("}");
-
-  if (firstBrace !== -1 && lastBrace !== -1) {
-    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+  if (firstBrace === -1) {
+    throw new Error("No JSON object found in response");
   }
 
+  // Parse from the first brace, tracking nested braces
+  let braceCount = 0;
+  let inString = false;
+  let escapeNext = false;
+  let endIndex = -1;
+
+  for (let i = firstBrace; i < jsonText.length; i++) {
+    const char = jsonText[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"' && !escapeNext) {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === "{") {
+      braceCount++;
+    } else if (char === "}") {
+      braceCount--;
+      if (braceCount === 0) {
+        endIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (endIndex === -1) {
+    throw new Error("No complete JSON object found in response");
+  }
+
+  jsonText = jsonText.substring(firstBrace, endIndex + 1);
   return JSON.parse(jsonText);
 }
 
@@ -311,28 +348,30 @@ async function main() {
           type: "function",
           function: {
             name: "web_search",
-            description: "Search the web for real, publicly listed events and activities",
+            description:
+              "Search the web for real, publicly listed events and activities",
             parameters: {
               type: "object",
               properties: {
                 query: {
                   type: "string",
-                  description: "Search query for finding events (e.g., 'toddler events San Francisco November 2025', 'family activities SF this weekend')"
-                }
+                  description:
+                    "Search query for finding events (e.g., 'toddler events San Francisco November 2025', 'family activities SF this weekend')",
+                },
               },
-              required: ["query"]
-            }
-          }
-        }
+              required: ["query"],
+            },
+          },
+        },
       ],
       tool_choice: "auto",
       response_format: { type: "json_object" }, // Force JSON output
-      temperature: 0.7,
+      // temperature: 0.7,
       max_completion_tokens: 4000,
     });
 
     const openaiDuration = ((Date.now() - openaiStartTime) / 1000).toFixed(2);
-    
+
     // Handle tool calls if present
     let responseText = completion.choices[0].message.content;
     let messages = [
@@ -349,40 +388,50 @@ async function main() {
 
     // Process tool calls
     if (completion.choices[0].message.tool_calls) {
-      console.log(`   🔧 Processing ${completion.choices[0].message.tool_calls.length} tool calls...`);
-      
+      console.log(
+        `   🔧 Processing ${completion.choices[0].message.tool_calls.length} tool calls...`
+      );
+
       for (const toolCall of completion.choices[0].message.tool_calls) {
         if (toolCall.function.name === "web_search") {
           const args = JSON.parse(toolCall.function.arguments);
           const searchResults = await webSearch(args.query);
-          
+
           messages.push({
             role: "assistant",
             content: null,
-            tool_calls: [toolCall]
+            tool_calls: [toolCall],
           });
-          
+
           messages.push({
             role: "tool",
             content: JSON.stringify(searchResults),
-            tool_call_id: toolCall.id
+            tool_call_id: toolCall.id,
           });
         }
       }
-      
+
       // Make another API call with the tool results
       console.log("   🔄 Making follow-up API call with search results...");
+
+      // Add a final instruction to ensure the model returns the complete JSON response
+      messages.push({
+        role: "user",
+        content:
+          "Now that you have the search results, please return the complete event discovery JSON with all the fields as specified in the original prompt. Do not make any more tool calls - just return the final JSON response.",
+      });
+
       const followUpCompletion = await openai.chat.completions.create({
         model: "gpt-5-mini",
         messages: messages,
         response_format: { type: "json_object" },
-        temperature: 0.7,
+        // temperature: 0.7,
         max_completion_tokens: 4000,
       });
-      
+
       responseText = followUpCompletion.choices[0].message.content;
     }
-    
+
     console.log(`   ✅ Received ${responseText.length} characters from OpenAI`);
     console.log(`   ⏱️  OpenAI API call took: ${openaiDuration}s`);
     console.log(
@@ -404,17 +453,22 @@ async function main() {
       console.log("   ✅ Direct JSON parsing successful");
     } catch (e) {
       console.log(
-        "   ⚠️  Direct parsing failed, trying markdown extraction..."
+        "   ⚠️  Direct parsing failed, trying to extract first complete JSON object..."
       );
-      // Fallback: try extracting JSON from markdown
+      // Fallback: try extracting JSON from markdown or multiple objects
       try {
         discoveryData = parseJSONResponse(responseText);
-        console.log("   ✅ Markdown extraction successful");
+        console.log("   ✅ JSON extraction successful");
       } catch (e2) {
+        // Show more context in the error for debugging
+        const previewLength = Math.min(500, responseText.length);
         throw new Error(
           `Failed to parse JSON: ${
             e.message
-          }. Response: ${responseText.substring(0, 200)}...`
+          }. First ${previewLength} chars of response: ${responseText.substring(
+            0,
+            previewLength
+          )}...`
         );
       }
     }

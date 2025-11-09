@@ -410,6 +410,47 @@ const getSetting = async (key, defaultValue = null) => {
   }
 };
 
+// GET /api/family/user-by-email - Get user ID by email
+router.get('/user-by-email', async (req, res) => {
+  const pool = getDbPool();
+  try {
+    const { email } = req.query;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email parameter required'
+      });
+    }
+
+    const result = await pool.query(
+      'SELECT id, email, name, role, active FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: result.rows[0]
+    });
+
+  } catch (error) {
+    req.app.locals.logger?.error('User lookup error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user'
+    });
+  } finally {
+    await pool.end();
+  }
+});
+
 // Export the router and helper functions
 module.exports = {
   router,
