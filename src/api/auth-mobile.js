@@ -6,11 +6,26 @@ function createMobileAuthRouter(database, logger) {
   const router = express.Router();
   const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+  // Add logging middleware for ALL requests to /auth/*
+  router.use((req, res, next) => {
+    console.log(`🔍 Auth router: ${req.method} ${req.path}`);
+    console.log(`🔍 Full URL: ${req.originalUrl}`);
+    console.log(`🔍 Body:`, req.body);
+    console.log(`🔍 Headers:`, req.headers);
+    if (logger) {
+      logger.info(`Auth route hit: ${req.method} ${req.path}`);
+    } else {
+      console.error("⚠️ Logger is undefined!");
+    }
+    next();
+  });
+
   /**
    * POST /api/auth/mobile-signin
    * Authenticate iOS app users with Google ID token
    */
   router.post("/mobile-signin", async (req, res) => {
+    console.log("🎯 Inside /mobile-signin handler");
     try {
       // Log the incoming request
       logger.info("📱 Mobile sign-in request received");
