@@ -75,10 +75,11 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Global error handling middleware
+// Global error handling middleware - only log 500s, not 404s
 app.use((req, res, next) => {
   res.on("finish", () => {
-    if (res.statusCode >= 400) {
+    // Only log server errors (5xx), not client errors (4xx)
+    if (res.statusCode >= 500) {
       errorHandler.handleError(
         new Error(`HTTP ${res.statusCode}: ${req.method} ${req.path}`),
         {
@@ -229,6 +230,15 @@ async function initializeComponents() {
 
     // const apiRouter = createApiRouter(database, scheduler, registrationAutomator, logger, unifiedNotifications);
     app.use("/api", apiRouter);
+
+    // 404 handler for undefined routes (must be after all other routes)
+    app.use((req, res) => {
+      res.status(404).json({
+        error: "Not Found",
+        path: req.path,
+        message: `Cannot ${req.method} ${req.path}`,
+      });
+    });
 
     return {
       database,
