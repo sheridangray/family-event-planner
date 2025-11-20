@@ -12,9 +12,9 @@ const { authenticateAPI } = require("../middleware/auth");
 
 function createApiRouter(
   database,
-  scheduler,
-  registrationAutomator,
   logger,
+  scheduler = null,
+  registrationAutomator = null,
   unifiedNotifications = null
 ) {
   const router = express.Router();
