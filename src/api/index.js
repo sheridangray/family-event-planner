@@ -6,6 +6,7 @@ const adminRouter = require("./admin");
 const { router: familyRouter } = require("./family");
 const chatgptEventDiscoveriesRouter = require("./chatgpt-event-discoveries");
 const createHealthRouter = require("./health");
+const createMobileAuthRouter = require("./auth-mobile");
 const GmailWebhookHandler = require("./gmail-webhooks");
 const { authenticateAPI } = require("../middleware/auth");
 
@@ -28,6 +29,7 @@ function createApiRouter(
   router.use("/family", familyRouter);
   router.use("/chatgpt-event-discoveries", chatgptEventDiscoveriesRouter);
   router.use("/health", createHealthRouter(database, logger));
+  router.use("/auth", createMobileAuthRouter(database, logger));
 
   // Gmail webhook routes - pass unifiedNotifications to access CalendarManager
   if (logger) {

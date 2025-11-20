@@ -1,5 +1,5 @@
 const express = require("express");
-const { authenticateAPI } = require("../middleware/auth");
+const { authenticateAPI, authenticateFlexible } = require("../middleware/auth");
 
 function createHealthRouter(database, logger) {
   const router = express.Router();
@@ -8,11 +8,14 @@ function createHealthRouter(database, logger) {
 
   /**
    * POST /api/health/sync
-   * Sync health data from iOS shortcut or external source
+   * Sync health data from iOS shortcut, iOS app, or external source
+   * Accepts either API key (X-API-Key header) or JWT token (Bearer token)
    */
-  router.post("/sync", authenticateAPI, async (req, res) => {
+  router.post("/sync", authenticateFlexible, async (req, res) => {
     try {
-      const { userId, date, metrics, source } = req.body;
+      // Extract userId from JWT (mobile) or request body (API key/shortcut)
+      const userId = req.user?.id || req.body.userId;
+      const { date, metrics, source } = req.body;
 
       if (!userId) {
         return res.status(400).json({
@@ -57,16 +60,26 @@ function createHealthRouter(database, logger) {
   });
 
   /**
-   * GET /api/health/metrics/:userId
-   * Get health metrics for a user
+   * GET /api/health/metrics
+   * Get health metrics for authenticated user (mobile) or specific user (API key)
+   * Mobile: Uses JWT token, no userId param needed
+   * Web/API: Requires userId param
    */
-  router.get("/metrics/:userId", async (req, res) => {
+  router.get("/metrics/:userId?", authenticateFlexible, async (req, res) => {
     try {
-      const { userId } = req.params;
+      // Use userId from JWT (mobile) or URL param (web/API)
+      const userId = req.user?.id || parseInt(req.params.userId);
       const { startDate, endDate } = req.query;
 
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId required"
+        });
+      }
+
       const metrics = await healthService.getHealthMetrics(
-        parseInt(userId),
+        userId,
         startDate ? new Date(startDate) : null,
         endDate ? new Date(endDate) : null
       );
@@ -85,13 +98,23 @@ function createHealthRouter(database, logger) {
   });
 
   /**
-   * GET /api/health/today/:userId
-   * Get today's health summary with goals
+   * GET /api/health/today
+   * Get today's health summary with goals for authenticated user
+   * Mobile: Uses JWT token
+   * Web/API: Falls back to userId param
    */
-  router.get("/today/:userId", async (req, res) => {
+  router.get("/today/:userId?", authenticateFlexible, async (req, res) => {
     try {
-      const { userId } = req.params;
-      const summary = await healthService.getTodaySummary(parseInt(userId));
+      const userId = req.user?.id || parseInt(req.params.userId);
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId required"
+        });
+      }
+
+      const summary = await healthService.getTodaySummary(userId);
 
       res.json({
         success: true,
@@ -107,13 +130,23 @@ function createHealthRouter(database, logger) {
   });
 
   /**
-   * GET /api/health/trends/:userId
-   * Get weekly trend data
+   * GET /api/health/trends
+   * Get weekly trend data for authenticated user
+   * Mobile: Uses JWT token
+   * Web/API: Falls back to userId param
    */
-  router.get("/trends/:userId", async (req, res) => {
+  router.get("/trends/:userId?", authenticateFlexible, async (req, res) => {
     try {
-      const { userId } = req.params;
-      const trends = await healthService.getWeeklyTrends(parseInt(userId));
+      const userId = req.user?.id || parseInt(req.params.userId);
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId required"
+        });
+      }
+
+      const trends = await healthService.getWeeklyTrends(userId);
 
       res.json({
         success: true,
