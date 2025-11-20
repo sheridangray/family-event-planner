@@ -12,9 +12,22 @@ function createMobileAuthRouter(database, logger) {
    */
   router.post("/mobile-signin", async (req, res) => {
     try {
+      // Log the incoming request
+      logger.info("📱 Mobile sign-in request received");
+      logger.info("Request headers:", {
+        contentType: req.headers["content-type"],
+        userAgent: req.headers["user-agent"],
+      });
+      logger.info("Request body keys:", Object.keys(req.body));
+      
       const { idToken, email, name, image } = req.body;
 
       if (!idToken || !email) {
+        logger.error("❌ Missing required fields:", {
+          hasIdToken: !!idToken,
+          hasEmail: !!email,
+          bodyKeys: Object.keys(req.body),
+        });
         return res.status(400).json({
           success: false,
           error: "idToken and email are required",
