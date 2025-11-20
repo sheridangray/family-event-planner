@@ -19,7 +19,7 @@ function createMobileAuthRouter(database, logger) {
         userAgent: req.headers["user-agent"],
       });
       logger.info("Request body keys:", Object.keys(req.body));
-      
+
       const { idToken, email, name, image } = req.body;
 
       if (!idToken || !email) {
