@@ -153,13 +153,13 @@ async function initializeComponents() {
     // Store ONLY database and logger in app locals
     app.locals.database = database;
     app.locals.logger = logger;
-    
+
     logger.info("📦 Creating API router with database and logger only...");
 
     // Initialize API router with minimal components
     const apiRouter = createApiRouter(database, logger);
     app.use("/api", apiRouter);
-    
+
     logger.info("✅ API routes mounted at /api");
 
     // 404 handler for undefined routes (must be after all other routes)

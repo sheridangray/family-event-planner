@@ -197,7 +197,7 @@ class HealthKitManager: ObservableObject {
     /// Sync health data to backend
     func syncToBackend(authManager: AuthenticationManager) async throws {
         guard let token = authManager.sessionToken,
-              let userId = authManager.currentUser?.id else {
+              let _ = authManager.currentUser?.id else {
             throw HealthKitError.notAuthenticated
         }
         
