@@ -31,18 +31,20 @@ function createApiRouter(
   router.use("/health", createHealthRouter(database, logger));
   router.use("/auth", createMobileAuthRouter(database, logger));
 
-  // Gmail webhook routes - pass unifiedNotifications to access CalendarManager
-  if (logger) {
-    const gmailWebhookHandler = new GmailWebhookHandler(
-      logger,
-      database,
-      unifiedNotifications
-    );
-    gmailWebhookHandler.init().catch((err) => {
-      logger.error("Failed to initialize Gmail webhook handler:", err);
-    });
-    router.use("/webhooks", gmailWebhookHandler.createRouter());
-  }
+  // Gmail webhook routes - DISABLED for minimal server mode
+  // if (logger) {
+  //   const gmailWebhookHandler = new GmailWebhookHandler(
+  //     logger,
+  //     database,
+  //     unifiedNotifications
+  //   );
+  //   gmailWebhookHandler.init().catch((err) => {
+  //     logger.error("Failed to initialize Gmail webhook handler:", err);
+  //   });
+  //   router.use("/webhooks", gmailWebhookHandler.createRouter());
+  // }
+  
+  logger.info("📧 Gmail webhooks disabled (minimal mode)");
 
   router.get("/status", (req, res) => {
     res.json({
