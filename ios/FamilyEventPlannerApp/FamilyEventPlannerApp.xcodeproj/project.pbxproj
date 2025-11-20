@@ -6,13 +6,32 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		AC0A5CE42ECE449B001DFED4 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = AC0A5CE32ECE449B001DFED4 /* GoogleSignIn */; };
+		AC0A5CE62ECE449B001DFED4 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = AC0A5CE52ECE449B001DFED4 /* GoogleSignInSwift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		AC0A5CC22ECE40BA001DFED4 /* FamilyEventPlannerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyEventPlannerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC0A5CEB2ECE6849001DFED4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AC0A5CEA2ECE67FB001DFED4 /* Exceptions for "FamilyEventPlannerApp" folder in "FamilyEventPlannerApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AC0A5CC12ECE40BA001DFED4 /* FamilyEventPlannerApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AC0A5CC42ECE40BA001DFED4 /* FamilyEventPlannerApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AC0A5CEA2ECE67FB001DFED4 /* Exceptions for "FamilyEventPlannerApp" folder in "FamilyEventPlannerApp" target */,
+			);
 			path = FamilyEventPlannerApp;
 			sourceTree = "<group>";
 		};
@@ -23,6 +42,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AC0A5CE42ECE449B001DFED4 /* GoogleSignIn in Frameworks */,
+				AC0A5CE62ECE449B001DFED4 /* GoogleSignInSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -34,6 +55,7 @@
 			children = (
 				AC0A5CC42ECE40BA001DFED4 /* FamilyEventPlannerApp */,
 				AC0A5CC32ECE40BA001DFED4 /* Products */,
+				AC0A5CEB2ECE6849001DFED4 /* Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -65,6 +87,8 @@
 			);
 			name = FamilyEventPlannerApp;
 			packageProductDependencies = (
+				AC0A5CE32ECE449B001DFED4 /* GoogleSignIn */,
+				AC0A5CE52ECE449B001DFED4 /* GoogleSignInSwift */,
 			);
 			productName = FamilyEventPlannerApp;
 			productReference = AC0A5CC22ECE40BA001DFED4 /* FamilyEventPlannerApp.app */;
@@ -94,6 +118,9 @@
 			);
 			mainGroup = AC0A5CB92ECE40BA001DFED4;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AC0A5CE22ECE449B001DFED4 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AC0A5CC32ECE40BA001DFED4 /* Products */;
 			projectDirPath = "";
@@ -249,10 +276,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = FamilyEventPlannerApp/FamilyEventPlannerApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 29XGJ7H3RU;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FamilyEventPlannerApp/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -280,10 +310,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = FamilyEventPlannerApp/FamilyEventPlannerApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 29XGJ7H3RU;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FamilyEventPlannerApp/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -328,6 +361,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AC0A5CE22ECE449B001DFED4 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AC0A5CE32ECE449B001DFED4 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC0A5CE22ECE449B001DFED4 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		AC0A5CE52ECE449B001DFED4 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC0A5CE22ECE449B001DFED4 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = AC0A5CBA2ECE40BA001DFED4 /* Project object */;
 }

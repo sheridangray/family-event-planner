@@ -1,5 +1,6 @@
 import SwiftUI
 import GoogleSignIn
+import Combine
 
 /// Manages user authentication with Google Sign-In and backend validation
 class AuthenticationManager: ObservableObject {
@@ -40,7 +41,8 @@ class AuthenticationManager: ObservableObject {
         }
         
         // Configure Google Sign-In
-        let clientID = "584799141962-3mfn2p032ihqfkjhbu8v8jl8pcmp45ie.apps.googleusercontent.com"
+        // TODO: Replace with your iOS client ID from Google Cloud Console
+        let clientID = "584799141962-cbnd0u748aup2m0da500o7d2hig4cqth.apps.googleusercontent.com"
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
         
@@ -67,6 +69,7 @@ class AuthenticationManager: ObservableObject {
     
     private func validateWithBackend(idToken: String, email: String, name: String, imageURL: String?) async throws {
         print("🔐 Validating with backend: \(email)")
+        print("📱 Using iOS client ID token")
         
         let url = URL(string: "\(backendURL)/api/auth/mobile-signin")!
         var request = URLRequest(url: url)
@@ -81,6 +84,8 @@ class AuthenticationManager: ObservableObject {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
+        print("📤 Sending request to: \(url.absoluteString)")
+        
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -88,6 +93,11 @@ class AuthenticationManager: ObservableObject {
         }
         
         if httpResponse.statusCode != 200 {
+            // Log the full response for debugging
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("❌ Backend error response: \(responseString)")
+            }
+            
             // Try to parse error message
             if let errorResponse = try? JSONDecoder().decode(AuthErrorResponse.self, from: data) {
                 throw AuthError.serverError(errorResponse.error)
