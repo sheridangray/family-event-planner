@@ -7,20 +7,20 @@ const path = require("path");
 // Core components
 const { config, validateConfig } = require("./config");
 const Database = require("./database");
-const ScraperManager = require("./scrapers");
-const EventFilter = require("./filters");
-const EventScorer = require("./scoring");
-const FamilyDemographicsService = require("./services/family-demographics");
-const CalendarManager = require("./services/calendar-manager");
+// const ScraperManager = require("./scrapers");
+// const EventFilter = require("./filters");
+// const EventScorer = require("./scoring");
+// const FamilyDemographicsService = require("./services/family-demographics");
+// const CalendarManager = require("./services/calendar-manager");
 // CalendarConflictChecker functionality is integrated into GmailClient
-const { SMSApprovalManager } = require("./mcp/twilio");
-const UnifiedNotificationService = require("./services/unified-notification");
-const RegistrationAutomator = require("./automation/registration");
-const TaskScheduler = require("./scheduler");
+// const { SMSApprovalManager } = require("./mcp/twilio");
+// const UnifiedNotificationService = require("./services/unified-notification");
+// const RegistrationAutomator = require("./automation/registration");
+// const TaskScheduler = require("./scheduler");
 
 // Safety and error handling
 const ErrorHandler = require("./safety/error-handler");
-const PaymentGuard = require("./safety/payment-guard");
+// const PaymentGuard = require("./safety/payment-guard");
 
 // API routes
 const createApiRouter = require("./api");
@@ -51,7 +51,7 @@ const app = express();
 
 // Initialize core systems
 const errorHandler = new ErrorHandler(logger);
-const paymentGuard = new PaymentGuard(logger);
+// const paymentGuard = new PaymentGuard(logger);
 
 // CORS configuration for frontend
 const corsOptions = {
@@ -138,98 +138,29 @@ app.post("/emergency-shutdown", authenticateAPI, (req, res) => {
 });
 
 async function initializeComponents() {
-  logger.info("Initializing Family Event Planner components...");
+  logger.info("🚀 Starting minimal server for iOS auth testing...");
 
   try {
     // Validate configuration
     validateConfig();
-    logger.info("Configuration validated");
+    logger.info("✅ Configuration validated");
 
-    // Initialize database
+    // Initialize ONLY the database
     const database = new Database();
     await database.init();
-    logger.info("Database initialized");
+    logger.info("✅ Database initialized (single instance)");
 
-    // Initialize scrapers
-    // const scraperManager = new ScraperManager(logger, database);
-    // logger.info('Scrapers initialized');
+    // Store ONLY database and logger in app locals
+    app.locals.database = database;
+    app.locals.logger = logger;
+    
+    logger.info("📦 Creating API router with database and logger only...");
 
-    // Initialize family demographics and migrate from environment if needed
-    // const familyService = new FamilyDemographicsService(logger, database);
-    // await familyService.initializeFamilyFromEnvironment();
-    // logger.info('Family demographics initialized');
-
-    // Initialize filtering and scoring
-    // const eventFilter = new EventFilter(logger, database);
-    // const eventScorer = new EventScorer(logger, database);
-    // logger.info('Event processing systems initialized');
-
-    // Initialize calendar service
-    // const calendarManager = new CalendarManager(logger);
-    // await calendarManager.init();
-
-    // Calendar conflict checking is handled by CalendarManager
-    // const calendarConflictChecker = calendarManager;
-
-    // Initialize notification services - SMS Manager is optional
-    // let smsManager = null;
-    // let unifiedNotifications = null;
-
-    // // Skip SMS initialization entirely, use email-only
-    // logger.info('SMS Manager disabled - using email-only notifications');
-
-    // try {
-    //   logger.info('Initializing UnifiedNotificationService (email-only)...');
-    //   unifiedNotifications = new UnifiedNotificationService(logger, database, calendarManager);
-    //   await unifiedNotifications.init();
-    //   logger.info('Email-only notification service initialized');
-    // } catch (emailError) {
-    //   logger.error('Email notification service failed to initialize:', emailError.message);
-    //   logger.error('Email service error stack:', emailError.stack);
-    //   logger.error('Will continue without notification services (no emails will be sent)');
-    //   // Don't throw - continue without notifications for now
-    //   unifiedNotifications = null;
-    // }
-
-    // Initialize automation with safety guards
-    // const registrationAutomator = new RegistrationAutomator(logger, database);
-    // await registrationAutomator.init();
-
-    // Wrap registration automator with payment guard
-    // const originalRegisterForEvent = registrationAutomator.registerForEvent.bind(registrationAutomator);
-    // registrationAutomator.registerForEvent = errorHandler.wrapAsync(async (event) => {
-    //   paymentGuard.preventAutomationOnPaidEvent(event);
-    //   return await originalRegisterForEvent(event);
-    // }, { component: 'registration' });
-
-    // logger.info('Registration automation initialized with safety guards');
-
-    // Initialize scheduler with notification services
-    // const scheduler = new TaskScheduler(
-    //   logger, database, scraperManager, eventScorer, eventFilter,
-    //   smsManager, registrationAutomator, calendarConflictChecker, unifiedNotifications
-    // );
-
-    // Store components in app locals for API access
-    // app.locals.database = database;
-    // app.locals.logger = logger;
-    // app.locals.scraperManager = scraperManager;
-    // app.locals.eventFilter = eventFilter;
-    // app.locals.eventScorer = eventScorer;
-    // app.locals.familyService = familyService;
-    // app.locals.calendarManager = calendarManager;
-    // app.locals.calendarConflictChecker = calendarConflictChecker;
-    // app.locals.smsManager = smsManager;
-    // app.locals.registrationAutomator = registrationAutomator;
-    // app.locals.scheduler = scheduler;
-    // app.locals.errorHandler = errorHandler;
-    // app.locals.paymentGuard = paymentGuard;
-
-    // Initialize API router now that all components are ready
+    // Initialize API router with minimal components
     const apiRouter = createApiRouter(database, logger);
-
-    // const apiRouter = createApiRouter(database, scheduler, registrationAutomator, logger, unifiedNotifications);
     app.use("/api", apiRouter);
+    
+    logger.info("✅ API routes mounted at /api");
 
     // 404 handler for undefined routes (must be after all other routes)
     app.use((req, res) => {
@@ -239,6 +170,9 @@ async function initializeComponents() {
         message: `Cannot ${req.method} ${req.path}`,
       });
     });
+
+    logger.info("✅ Minimal server initialization complete");
+    logger.info("📱 Ready for iOS authentication testing");
 
     return {
       database,
@@ -271,11 +205,7 @@ async function startServer() {
     // Graceful shutdown handling
     process.on("SIGTERM", async () => {
       logger.info("Received SIGTERM, shutting down gracefully...");
-
-      components.scheduler.stop();
-      await components.registrationAutomator.close();
       await components.database.close();
-
       server.close(() => {
         logger.info("Server closed");
         process.exit(0);
@@ -284,11 +214,7 @@ async function startServer() {
 
     process.on("SIGINT", async () => {
       logger.info("Received SIGINT, shutting down gracefully...");
-
-      components.scheduler.stop();
-      await components.registrationAutomator.close();
       await components.database.close();
-
       server.close(() => {
         logger.info("Server closed");
         process.exit(0);
