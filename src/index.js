@@ -93,6 +93,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root endpoint for Render health checks (responds to HEAD and GET)
+app.all("/", (req, res) => {
+  res.status(200).json({
+    service: "Family Event Planner API",
+    status: "running",
+    version: "1.0.0",
+  });
+});
+
 // Health check endpoint
 app.get("/health", async (req, res) => {
   try {
