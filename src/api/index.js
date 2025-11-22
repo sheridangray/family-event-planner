@@ -7,6 +7,7 @@ const { router: familyRouter } = require("./family");
 const chatgptEventDiscoveriesRouter = require("./chatgpt-event-discoveries");
 const createHealthRouter = require("./health");
 const createMobileAuthRouter = require("./auth-mobile");
+const createCalendarRouter = require("./calendar");
 const GmailWebhookHandler = require("./gmail-webhooks");
 const { authenticateAPI } = require("../middleware/auth");
 
@@ -29,6 +30,7 @@ function createApiRouter(
   router.use("/family", familyRouter);
   router.use("/chatgpt-event-discoveries", chatgptEventDiscoveriesRouter);
   router.use("/health", createHealthRouter(database, logger));
+  router.use("/calendar", createCalendarRouter(database, logger));
   router.use("/auth", createMobileAuthRouter(database, logger));
 
   // Gmail webhook routes - DISABLED for minimal server mode
@@ -43,7 +45,7 @@ function createApiRouter(
   //   });
   //   router.use("/webhooks", gmailWebhookHandler.createRouter());
   // }
-  
+
   logger.info("📧 Gmail webhooks disabled (minimal mode)");
 
   router.get("/status", (req, res) => {
