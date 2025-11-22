@@ -10,7 +10,7 @@ struct FamilyEventPlannerApp: App {
         WindowGroup {
             Group {
                 if authManager.isAuthenticated {
-                    HealthSyncView()
+                    DashboardView()
                         .environmentObject(authManager)
                         .environmentObject(healthManager)
                 } else {

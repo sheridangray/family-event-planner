@@ -11,7 +11,7 @@ class AuthenticationManager: ObservableObject {
     @Published var errorMessage: String?
     
     private let keychainKey = "family_planner_session"
-    private let backendURL = "https://sheridangray.com"
+    private let backendURL = "https://family-event-planner-backend.onrender.com"
     
     // For local development, change to:
     // private let backendURL = "http://localhost:3000"

@@ -32,10 +32,20 @@ class HealthSyncService {
           resting_heart_rate, heart_rate_variability, avg_heart_rate, max_heart_rate,
           weight_lbs, body_fat_percentage, bmi,
           sleep_hours, deep_sleep_hours, rem_sleep_hours, sleep_quality_score,
-          calories_consumed, water_oz, raw_data, updated_at
+          calories_consumed, water_oz,
+          height_inches, vo2_max, blood_oxygen, respiratory_rate,
+          walking_speed, stand_hours, lean_body_mass,
+          protein_grams, carbs_grams, fat_grams, sugar_grams, fiber_grams, caffeine_mg,
+          mindful_minutes,
+          raw_data, updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-          $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW()
+          $14, $15, $16, $17, $18, $19, $20, $21, $22,
+          $23, $24, $25, $26,
+          $27, $28, $29,
+          $30, $31, $32, $33, $34, $35,
+          $36,
+          $37, NOW()
         )
         ON CONFLICT (user_id, metric_date) 
         DO UPDATE SET
@@ -59,7 +69,21 @@ class HealthSyncService {
           sleep_quality_score = COALESCE($20, health_physical_metrics.sleep_quality_score),
           calories_consumed = COALESCE($21, health_physical_metrics.calories_consumed),
           water_oz = COALESCE($22, health_physical_metrics.water_oz),
-          raw_data = COALESCE($23, health_physical_metrics.raw_data),
+          height_inches = COALESCE($23, health_physical_metrics.height_inches),
+          vo2_max = COALESCE($24, health_physical_metrics.vo2_max),
+          blood_oxygen = COALESCE($25, health_physical_metrics.blood_oxygen),
+          respiratory_rate = COALESCE($26, health_physical_metrics.respiratory_rate),
+          walking_speed = COALESCE($27, health_physical_metrics.walking_speed),
+          stand_hours = COALESCE($28, health_physical_metrics.stand_hours),
+          lean_body_mass = COALESCE($29, health_physical_metrics.lean_body_mass),
+          protein_grams = COALESCE($30, health_physical_metrics.protein_grams),
+          carbs_grams = COALESCE($31, health_physical_metrics.carbs_grams),
+          fat_grams = COALESCE($32, health_physical_metrics.fat_grams),
+          sugar_grams = COALESCE($33, health_physical_metrics.sugar_grams),
+          fiber_grams = COALESCE($34, health_physical_metrics.fiber_grams),
+          caffeine_mg = COALESCE($35, health_physical_metrics.caffeine_mg),
+          mindful_minutes = COALESCE($36, health_physical_metrics.mindful_minutes),
+          raw_data = COALESCE($37, health_physical_metrics.raw_data),
           updated_at = NOW()
         RETURNING id
       `;
@@ -87,6 +111,20 @@ class HealthSyncService {
         metrics.sleep_quality_score,
         metrics.calories_consumed,
         metrics.water_oz,
+        metrics.height_inches,
+        metrics.vo2_max,
+        metrics.blood_oxygen,
+        metrics.respiratory_rate,
+        metrics.walking_speed,
+        metrics.stand_hours,
+        metrics.lean_body_mass,
+        metrics.protein_grams,
+        metrics.carbs_grams,
+        metrics.fat_grams,
+        metrics.sugar_grams,
+        metrics.fiber_grams,
+        metrics.caffeine_mg,
+        metrics.mindful_minutes,
         JSON.stringify(metrics.raw || {}),
       ];
 
@@ -100,7 +138,12 @@ class HealthSyncService {
       );
 
       // Log the sync
-      await this._logSync(userId, Object.keys(metrics).length, "success", source);
+      await this._logSync(
+        userId,
+        Object.keys(metrics).length,
+        "success",
+        source
+      );
 
       this.logger.info(`✅ Health data synced successfully for user ${userId}`);
 
@@ -242,7 +285,10 @@ class HealthSyncService {
       progress[goalType] = {
         current: currentValue,
         target: targetValue,
-        percentage: Math.min(100, Math.round((currentValue / targetValue) * 100)),
+        percentage: Math.min(
+          100,
+          Math.round((currentValue / targetValue) * 100)
+        ),
         achieved: currentValue >= targetValue,
       };
     }
@@ -267,7 +313,9 @@ class HealthSyncService {
         healthData.metrics?.flights_climbed ||
         null,
       active_calories:
-        healthData.active_calories || healthData.metrics?.active_calories || null,
+        healthData.active_calories ||
+        healthData.metrics?.active_calories ||
+        null,
       resting_calories:
         healthData.resting_calories ||
         healthData.metrics?.resting_calories ||
@@ -290,7 +338,8 @@ class HealthSyncService {
         healthData.avg_heart_rate || healthData.metrics?.avg_heart_rate || null,
       max_heart_rate:
         healthData.max_heart_rate || healthData.metrics?.max_heart_rate || null,
-      weight_lbs: healthData.weight_lbs || healthData.metrics?.weight_lbs || null,
+      weight_lbs:
+        healthData.weight_lbs || healthData.metrics?.weight_lbs || null,
       body_fat_percentage:
         healthData.body_fat_percentage ||
         healthData.metrics?.body_fat_percentage ||
@@ -315,6 +364,47 @@ class HealthSyncService {
         healthData.metrics?.calories_consumed ||
         null,
       water_oz: healthData.water_oz || healthData.metrics?.water_oz || null,
+
+      // Extended vitals & fitness
+      height_inches:
+        healthData.height_inches || healthData.metrics?.height_inches || null,
+      vo2_max: healthData.vo2_max || healthData.metrics?.vo2_max || null,
+      blood_oxygen:
+        healthData.blood_oxygen || healthData.metrics?.blood_oxygen || null,
+      respiratory_rate:
+        healthData.respiratory_rate ||
+        healthData.metrics?.respiratory_rate ||
+        null,
+
+      // Extended activity & mobility
+      walking_speed:
+        healthData.walking_speed || healthData.metrics?.walking_speed || null,
+      stand_hours:
+        healthData.stand_hours || healthData.metrics?.stand_hours || null,
+
+      // Extended body composition
+      lean_body_mass:
+        healthData.lean_body_mass || healthData.metrics?.lean_body_mass || null,
+
+      // Extended nutrition
+      protein_grams:
+        healthData.protein_grams || healthData.metrics?.protein_grams || null,
+      carbs_grams:
+        healthData.carbs_grams || healthData.metrics?.carbs_grams || null,
+      fat_grams: healthData.fat_grams || healthData.metrics?.fat_grams || null,
+      sugar_grams:
+        healthData.sugar_grams || healthData.metrics?.sugar_grams || null,
+      fiber_grams:
+        healthData.fiber_grams || healthData.metrics?.fiber_grams || null,
+      caffeine_mg:
+        healthData.caffeine_mg || healthData.metrics?.caffeine_mg || null,
+
+      // Mindfulness
+      mindful_minutes:
+        healthData.mindful_minutes ||
+        healthData.metrics?.mindful_minutes ||
+        null,
+
       raw: healthData.raw || healthData,
     };
 

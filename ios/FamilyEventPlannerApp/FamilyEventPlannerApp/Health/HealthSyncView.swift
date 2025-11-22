@@ -6,126 +6,163 @@ struct HealthSyncView: View {
     @EnvironmentObject var healthManager: HealthKitManager
     @State private var showingError = false
     @State private var errorMessage = ""
+    @State private var navigateToHealth = false
+    @State private var navigateToIntegrations = false
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // User profile header
-                    UserProfileHeader()
-                        .environmentObject(authManager)
+        ScrollView {
+            VStack(spacing: 24) {
+                if healthManager.isAuthorized {
+                    // Date header
+                    VStack(spacing: 4) {
+                        Text("Yesterday's Health Data")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+                        Text(yesterday, style: .date)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
                     
-                    if healthManager.isAuthorized {
-                        // Health metrics cards
-                        VStack(spacing: 16) {
-                            HealthMetricRow(
-                                icon: "figure.walk",
-                                title: "Steps",
-                                value: "\(healthManager.todaySteps.formatted())",
-                                color: .blue
-                            )
-                            
-                            HealthMetricRow(
-                                icon: "flame.fill",
-                                title: "Exercise",
-                                value: "\(healthManager.todayExercise) min",
-                                color: .orange
-                            )
-                            
-                            HealthMetricRow(
-                                icon: "bed.double.fill",
-                                title: "Sleep",
-                                value: String(format: "%.1fh", healthManager.todaySleep),
-                                color: .purple
-                            )
-                            
-                            HealthMetricRow(
-                                icon: "heart.fill",
-                                title: "Resting Heart Rate",
-                                value: healthManager.restingHeartRate > 0 ? "\(healthManager.restingHeartRate) bpm" : "--",
-                                color: .red
-                            )
-                        }
-                        .padding(.horizontal)
-                        
-                        // Last sync info
-                        if let lastSync = healthManager.lastSyncDate {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text("Last synced \(lastSync, style: .relative) ago")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                    // Category cards
+                    VStack(spacing: 16) {
+                        ForEach(HealthCategory.allCases) { category in
+                            NavigationLink(destination: CategoryDetailView(category: category)
+                                .environmentObject(healthManager)) {
+                                CategoryCardView(
+                                    category: category,
+                                    summary: healthManager.getCategorySummary(for: category)
+                                )
                             }
-                            .padding(.top, 8)
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    // Last sync info
+                    if let lastSync = healthManager.lastSyncDate {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Last synced \(lastSync, style: .relative) ago")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.top, 8)
+                    }
+                    
+                    // Sync button
+                    Button(action: syncData) {
+                        HStack {
+                            if healthManager.isSyncing {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text(healthManager.lastSyncDate == nil ? "Sync Now" : "Sync Again")
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(
+                            LinearGradient(
+                                colors: [.blue, .indigo],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                        .shadow(color: .blue.opacity(0.3), radius: 10, y: 5)
+                    }
+                    .disabled(healthManager.isSyncing)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    
+                } else {
+                    // Health permission not connected - encourage setup
+                    VStack(spacing: 24) {
+                        Image(systemName: "heart.circle")
+                            .font(.system(size: 70))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.red, .pink],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        VStack(spacing: 8) {
+                            Text("Connect Apple Health")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                            
+                            Text("Sync your activity data")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
                         }
                         
-                        // Sync button
-                        Button(action: syncData) {
+                        Text("Track your steps, exercise, sleep, and heart rate by connecting to Apple Health")
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 32)
+                        
+                        // Button to navigate to Integrations
+                        Button(action: {
+                            navigateToIntegrations = true
+                        }) {
                             HStack {
-                                if healthManager.isSyncing {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                } else {
-                                    Image(systemName: "arrow.triangle.2.circlepath")
-                                    Text(healthManager.lastSyncDate == nil ? "Sync Now" : "Sync Again")
-                                }
+                                Image(systemName: "link.circle.fill")
+                                Text("Connect in Settings")
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(
                                 LinearGradient(
-                                    colors: [.blue, .indigo],
+                                    colors: [.red, .pink],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
                             .foregroundColor(.white)
                             .cornerRadius(12)
-                            .shadow(color: .blue.opacity(0.3), radius: 10, y: 5)
+                            .shadow(color: .red.opacity(0.3), radius: 10, y: 5)
                         }
-                        .disabled(healthManager.isSyncing)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 32)
                         .padding(.top, 8)
                         
-                    } else {
-                        // Health permission needed
-                        VStack(spacing: 20) {
-                            Image(systemName: "heart.circle")
-                                .font(.system(size: 60))
-                                .foregroundColor(.red)
-                            
-                            Text("Health Access Required")
-                                .font(.title2)
-                                .fontWeight(.semibold)
-                            
-                            Text("Grant access to sync your health data with the Family Event Planner")
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                            
-                            Button("Grant Access") {
-                                requestHealthAccess()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
+                        // Alternative: Grant Access directly
+                        Button("Grant Access Now") {
+                            requestHealthAccess()
                         }
-                        .padding()
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
                     }
-                    
-                    Spacer(minLength: 20)
+                    .padding()
                 }
-                .padding(.vertical)
+                
+                Spacer(minLength: 20)
             }
-            .navigationTitle("Health Sync")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { authManager.signOut() }) {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                    }
-                }
+            .padding(.vertical)
+        }
+        .navigationTitle("Health")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                ProfileMenuButton(
+                    navigateToHealth: $navigateToHealth,
+                    navigateToSettings: .constant(false)
+                )
+                .environmentObject(authManager)
             }
+        }
+        .navigationDestination(isPresented: $navigateToIntegrations) {
+            IntegrationsView()
+                .environmentObject(authManager)
+                .environmentObject(healthManager)
         }
         .alert("Error", isPresented: $showingError) {
             Button("OK", role: .cancel) { }
@@ -156,69 +193,6 @@ struct HealthSyncView: View {
                 showingError = true
             }
         }
-    }
-}
-
-// MARK: - User Profile Header
-
-struct UserProfileHeader: View {
-    @EnvironmentObject var authManager: AuthenticationManager
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Profile image
-            if let imageURL = authManager.currentUser?.image,
-               let url = URL(string: imageURL) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .overlay(
-                            ProgressView()
-                        )
-                }
-                .frame(width: 50, height: 50)
-                .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "?")
-                            .foregroundColor(.white)
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                    )
-            }
-            
-            // User info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(authManager.currentUser?.name ?? "User")
-                    .font(.headline)
-                
-                Text(authManager.currentUser?.email ?? "")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
-        )
-        .padding(.horizontal)
     }
 }
 

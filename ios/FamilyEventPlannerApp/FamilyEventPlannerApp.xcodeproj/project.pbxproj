@@ -9,11 +9,14 @@
 /* Begin PBXBuildFile section */
 		AC0A5CE42ECE449B001DFED4 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = AC0A5CE32ECE449B001DFED4 /* GoogleSignIn */; };
 		AC0A5CE62ECE449B001DFED4 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = AC0A5CE52ECE449B001DFED4 /* GoogleSignInSwift */; };
+		AC2A45982ECED91C00106EE6 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2A45972ECED91C00106EE6 /* DashboardView.swift */; };
+		AC2A459A2ECEDE7300106EE6 /* ProfileMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2A45992ECEDE7300106EE6 /* ProfileMenu.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		AC0A5CC22ECE40BA001DFED4 /* FamilyEventPlannerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyEventPlannerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AC0A5CEB2ECE6849001DFED4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AC2A45972ECED91C00106EE6 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		AC2A45992ECEDE7300106EE6 /* ProfileMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileMenu.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -55,7 +58,8 @@
 			children = (
 				AC0A5CC42ECE40BA001DFED4 /* FamilyEventPlannerApp */,
 				AC0A5CC32ECE40BA001DFED4 /* Products */,
-				AC0A5CEB2ECE6849001DFED4 /* Info.plist */,
+				AC2A45972ECED91C00106EE6 /* DashboardView.swift */,
+				AC2A45992ECEDE7300106EE6 /* ProfileMenu.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -146,6 +150,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AC2A45982ECED91C00106EE6 /* DashboardView.swift in Sources */,
+				AC2A459A2ECEDE7300106EE6 /* ProfileMenu.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

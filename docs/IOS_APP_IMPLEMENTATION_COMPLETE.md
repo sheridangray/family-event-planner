@@ -78,12 +78,12 @@ psql your_production_url -f migrations/008_create_health_tables.sql
 Verify the backend endpoints work:
 ```bash
 # Test mobile sign-in
-curl -X POST https://sheridangray.com/api/auth/mobile-signin \
+curl -X POST https://family-event-planner-backend.onrender.com/api/auth/mobile-signin \
   -H "Content-Type: application/json" \
   -d '{"idToken":"test","email":"sheridan.gray@gmail.com","name":"Test"}'
 
 # Test health sync (after getting JWT token)
-curl -X POST https://sheridangray.com/api/health/sync \
+curl -X POST https://family-event-planner-backend.onrender.com/api/health/sync \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{"date":"2025-01-15","metrics":{"steps":5000},"source":"test"}'

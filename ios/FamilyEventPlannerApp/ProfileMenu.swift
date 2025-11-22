@@ -6,18 +6,20 @@ import SwiftUI
 struct ProfileMenuButton: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @Binding var navigateToHealth: Bool
+    @Binding var navigateToSettings: Bool
     
     var body: some View {
         Menu {
-            // User info section
-            VStack(alignment: .leading) {
-                Text(authManager.currentUser?.name ?? "User")
-                    .font(.headline)
-                    .foregroundStyle(.primary)  // Darker color for name
-                Text(authManager.currentUser?.email ?? "")
-                    .font(.caption2)  // Smaller font for email
-                    .foregroundStyle(.secondary)
-            }
+            // User name as non-interactive text
+            Text(authManager.currentUser?.name ?? "User")
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.black)
+            
+            // User email as non-interactive text
+            Text(authManager.currentUser?.email ?? "")
+                .font(.caption)
+                .foregroundColor(.secondary)
             
             Divider()
             
@@ -26,6 +28,13 @@ struct ProfileMenuButton: View {
                 navigateToHealth = true
             }) {
                 Label("Health", systemImage: "heart.fill")
+            }
+            
+            // Settings option
+            Button(action: {
+                navigateToSettings = true
+            }) {
+                Label("Settings", systemImage: "gearshape.fill")
             }
             
             Divider()
