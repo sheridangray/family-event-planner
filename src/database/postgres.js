@@ -30,6 +30,37 @@ class PostgresDatabase {
 
   async createTables() {
     const createTablesSQL = `
+      -- Users table for multi-user authentication
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        name VARCHAR(255),
+        image_url VARCHAR(500),
+        role VARCHAR(50) DEFAULT 'user' CHECK(role IN ('admin', 'user')),
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- OAuth tokens table for multi-user token storage
+      CREATE TABLE IF NOT EXISTS oauth_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider VARCHAR(50) NOT NULL DEFAULT 'google',
+        access_token TEXT NOT NULL,
+        refresh_token TEXT,
+        token_expiry TIMESTAMP,
+        scope TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, provider)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user ON oauth_tokens(user_id);
+      CREATE INDEX IF NOT EXISTS idx_oauth_tokens_provider ON oauth_tokens(user_id, provider);
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_users_active ON users(active);
+
       CREATE TABLE IF NOT EXISTS events (
         id VARCHAR(255) PRIMARY KEY,
         source VARCHAR(100) NOT NULL,
@@ -205,6 +236,76 @@ class PostgresDatabase {
       CREATE INDEX IF NOT EXISTS idx_event_interactions_date ON event_interactions(interaction_date);
       CREATE INDEX IF NOT EXISTS idx_chatgpt_discoveries_date_searched ON chatgpt_event_discoveries(date_searched);
       CREATE INDEX IF NOT EXISTS idx_chatgpt_discoveries_target_date ON chatgpt_event_discoveries(target_date);
+
+      -- Health tracking tables
+      CREATE TABLE IF NOT EXISTS health_profiles (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        data_source VARCHAR(50) DEFAULT 'apple_health',
+        last_sync_at TIMESTAMP,
+        sync_frequency_hours INTEGER DEFAULT 24,
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS health_physical_metrics (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        metric_date DATE NOT NULL,
+        steps INTEGER DEFAULT 0,
+        distance_miles DECIMAL(10,2) DEFAULT 0,
+        flights_climbed INTEGER DEFAULT 0,
+        active_calories INTEGER DEFAULT 0,
+        resting_calories INTEGER DEFAULT 0,
+        exercise_minutes INTEGER DEFAULT 0,
+        standing_hours INTEGER DEFAULT 0,
+        resting_heart_rate INTEGER,
+        heart_rate_variability DECIMAL(10,2),
+        avg_heart_rate INTEGER,
+        max_heart_rate INTEGER,
+        weight_lbs DECIMAL(10,2),
+        body_fat_percentage DECIMAL(5,2),
+        bmi DECIMAL(5,2),
+        sleep_hours DECIMAL(4,2),
+        deep_sleep_hours DECIMAL(4,2),
+        rem_sleep_hours DECIMAL(4,2),
+        sleep_quality_score INTEGER,
+        calories_consumed INTEGER,
+        water_oz DECIMAL(10,2),
+        raw_data JSONB,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, metric_date)
+      );
+
+      CREATE TABLE IF NOT EXISTS health_goals (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        goal_type VARCHAR(50) NOT NULL,
+        target_value DECIMAL(10,2) NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE,
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS health_sync_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        sync_date TIMESTAMP DEFAULT NOW(),
+        metrics_count INTEGER DEFAULT 0,
+        status VARCHAR(20) DEFAULT 'success',
+        error_message TEXT,
+        source VARCHAR(50) DEFAULT 'ios_shortcut'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_health_metrics_user_date ON health_physical_metrics(user_id, metric_date DESC);
+      CREATE INDEX IF NOT EXISTS idx_health_metrics_date ON health_physical_metrics(metric_date DESC);
+      CREATE INDEX IF NOT EXISTS idx_health_goals_user_active ON health_goals(user_id, active);
+      CREATE INDEX IF NOT EXISTS idx_health_sync_logs_user ON health_sync_logs(user_id, sync_date DESC);
+      CREATE INDEX IF NOT EXISTS idx_health_profiles_user ON health_profiles(user_id);
     `;
 
     await this.pool.query(createTablesSQL);
@@ -259,12 +360,55 @@ class PostgresDatabase {
 
       await this.pool.query(updateDefaultsSQL);
 
+      // Initialize health profiles and goals for existing users
+      await this.initializeHealthData();
+
       console.log("Database migrations completed successfully");
     } catch (error) {
       console.warn(
         "Migration warning (may be expected if columns already exist):",
         error.message
       );
+    }
+  }
+
+  async initializeHealthData() {
+    try {
+      // Create default health profiles for active users without profiles
+      const createProfilesSQL = `
+        INSERT INTO health_profiles (user_id, data_source, active)
+        SELECT id, 'apple_health', true
+        FROM users
+        WHERE active = true
+        AND NOT EXISTS (
+          SELECT 1 FROM health_profiles WHERE health_profiles.user_id = users.id
+        );
+      `;
+      await this.pool.query(createProfilesSQL);
+
+      // Create default health goals (10k steps, 30min exercise, 8h sleep)
+      const createGoalsSQL = `
+        INSERT INTO health_goals (user_id, goal_type, target_value, start_date, active)
+        SELECT id, goal_data.type, goal_data.target, CURRENT_DATE, true
+        FROM users
+        CROSS JOIN (
+          VALUES 
+            ('steps', 10000),
+            ('exercise_minutes', 30),
+            ('sleep_hours', 8)
+        ) AS goal_data(type, target)
+        WHERE users.active = true
+        AND NOT EXISTS (
+          SELECT 1 FROM health_goals 
+          WHERE health_goals.user_id = users.id 
+          AND health_goals.goal_type = goal_data.type
+        );
+      `;
+      await this.pool.query(createGoalsSQL);
+
+      console.log("✅ Health data initialized for existing users");
+    } catch (error) {
+      console.warn("Health data initialization warning:", error.message);
     }
   }
 
