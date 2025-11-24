@@ -48,6 +48,7 @@ class TaskScheduler {
     this.scheduleCalendarSync();
     // this.scheduleDailyReports(); // Disabled - daily report emails removed
     this.scheduleHealthChecks();
+    this.scheduleHealthCoachWeekly();
 
     this.logger.info(
       `Task scheduler started with ${this.tasks.length} scheduled tasks`
@@ -179,6 +180,80 @@ class TaskScheduler {
       frequency: "Every 15 minutes",
     });
     this.logger.debug("Scheduled health checks: every 15 minutes");
+  }
+
+  scheduleHealthCoachWeekly() {
+    // Every Monday at 8:00 PM (20:00)
+    const task = cron.schedule("0 20 * * 1", async () => {
+      try {
+        this.logger.info("Starting weekly health coach recommendations...");
+        await this.runWeeklyHealthCoach();
+      } catch (error) {
+        this.logger.error(
+          "Error in weekly health coach job:",
+          error.message
+        );
+      }
+    });
+
+    this.tasks.push({
+      name: "Weekly Health Coach",
+      task,
+      frequency: "Every Monday at 8:00 PM",
+    });
+    this.logger.info("Scheduled weekly health coach: Every Monday at 8:00 PM");
+  }
+
+  async runWeeklyHealthCoach() {
+    try {
+      const HealthCoachService = require("../services/health-coach");
+      const healthCoach = new HealthCoachService(this.database, this.logger);
+
+      // Get all active users with health data from the last 7 days
+      const users = await this.database.query(
+        `SELECT DISTINCT u.id, u.email, u.name 
+         FROM users u
+         INNER JOIN health_physical_metrics hpm ON u.id = hpm.user_id
+         WHERE u.active = true
+         AND hpm.metric_date >= CURRENT_DATE - INTERVAL '7 days'`
+      );
+
+      this.logger.info(
+        `Generating health coach recommendations for ${users.rows.length} users`
+      );
+
+      for (const user of users.rows) {
+        try {
+          // Generate recommendations
+          const recommendations = await healthCoach.generateRecommendations(
+            user.id,
+            { timeRange: "week" }
+          );
+
+          // Send notification (email)
+          await healthCoach.sendRecommendationNotification(
+            user.id,
+            user.email,
+            user.name,
+            recommendations
+          );
+
+          this.logger.info(
+            `✅ Health coach recommendations sent to user ${user.id} (${user.email})`
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to send health coach recommendations to user ${user.id}:`,
+            error.message
+          );
+        }
+      }
+
+      this.logger.info("✅ Weekly health coach job completed");
+    } catch (error) {
+      this.logger.error("Error in weekly health coach job:", error);
+      throw error;
+    }
   }
 
   async runEventDiscovery(isManual = false) {

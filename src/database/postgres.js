@@ -306,6 +306,44 @@ class PostgresDatabase {
       CREATE INDEX IF NOT EXISTS idx_health_goals_user_active ON health_goals(user_id, active);
       CREATE INDEX IF NOT EXISTS idx_health_sync_logs_user ON health_sync_logs(user_id, sync_date DESC);
       CREATE INDEX IF NOT EXISTS idx_health_profiles_user ON health_profiles(user_id);
+
+      -- Health coach recommendations table
+      CREATE TABLE IF NOT EXISTS health_coach_recommendations (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        generated_at TIMESTAMP DEFAULT NOW(),
+        focus_areas JSONB,
+        recommendations JSONB,
+        context_snapshot JSONB,
+        model_used VARCHAR(50),
+        tokens_used INTEGER,
+        cache_hit BOOLEAN DEFAULT false,
+        notification_sent BOOLEAN DEFAULT false,
+        notification_sent_at TIMESTAMP,
+        user_feedback INTEGER,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT fk_health_coach_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_health_coach_user_date ON health_coach_recommendations(user_id, generated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_health_coach_notification_sent ON health_coach_recommendations(notification_sent);
+
+      -- Create function to update updated_at timestamp for health_coach_recommendations
+      CREATE OR REPLACE FUNCTION update_health_coach_updated_at()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = CURRENT_TIMESTAMP;
+          RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      -- Create trigger to auto-update updated_at
+      DROP TRIGGER IF EXISTS trigger_health_coach_updated_at ON health_coach_recommendations;
+      CREATE TRIGGER trigger_health_coach_updated_at
+          BEFORE UPDATE ON health_coach_recommendations
+          FOR EACH ROW
+          EXECUTE FUNCTION update_health_coach_updated_at();
     `;
 
     await this.pool.query(createTablesSQL);

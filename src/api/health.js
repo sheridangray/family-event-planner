@@ -243,6 +243,107 @@ function createHealthRouter(database, logger) {
     }
   });
 
+  /**
+   * POST /api/health/coach/recommendations
+   * Get health coach recommendations (triggered by app or scheduled job)
+   * Mobile: Uses JWT token
+   * Web/API: Falls back to userId in body
+   */
+  router.post("/coach/recommendations", authenticateFlexible, async (req, res) => {
+    try {
+      const userId = req.user?.id || req.body.userId;
+      const { focusArea, timeRange } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId required"
+        });
+      }
+
+      const HealthCoachService = require("../services/health-coach");
+      const healthCoach = new HealthCoachService(database, logger);
+      
+      const recommendations = await healthCoach.generateRecommendations(
+        userId,
+        { focusArea, timeRange: timeRange || 'month' }
+      );
+
+      res.json({
+        success: true,
+        data: recommendations,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error("Error generating health coach recommendations:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to generate recommendations",
+        message: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/health/coach/recommendations/:userId?
+   * Get latest health coach recommendations
+   * Mobile: Uses JWT token
+   * Web/API: Falls back to userId param
+   */
+  router.get("/coach/recommendations/:userId?", authenticateFlexible, async (req, res) => {
+    try {
+      const userId = req.user?.id || parseInt(req.params.userId);
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId required"
+        });
+      }
+
+      const result = await database.query(
+        `SELECT 
+          id, generated_at, focus_areas, recommendations,
+          model_used, tokens_used, notification_sent
+         FROM health_coach_recommendations
+         WHERE user_id = $1
+         ORDER BY generated_at DESC
+         LIMIT 1`,
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.json({
+          success: true,
+          data: null,
+          message: "No recommendations found. Generate recommendations first."
+        });
+      }
+
+      const rec = result.rows[0];
+      res.json({
+        success: true,
+        data: {
+          id: rec.id,
+          generatedAt: rec.generated_at,
+          focusAreas: rec.focus_areas,
+          recommendations: rec.recommendations,
+          metadata: {
+            modelUsed: rec.model_used,
+            tokensUsed: rec.tokens_used,
+            notificationSent: rec.notification_sent
+          }
+        }
+      });
+    } catch (error) {
+      logger.error("Error fetching health coach recommendations:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch recommendations"
+      });
+    }
+  });
+
   return router;
 }
 
