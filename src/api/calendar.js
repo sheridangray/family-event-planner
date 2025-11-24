@@ -1,6 +1,6 @@
 const express = require("express");
 const { google } = require("googleapis");
-const { authenticateMobile } = require("../middleware/auth");
+const { authenticateMobileJWT } = require("../middleware/auth");
 
 /**
  * Create calendar router for Google Calendar integration
@@ -12,7 +12,7 @@ function createCalendarRouter(database, logger) {
   const router = express.Router();
 
   // All routes require authentication
-  router.use(authenticateMobile);
+  router.use(authenticateMobileJWT);
 
   /**
    * POST /api/calendar/connect
