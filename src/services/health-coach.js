@@ -59,7 +59,7 @@ class HealthCoachService {
       // Call LLM
       const startTime = Date.now();
       const llmResponse = await this.llmClient.callTogetherAI(prompt, {
-        model: 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo', // Larger model for better recommendations
+        model: 'openai/gpt-oss-20b', // Serverless model for health recommendations
         max_tokens: 2000,
         temperature: 0.7,
         systemMessage: this._getSystemPrompt()
@@ -77,7 +77,7 @@ class HealthCoachService {
         userId,
         recommendations,
         context,
-        'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo',
+        'openai/gpt-oss-20b',
         tokensUsed,
         false // cache_hit
       );
