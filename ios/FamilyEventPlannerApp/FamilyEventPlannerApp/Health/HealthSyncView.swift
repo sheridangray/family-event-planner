@@ -4,31 +4,91 @@ import SwiftUI
 struct HealthSyncView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @EnvironmentObject var healthManager: HealthKitManager
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
     @State private var showingError = false
     @State private var errorMessage = ""
-    @State private var navigateToHealth = false
-    @State private var navigateToIntegrations = false
     
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 if healthManager.isAuthorized {
-                    // Date header
-                    VStack(spacing: 4) {
-                        Text("Yesterday's Health Data")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
+                    // Date header with navigation
+                    VStack(spacing: 12) {
+                        // Date display
+                        VStack(spacing: 4) {
+                            HStack(spacing: 8) {
+                                Text("Health Data")
+                                    .font(.headline)
+                                    .foregroundColor(.secondary)
+                                
+                                // Live indicator for today's data
+                                if healthManager.isViewingToday {
+                                    HStack(spacing: 4) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 8, height: 8)
+                                        Text("Live")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.green)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.green.opacity(0.1))
+                                    .cornerRadius(8)
+                                }
+                            }
+                            
+                            Text(healthManager.selectedDate, style: .date)
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                            
+                            // Show last update time for current day
+                            if healthManager.isViewingToday, let lastUpdate = healthManager.lastCurrentDayUpdate {
+                                Text("Updated \(lastUpdate, style: .relative)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                         
-                        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
-                        Text(yesterday, style: .date)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        // Navigation buttons
+                        HStack(spacing: 20) {
+                            Button(action: {
+                                healthManager.goToPreviousDay()
+                            }) {
+                                Image(systemName: "chevron.left.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(healthManager.isOnOldestDate ? .gray.opacity(0.3) : .sunsetDustyBlue)
+                            }
+                            .disabled(healthManager.isOnOldestDate)
+                            
+                            Button(action: {
+                                healthManager.goToNextDay()
+                            }) {
+                                Image(systemName: "chevron.right.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(healthManager.isOnMostRecentDate ? .gray.opacity(0.3) : .sunsetDustyBlue)
+                            }
+                            .disabled(healthManager.isOnMostRecentDate)
+                        }
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
                     
-                    // Category cards
+                    // Exercise Quick View (separate section)
+                    ExerciseQuickView()
+                        .environmentObject(ExerciseManager.shared)
+                        .environmentObject(healthManager)
+                        .padding(.horizontal)
+                    
+                    // Category cards for passive health metrics
                     VStack(spacing: 16) {
+                        Text("Health Metrics")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 4)
+                        
                         ForEach(HealthCategory.allCases) { category in
                             NavigationLink(destination: CategoryDetailView(category: category)
                                 .environmentObject(healthManager)) {
@@ -41,18 +101,83 @@ struct HealthSyncView: View {
                         }
                     }
                     .padding(.horizontal)
+                    .onAppear {
+                        // Fetch data for selected date when view appears
+                        Task {
+                            if healthManager.isViewingToday {
+                                // Fetch current day data
+                                await CurrentDaySyncManager.shared.fetchCurrentDayData()
+                            } else {
+                                // Fetch historical data
+                                await healthManager.fetchDataForDate(date: healthManager.selectedDate)
+                            }
+                        }
+                    }
+                    .onChange(of: healthManager.selectedDate) { newDate in
+                        // Fetch data when date changes
+                        Task {
+                            let calendar = Calendar.current
+                            if calendar.isDateInToday(newDate) {
+                                // Fetch current day data
+                                await CurrentDaySyncManager.shared.fetchCurrentDayData()
+                            } else {
+                                // Fetch historical data
+                                await healthManager.fetchDataForDate(date: newDate)
+                            }
+                        }
+                    }
                     
                     // Last sync info
-                    if let lastSync = healthManager.lastSyncDate {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("Last synced \(lastSync, style: .relative) ago")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    VStack(spacing: 4) {
+                        if healthManager.isViewingToday {
+                            // Show current day sync info
+                            if let lastSync = CurrentDaySyncManager.shared.lastCurrentDaySync {
+                                HStack {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .foregroundColor(.blue)
+                                    Text("Current day synced \(lastSync, style: .relative) ago")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } else {
+                            // Show historical sync info
+                            if let lastSync = healthManager.lastSyncDate {
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                    Text("Last synced \(lastSync, style: .relative) ago")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
-                        .padding(.top, 8)
                     }
+                    .padding(.top, 8)
+                    
+                    // Health Coach button
+                    Button(action: {
+                        navigationCoordinator.showHealthCoach()
+                    }) {
+                        HStack {
+                            Image(systemName: "sparkles")
+                            Text("Get Health Coach Recommendations")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(
+                            LinearGradient(
+                                colors: [.sunsetPeach, .sunsetCoral],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                        .shadow(color: .sunsetPeach.opacity(0.3), radius: 10, y: 5)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
                     
                     // Sync button
                     Button(action: syncData) {
@@ -69,14 +194,14 @@ struct HealthSyncView: View {
                         .padding()
                         .background(
                             LinearGradient(
-                                colors: [.blue, .indigo],
+                                colors: [.sunsetDustyBlue, .sunsetDustyBlueDark],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .foregroundColor(.white)
                         .cornerRadius(12)
-                        .shadow(color: .blue.opacity(0.3), radius: 10, y: 5)
+                        .shadow(color: .sunsetDustyBlue.opacity(0.3), radius: 10, y: 5)
                     }
                     .disabled(healthManager.isSyncing)
                     .padding(.horizontal)
@@ -89,7 +214,7 @@ struct HealthSyncView: View {
                             .font(.system(size: 70))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [.red, .pink],
+                                    colors: [.sunsetPeach, .sunsetCoral],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -112,7 +237,7 @@ struct HealthSyncView: View {
                         
                         // Button to navigate to Integrations
                         Button(action: {
-                            navigateToIntegrations = true
+                            navigationCoordinator.showIntegrations()
                         }) {
                             HStack {
                                 Image(systemName: "link.circle.fill")
@@ -122,14 +247,14 @@ struct HealthSyncView: View {
                             .padding()
                             .background(
                                 LinearGradient(
-                                    colors: [.red, .pink],
+                                    colors: [.sunsetCoral, .sunsetRose],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
                             .foregroundColor(.white)
                             .cornerRadius(12)
-                            .shadow(color: .red.opacity(0.3), radius: 10, y: 5)
+                            .shadow(color: .sunsetCoral.opacity(0.3), radius: 10, y: 5)
                         }
                         .padding(.horizontal, 32)
                         .padding(.top, 8)
@@ -152,15 +277,26 @@ struct HealthSyncView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                ProfileMenuButton(
-                    navigateToHealth: $navigateToHealth,
-                    navigateToSettings: .constant(false)
-                )
-                .environmentObject(authManager)
+                ProfileMenuButton()
+                    .environmentObject(authManager)
             }
         }
-        .navigationDestination(isPresented: $navigateToIntegrations) {
+        .navigationDestination(isPresented: $navigationCoordinator.navigateToIntegrations) {
             IntegrationsView()
+                .environmentObject(authManager)
+                .environmentObject(healthManager)
+        }
+        .navigationDestination(isPresented: $navigationCoordinator.navigateToHealthCoach) {
+            HealthCoachView()
+                .environmentObject(authManager)
+                .environmentObject(healthManager)
+        }
+        .navigationDestination(isPresented: $navigationCoordinator.navigateToExercise) {
+            ExerciseView()
+                .environmentObject(ExerciseManager.shared)
+        }
+        .navigationDestination(isPresented: $navigationCoordinator.navigateToSettings) {
+            SettingsView()
                 .environmentObject(authManager)
                 .environmentObject(healthManager)
         }
@@ -187,7 +323,13 @@ struct HealthSyncView: View {
     func syncData() {
         Task {
             do {
-                try await healthManager.syncToBackend(authManager: authManager)
+                if healthManager.isViewingToday {
+                    // Sync current day data
+                    try await CurrentDaySyncManager.shared.syncCurrentDayToBackend(authManager: authManager)
+                } else {
+                    // Sync historical data
+                    try await healthManager.syncToBackend(authManager: authManager)
+                }
             } catch {
                 errorMessage = error.localizedDescription
                 showingError = true
@@ -242,8 +384,9 @@ struct HealthMetricRow: View {
 
 #Preview {
     HealthSyncView()
-        .environmentObject(AuthenticationManager())
-        .environmentObject(HealthKitManager())
+        .environmentObject(AuthenticationManager.shared)
+        .environmentObject(HealthKitManager.shared)
+        .environmentObject(NavigationCoordinator.shared)
 }
 
 

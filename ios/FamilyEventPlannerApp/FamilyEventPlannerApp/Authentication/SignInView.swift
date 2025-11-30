@@ -13,7 +13,7 @@ struct SignInView: View {
                 .font(.system(size: 80))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [.pink, .red],
+                        colors: [.sunsetPeach, .sunsetCoral],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -54,14 +54,14 @@ struct SignInView: View {
                 .padding()
                 .background(
                     LinearGradient(
-                        colors: [.blue, .indigo],
+                        colors: [.sunsetDustyBlue, .sunsetDustyBlueDark],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .foregroundColor(.white)
                 .cornerRadius(12)
-                .shadow(color: .blue.opacity(0.3), radius: 10, y: 5)
+                .shadow(color: .sunsetDustyBlue.opacity(0.3), radius: 10, y: 5)
             }
             .disabled(authManager.isLoading)
             .padding(.horizontal, 40)

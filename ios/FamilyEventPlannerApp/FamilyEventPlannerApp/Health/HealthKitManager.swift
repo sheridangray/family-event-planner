@@ -4,11 +4,15 @@ import Combine
 
 /// Manages HealthKit data reading and syncing to backend
 class HealthKitManager: ObservableObject {
+    static let shared = HealthKitManager()
+    
     let healthStore = HKHealthStore()
     
     @Published var isAuthorized = false
     @Published var lastSyncDate: Date?
     @Published var isSyncing = false
+    @Published var selectedDate: Date = Calendar.current.date(byAdding: .day, value: -1, to: Date())! // Default to yesterday
+    @Published var lastCurrentDayUpdate: Date? // Last time current day data was updated
     
     // Activity & Fitness
     @Published var todaySteps: Int = 0
@@ -49,6 +53,10 @@ class HealthKitManager: ObservableObject {
     // Mindfulness
     @Published var mindfulMinutes: Int = 0
     
+    // Health Coach
+    @Published var isLoadingRecommendations = false
+    @Published var healthCoachRecommendations: HealthCoachRecommendations?
+    
     private let backendURL = "https://family-event-planner-backend.onrender.com"
     // For local development, change to:
     // private let backendURL = "http://localhost:3000"
@@ -56,8 +64,13 @@ class HealthKitManager: ObservableObject {
     // MARK: - Initialization
     
     init() {
+        print("🏥 HealthKitManager singleton initialized")
         // Check authorization status on init
         checkAuthorizationStatus()
+    }
+    
+    deinit {
+        print("⚠️ HealthKitManager deallocated - THIS SHOULD NEVER HAPPEN WITH SINGLETON!")
     }
     
     /// Check if we already have HealthKit authorization
@@ -117,11 +130,7 @@ class HealthKitManager: ObservableObject {
         if status != .notDetermined {
             isAuthorized = true
             print("✅ HealthKit already authorized")
-            
-            // Fetch initial data
-            Task {
-                await fetchTodayData()
-            }
+            // Note: Data is fetched only when user explicitly syncs or grants new permissions
         }
     }
     
@@ -180,6 +189,16 @@ class HealthKitManager: ObservableObject {
                 self.isAuthorized = true
             }
             print("✅ HealthKit authorized")
+            
+            // Schedule background syncs after authorization
+            BackgroundTaskManager.shared.scheduleHealthSync()
+            BackgroundTaskManager.shared.scheduleCurrentDaySync()
+            
+            // Start HealthKit observers for real-time updates
+            CurrentDaySyncManager.shared.startHealthObservers(healthStore: healthStore)
+            
+            // Setup notification rules
+            setupNotificationRules()
         } catch {
             print("❌ HealthKit authorization failed: \(error)")
             throw error
@@ -204,6 +223,15 @@ class HealthKitManager: ObservableObject {
             
             if wasAuthorized != self.isAuthorized {
                 print("⚠️ HealthKit authorization status changed: \(self.isAuthorized)")
+                
+                if self.isAuthorized {
+                    // Start observers and schedule syncs when authorized
+                    BackgroundTaskManager.shared.scheduleCurrentDaySync()
+                    CurrentDaySyncManager.shared.startHealthObservers(healthStore: self.healthStore)
+                } else {
+                    // Stop observers when unauthorized
+                    CurrentDaySyncManager.shared.stopAllObservers()
+                }
             }
         }
     }
@@ -211,17 +239,18 @@ class HealthKitManager: ObservableObject {
     // MARK: - Fetch Health Data
     
     /// Fetch yesterday's health data from HealthKit
-    func fetchTodayData() async {  // Keep name for compatibility with existing code
+    /// Fetch health data for a specific date
+    func fetchDataForDate(date: Date) async {
         let calendar = Calendar.current
-        let now = Date()
+        let startOfDay = calendar.startOfDay(for: date)
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
         
-        // Get yesterday's date range
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
-        let startOfYesterday = calendar.startOfDay(for: yesterday)
-        let endOfYesterday = calendar.date(byAdding: .day, value: 1, to: startOfYesterday)!
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateString = dateFormatter.string(from: date)
         
-        print("📊 Fetching yesterday's health data...")
-        print("📅 Date range: \(startOfYesterday) to \(endOfYesterday)")
+        print("📊 Fetching health data for date: \(dateString)")
+        print("📅 Date range: \(startOfDay) to \(endOfDay)")
         
         // Check if running in simulator
         #if targetEnvironment(simulator)
@@ -230,59 +259,59 @@ class HealthKitManager: ObservableObject {
         let isSimulator = false
         #endif
         
-        // Fetch steps from yesterday
+        // Fetch steps for the date
         var steps = await fetchQuantity(
             type: HKQuantityType(.stepCount),
             unit: HKUnit.count(),
-            start: startOfYesterday,
-            end: endOfYesterday
+            start: startOfDay,
+            end: endOfDay
         )
         
-        // Fetch exercise minutes from yesterday
+        // Fetch exercise minutes for the date
         var exercise = await fetchQuantity(
             type: HKQuantityType(.appleExerciseTime),
             unit: HKUnit.minute(),
-            start: startOfYesterday,
-            end: endOfYesterday
+            start: startOfDay,
+            end: endOfDay
         )
         
-        // Fetch sleep from the night before yesterday
-        let sleepStart = calendar.date(byAdding: .hour, value: -12, to: startOfYesterday)!
-        var sleep = await fetchSleepHours(start: sleepStart, end: endOfYesterday)
+        // Fetch sleep from the night before the date
+        let sleepStart = calendar.date(byAdding: .hour, value: -12, to: startOfDay)!
+        var sleep = await fetchSleepHours(start: sleepStart, end: endOfDay)
         
-        // Fetch activity metrics from yesterday
-        var distanceMiles = await fetchDistance(start: startOfYesterday, end: endOfYesterday)
-        var activeCals = await fetchActiveCalories(start: startOfYesterday, end: endOfYesterday)
-        var flights = await fetchFlightsClimbed(start: startOfYesterday, end: endOfYesterday)
-        var speed = await fetchWalkingSpeed(start: startOfYesterday, end: endOfYesterday)
-        var standHrs = await fetchStandHours(start: startOfYesterday, end: endOfYesterday)
+        // Fetch activity metrics for the date
+        var distanceMiles = await fetchDistance(start: startOfDay, end: endOfDay)
+        var activeCals = await fetchActiveCalories(start: startOfDay, end: endOfDay)
+        var flights = await fetchFlightsClimbed(start: startOfDay, end: endOfDay)
+        var speed = await fetchWalkingSpeed(start: startOfDay, end: endOfDay)
+        var standHrs = await fetchStandHours(start: startOfDay, end: endOfDay)
         
-        // Fetch heart & vitals
-        var heartRate = await fetchLatestHeartRate(start: startOfYesterday, end: endOfYesterday)
-        var hrv = await fetchHRV()
-        var vo2 = await fetchVO2Max()
-        var spo2 = await fetchBloodOxygen()
-        var respRate = await fetchRespiratoryRate()
+        // Fetch heart & vitals (most recent value on or before the selected date)
+        var heartRate = await fetchLatestHeartRate(start: startOfDay, end: endOfDay)
+        var hrv = await fetchHRV(beforeDate: endOfDay)
+        var vo2 = await fetchVO2Max(beforeDate: endOfDay)
+        var spo2 = await fetchBloodOxygen(beforeDate: endOfDay)
+        var respRate = await fetchRespiratoryRate(beforeDate: endOfDay)
         
-        // Fetch body metrics (latest available)
-        var weightLbs = await fetchLatestWeight()
-        var bodyFat = await fetchLatestBodyFat()
-        var bmiValue = await fetchLatestBMI()
-        var heightInches = await fetchLatestHeight()
-        var leanMass = await fetchLatestBodyFat()  // Using body fat function as placeholder
+        // Fetch body metrics (most recent value on or before the selected date)
+        var weightLbs = await fetchLatestWeight(beforeDate: endOfDay)
+        var bodyFat = await fetchLatestBodyFat(beforeDate: endOfDay)
+        var bmiValue = await fetchLatestBMI(beforeDate: endOfDay)
+        var heightInches = await fetchLatestHeight(beforeDate: endOfDay)
+        var leanMass = await fetchLatestLeanBodyMass(beforeDate: endOfDay)
         
-        // Fetch nutrition from yesterday
-        var cals = await fetchDietaryMetric(type: HKQuantityType(.dietaryEnergyConsumed), unit: HKUnit.kilocalorie(), start: startOfYesterday, end: endOfYesterday)
-        var prot = await fetchDietaryMetric(type: HKQuantityType(.dietaryProtein), unit: HKUnit.gram(), start: startOfYesterday, end: endOfYesterday)
-        var carbGrams = await fetchDietaryMetric(type: HKQuantityType(.dietaryCarbohydrates), unit: HKUnit.gram(), start: startOfYesterday, end: endOfYesterday)
-        var fatGrams = await fetchDietaryMetric(type: HKQuantityType(.dietaryFatTotal), unit: HKUnit.gram(), start: startOfYesterday, end: endOfYesterday)
-        var sugarGrams = await fetchDietaryMetric(type: HKQuantityType(.dietarySugar), unit: HKUnit.gram(), start: startOfYesterday, end: endOfYesterday)
-        var fiberGrams = await fetchDietaryMetric(type: HKQuantityType(.dietaryFiber), unit: HKUnit.gram(), start: startOfYesterday, end: endOfYesterday)
-        var waterOz = await fetchDietaryMetric(type: HKQuantityType(.dietaryWater), unit: HKUnit.fluidOunceUS(), start: startOfYesterday, end: endOfYesterday)
-        var caffeineMg = await fetchDietaryMetric(type: HKQuantityType(.dietaryCaffeine), unit: HKUnit.gramUnit(with: .milli), start: startOfYesterday, end: endOfYesterday)
+        // Fetch nutrition for the date
+        var cals = await fetchDietaryMetric(type: HKQuantityType(.dietaryEnergyConsumed), unit: HKUnit.kilocalorie(), start: startOfDay, end: endOfDay)
+        var prot = await fetchDietaryMetric(type: HKQuantityType(.dietaryProtein), unit: HKUnit.gram(), start: startOfDay, end: endOfDay)
+        var carbGrams = await fetchDietaryMetric(type: HKQuantityType(.dietaryCarbohydrates), unit: HKUnit.gram(), start: startOfDay, end: endOfDay)
+        var fatGrams = await fetchDietaryMetric(type: HKQuantityType(.dietaryFatTotal), unit: HKUnit.gram(), start: startOfDay, end: endOfDay)
+        var sugarGrams = await fetchDietaryMetric(type: HKQuantityType(.dietarySugar), unit: HKUnit.gram(), start: startOfDay, end: endOfDay)
+        var fiberGrams = await fetchDietaryMetric(type: HKQuantityType(.dietaryFiber), unit: HKUnit.gram(), start: startOfDay, end: endOfDay)
+        var waterOz = await fetchDietaryMetric(type: HKQuantityType(.dietaryWater), unit: HKUnit.fluidOunceUS(), start: startOfDay, end: endOfDay)
+        var caffeineMg = await fetchDietaryMetric(type: HKQuantityType(.dietaryCaffeine), unit: HKUnit.gramUnit(with: .milli), start: startOfDay, end: endOfDay)
         
-        // Fetch mindfulness from yesterday
-        var mindful = await fetchMindfulMinutes(start: startOfYesterday, end: endOfYesterday)
+        // Fetch mindfulness for the date
+        var mindful = await fetchMindfulMinutes(start: startOfDay, end: endOfDay)
         
         // Use mock data in simulator if no real activity data available
         // (Note: Some simulators may have heart rate data but no step data)
@@ -341,9 +370,310 @@ class HealthKitManager: ObservableObject {
             
             // Mindfulness
             self.mindfulMinutes = mindful
+            
+            // Update last current day update if this is today's data
+            let calendar = Calendar.current
+            if calendar.isDateInToday(date) {
+                self.lastCurrentDayUpdate = Date()
+            }
         }
         
-        print("✅ Fetched all health metrics for yesterday")
+        print("✅ Fetched all health metrics for \(dateString)")
+    }
+    
+    /// Fetch yesterday's health data (backward compatibility)
+    func fetchTodayData() async {
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        await fetchDataForDate(date: yesterday)
+    }
+    
+    /// Fetch current day's health data (today's partial data)
+    func fetchCurrentDayData() async {
+        let today = Date()
+        await fetchDataForDate(date: today)
+    }
+    
+    /// Check if the selected date is today
+    var isViewingToday: Bool {
+        Calendar.current.isDateInToday(selectedDate)
+    }
+    
+    // MARK: - Date Navigation
+    
+    /// Get the oldest date we can view (defaults to 1 year ago)
+    var oldestAvailableDate: Date {
+        Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date()
+    }
+    
+    /// Get the most recent date we can view (today, for current day tracking)
+    var mostRecentDate: Date {
+        Date()
+    }
+    
+    /// Check if we're on the oldest available date
+    var isOnOldestDate: Bool {
+        let calendar = Calendar.current
+        let selectedStart = calendar.startOfDay(for: selectedDate)
+        let oldestStart = calendar.startOfDay(for: oldestAvailableDate)
+        return selectedStart <= oldestStart
+    }
+    
+    /// Check if we're on the most recent date
+    var isOnMostRecentDate: Bool {
+        let calendar = Calendar.current
+        let selectedStart = calendar.startOfDay(for: selectedDate)
+        let mostRecentStart = calendar.startOfDay(for: mostRecentDate)
+        return selectedStart >= mostRecentStart
+    }
+    
+    /// Navigate to previous day
+    func goToPreviousDay() {
+        guard !isOnOldestDate else { return }
+        let calendar = Calendar.current
+        if let previousDate = calendar.date(byAdding: .day, value: -1, to: selectedDate) {
+            selectedDate = previousDate
+            Task {
+                await fetchDataForDate(date: previousDate)
+            }
+        }
+    }
+    
+    /// Navigate to next day
+    func goToNextDay() {
+        guard !isOnMostRecentDate else { return }
+        let calendar = Calendar.current
+        if let nextDate = calendar.date(byAdding: .day, value: 1, to: selectedDate) {
+            selectedDate = nextDate
+            Task {
+                await fetchDataForDate(date: nextDate)
+            }
+        }
+    }
+    
+    // MARK: - Aggregated Data Fetching
+    
+    /// Data point for charts
+    struct MetricDataPoint: Identifiable {
+        let id = UUID()
+        let date: Date
+        let value: Double
+    }
+    
+    /// Fetch aggregated data for a metric over a date range
+    func fetchMetricData(for identifier: MetricIdentifier, from startDate: Date, to endDate: Date) async -> [MetricDataPoint] {
+        print("📊 Fetching metric data for: \(identifier.rawValue)")
+        print("📅 Date range: \(startDate) to \(endDate)")
+        
+        let calendar = Calendar.current
+        var dataPoints: [MetricDataPoint] = []
+        
+        // Handle sleep specially (category type)
+        if identifier == .sleep {
+            var currentDate = calendar.startOfDay(for: startDate)
+            let end = calendar.startOfDay(for: endDate)
+            
+            while currentDate <= end {
+                let dayStart = calendar.date(byAdding: .hour, value: -12, to: currentDate)!
+                let dayEnd = calendar.date(byAdding: .day, value: 1, to: currentDate)!
+                
+                let value = await fetchSleepHours(start: dayStart, end: dayEnd)
+                dataPoints.append(MetricDataPoint(date: currentDate, value: value))
+                
+                currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
+            }
+            return dataPoints
+        }
+        
+        // Handle mindful minutes specially (category type)
+        if identifier == .mindfulMinutes {
+            var currentDate = calendar.startOfDay(for: startDate)
+            let end = calendar.startOfDay(for: endDate)
+            
+            while currentDate <= end {
+                let dayStart = currentDate
+                let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+                
+                let value = await fetchMindfulMinutes(start: dayStart, end: dayEnd)
+                dataPoints.append(MetricDataPoint(date: dayStart, value: Double(value)))
+                
+                currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
+            }
+            return dataPoints
+        }
+        
+        // Handle quantity types
+        guard let quantityType = getQuantityType(for: identifier) else {
+            print("❌ No quantity type for metric: \(identifier.rawValue)")
+            return []
+        }
+        
+        print("✅ Using HealthKit type: \(identifier.healthKitType ?? "unknown")")
+        
+        // For aggregated metrics (steps, exercise, etc.), get daily totals
+        // For averaged metrics (weight, heart rate, etc.), get daily averages
+        if identifier.isAggregated {
+            // Get daily sums
+            var currentDate = calendar.startOfDay(for: startDate)
+            let end = calendar.startOfDay(for: endDate)
+            
+            while currentDate <= end {
+                let dayStart = currentDate
+                let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+                
+                let value = await fetchQuantityValue(type: quantityType, unit: getUnit(for: identifier), start: dayStart, end: dayEnd)
+                dataPoints.append(MetricDataPoint(date: dayStart, value: value))
+                
+                currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
+            }
+            print("✅ Fetched \(dataPoints.count) data points (aggregated)")
+        } else {
+            // Get daily averages or latest values
+            var currentDate = calendar.startOfDay(for: startDate)
+            let end = calendar.startOfDay(for: endDate)
+            
+            while currentDate <= end {
+                let dayStart = currentDate
+                let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+                
+                let value = await fetchAverageOrLatestValue(type: quantityType, unit: getUnit(for: identifier), start: dayStart, end: dayEnd)
+                dataPoints.append(MetricDataPoint(date: dayStart, value: value))
+                
+                currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
+            }
+            print("✅ Fetched \(dataPoints.count) data points (averaged/latest)")
+        }
+        
+        print("📊 Total data points: \(dataPoints.count)")
+        if !dataPoints.isEmpty {
+            print("📊 Sample values: \(dataPoints.prefix(3).map { "\($0.value)" }.joined(separator: ", "))")
+        }
+        
+        return dataPoints
+    }
+    
+    /// Get the HKQuantityType for a metric identifier
+    private func getQuantityType(for identifier: MetricIdentifier) -> HKQuantityType? {
+        switch identifier {
+        case .steps: return HKQuantityType(.stepCount)
+        case .exercise: return HKQuantityType(.appleExerciseTime)
+        case .distance: return HKQuantityType(.distanceWalkingRunning)
+        case .activeCalories: return HKQuantityType(.activeEnergyBurned)
+        case .flightsClimbed: return HKQuantityType(.flightsClimbed)
+        case .standHours: return HKQuantityType(.appleStandTime)
+        case .walkingSpeed: return HKQuantityType(.walkingSpeed)
+        case .weight: return HKQuantityType(.bodyMass)
+        case .bmi: return HKQuantityType(.bodyMassIndex)
+        case .bodyFat: return HKQuantityType(.bodyFatPercentage)
+        case .height: return HKQuantityType(.height)
+        case .leanBodyMass: return HKQuantityType(.leanBodyMass)
+        case .restingHeartRate: return HKQuantityType(.restingHeartRate)
+        case .bloodOxygen: return HKQuantityType(.oxygenSaturation)
+        case .vo2Max: return HKQuantityType(.vo2Max)
+        case .hrv: return HKQuantityType(.heartRateVariabilitySDNN)
+        case .respiratoryRate: return HKQuantityType(.respiratoryRate)
+        case .calories: return HKQuantityType(.dietaryEnergyConsumed)
+        case .water: return HKQuantityType(.dietaryWater)
+        case .protein: return HKQuantityType(.dietaryProtein)
+        case .carbs: return HKQuantityType(.dietaryCarbohydrates)
+        case .fat: return HKQuantityType(.dietaryFatTotal)
+        case .sugar: return HKQuantityType(.dietarySugar)
+        case .fiber: return HKQuantityType(.dietaryFiber)
+        case .caffeine: return HKQuantityType(.dietaryCaffeine)
+        case .sleep, .mindfulMinutes: return nil // These are category types, handled separately
+        }
+    }
+    
+    /// Get the appropriate unit for a metric
+    private func getUnit(for identifier: MetricIdentifier) -> HKUnit {
+        switch identifier {
+        case .steps: return HKUnit.count()
+        case .exercise, .mindfulMinutes: return HKUnit.minute()
+        case .distance: return HKUnit.mile()
+        case .activeCalories, .calories: return HKUnit.kilocalorie()
+        case .flightsClimbed: return HKUnit.count()
+        case .standHours: return HKUnit.hour()
+        case .walkingSpeed: return HKUnit.mile().unitDivided(by: HKUnit.hour())
+        case .weight, .leanBodyMass: return HKUnit.pound()
+        case .bmi: return HKUnit.count()
+        case .bodyFat: return HKUnit.percent()
+        case .height: return HKUnit.inch()
+        case .restingHeartRate: return HKUnit(from: "count/min")
+        case .bloodOxygen: return HKUnit.percent()
+        case .vo2Max: return HKUnit.literUnit(with: .milli).unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: HKUnit.minute()))
+        case .hrv: return HKUnit.secondUnit(with: .milli)
+        case .respiratoryRate: return HKUnit.count().unitDivided(by: HKUnit.minute())
+        case .water: return HKUnit.fluidOunceUS()
+        case .protein, .carbs, .fat, .sugar, .fiber: return HKUnit.gram()
+        case .caffeine: return HKUnit.gramUnit(with: .milli)
+        case .sleep: return HKUnit.hour()
+        }
+    }
+    
+    /// Fetch quantity value (sum or average)
+    private func fetchQuantityValue(type: HKQuantityType, unit: HKUnit, start: Date, end: Date) async -> Double {
+        return await withCheckedContinuation { continuation in
+            let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+            
+            let query = HKStatisticsQuery(
+                quantityType: type,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, result, error in
+                if let error = error {
+                    let nsError = error as NSError
+                    if nsError.code != 11 { // Ignore "no data" errors
+                        print("❌ Error fetching quantity: \(error)")
+                    }
+                    continuation.resume(returning: 0)
+                    return
+                }
+                
+                let value = result?.sumQuantity()?.doubleValue(for: unit) ?? 0
+                continuation.resume(returning: value)
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
+    /// Fetch average or latest value
+    private func fetchAverageOrLatestValue(type: HKQuantityType, unit: HKUnit, start: Date, end: Date) async -> Double {
+        return await withCheckedContinuation { continuation in
+            let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: predicate,
+                limit: 1,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, error in
+                if let error = error {
+                    let nsError = error as NSError
+                    if nsError.code != 11 {
+                        print("❌ Error fetching average/latest: \(error)")
+                    }
+                    continuation.resume(returning: 0)
+                    return
+                }
+                
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    continuation.resume(returning: 0)
+                    return
+                }
+                
+                var value = sample.quantity.doubleValue(for: unit)
+                
+                // Convert percentages to readable format
+                if unit == HKUnit.percent() {
+                    value = value * 100
+                }
+                
+                continuation.resume(returning: value)
+            }
+            
+            healthStore.execute(query)
+        }
     }
     
     /// Fetch quantity sum (steps, exercise, etc.)
@@ -419,11 +749,11 @@ class HealthKitManager: ObservableObject {
     }
     
     /// Fetch latest weight
-    private func fetchLatestWeight() async -> Double {
+    private func fetchLatestWeight(beforeDate: Date) async -> Double {
         return await withCheckedContinuation { continuation in
-            let now = Date()
-            let lastWeek = Calendar.current.date(byAdding: .day, value: -7, to: now)!
-            let predicate = HKQuery.predicateForSamples(withStart: lastWeek, end: now)
+            // Look back up to 1 year for weight data
+            let startDate = Calendar.current.date(byAdding: .year, value: -1, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
             let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             
             let query = HKSampleQuery(
@@ -439,11 +769,13 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No weight data found before \(beforeDate)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let pounds = sample.quantity.doubleValue(for: HKUnit.pound())
+                print("✅ Weight: \(pounds) lbs (from \(sample.startDate), requested date: \(beforeDate))")
                 continuation.resume(returning: pounds)
             }
             
@@ -452,11 +784,11 @@ class HealthKitManager: ObservableObject {
     }
     
     /// Fetch latest body fat percentage
-    private func fetchLatestBodyFat() async -> Double {
+    private func fetchLatestBodyFat(beforeDate: Date) async -> Double {
         return await withCheckedContinuation { continuation in
-            let now = Date()
-            let lastMonth = Calendar.current.date(byAdding: .day, value: -30, to: now)!
-            let predicate = HKQuery.predicateForSamples(withStart: lastMonth, end: now)
+            // Look back up to 1 year for body fat data
+            let startDate = Calendar.current.date(byAdding: .year, value: -1, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
             let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             
             let query = HKSampleQuery(
@@ -472,11 +804,13 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No body fat data found before \(beforeDate)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let percentage = sample.quantity.doubleValue(for: HKUnit.percent()) * 100
+                print("✅ Body Fat: \(percentage)% (from \(sample.startDate), requested date: \(beforeDate))")
                 continuation.resume(returning: percentage)
             }
             
@@ -485,11 +819,11 @@ class HealthKitManager: ObservableObject {
     }
     
     /// Fetch latest BMI
-    private func fetchLatestBMI() async -> Double {
+    private func fetchLatestBMI(beforeDate: Date) async -> Double {
         return await withCheckedContinuation { continuation in
-            let now = Date()
-            let lastMonth = Calendar.current.date(byAdding: .day, value: -30, to: now)!
-            let predicate = HKQuery.predicateForSamples(withStart: lastMonth, end: now)
+            // Look back up to 1 year for BMI data
+            let startDate = Calendar.current.date(byAdding: .year, value: -1, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
             let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             
             let query = HKSampleQuery(
@@ -505,11 +839,13 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No BMI data found before \(beforeDate)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let bmi = sample.quantity.doubleValue(for: HKUnit.count())
+                print("✅ BMI: \(bmi) (from \(sample.startDate), requested date: \(beforeDate))")
                 continuation.resume(returning: bmi)
             }
             
@@ -518,9 +854,11 @@ class HealthKitManager: ObservableObject {
     }
     
     /// Fetch latest height
-    private func fetchLatestHeight() async -> Double {
+    private func fetchLatestHeight(beforeDate: Date) async -> Double {
         return await withCheckedContinuation { continuation in
-            let predicate = HKQuery.predicateForSamples(withStart: nil, end: Date())
+            // Height rarely changes, so look back as far as needed
+            let startDate = Calendar.current.date(byAdding: .year, value: -10, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
             let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             
             let query = HKSampleQuery(
@@ -536,12 +874,49 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No height data found before \(beforeDate)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let inches = sample.quantity.doubleValue(for: HKUnit.inch())
+                print("✅ Height: \(inches) inches (from \(sample.startDate), requested date: \(beforeDate))")
                 continuation.resume(returning: inches)
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
+    /// Fetch latest lean body mass
+    private func fetchLatestLeanBodyMass(beforeDate: Date) async -> Double {
+        return await withCheckedContinuation { continuation in
+            // Look back up to 1 year for lean body mass data
+            let startDate = Calendar.current.date(byAdding: .year, value: -1, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            
+            let query = HKSampleQuery(
+                sampleType: HKQuantityType(.leanBodyMass),
+                predicate: predicate,
+                limit: 1,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, error in
+                if let error = error {
+                    print("❌ Error fetching lean body mass: \(error)")
+                    continuation.resume(returning: 0)
+                    return
+                }
+                
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No lean body mass data found before \(beforeDate)")
+                    continuation.resume(returning: 0)
+                    return
+                }
+                
+                let pounds = sample.quantity.doubleValue(for: HKUnit.pound())
+                print("✅ Lean Body Mass: \(pounds) lbs (from \(sample.startDate), requested date: \(beforeDate))")
+                continuation.resume(returning: pounds)
             }
             
             healthStore.execute(query)
@@ -643,11 +1018,11 @@ class HealthKitManager: ObservableObject {
     }
     
     /// Fetch VO2 Max
-    private func fetchVO2Max() async -> Double {
+    private func fetchVO2Max(beforeDate: Date) async -> Double {
         return await withCheckedContinuation { continuation in
-            let now = Date()
-            let lastMonth = Calendar.current.date(byAdding: .day, value: -30, to: now)!
-            let predicate = HKQuery.predicateForSamples(withStart: lastMonth, end: now)
+            // Look back up to 1 year for VO2 Max data
+            let startDate = Calendar.current.date(byAdding: .year, value: -1, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
             let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             
             let query = HKSampleQuery(
@@ -663,11 +1038,13 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No VO2 Max data found before \(beforeDate)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let vo2Max = sample.quantity.doubleValue(for: HKUnit.literUnit(with: .milli).unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: HKUnit.minute())))
+                print("✅ VO2 Max: \(vo2Max) ml/kg/min (from \(sample.startDate), requested date: \(beforeDate))")
                 continuation.resume(returning: vo2Max)
             }
             
@@ -676,11 +1053,11 @@ class HealthKitManager: ObservableObject {
     }
     
     /// Fetch heart rate variability (HRV)
-    private func fetchHRV() async -> Double {
+    private func fetchHRV(beforeDate: Date) async -> Double {
         return await withCheckedContinuation { continuation in
-            let now = Date()
-            let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
-            let predicate = HKQuery.predicateForSamples(withStart: yesterday, end: now)
+            // Look back up to 1 year for HRV data
+            let startDate = Calendar.current.date(byAdding: .year, value: -1, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
             let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             
             let query = HKSampleQuery(
@@ -696,11 +1073,13 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No HRV data found before \(beforeDate)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let hrv = sample.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
+                print("✅ HRV: \(hrv) ms (from \(sample.startDate), requested date: \(beforeDate))")
                 continuation.resume(returning: hrv)
             }
             
@@ -709,11 +1088,11 @@ class HealthKitManager: ObservableObject {
     }
     
     /// Fetch blood oxygen (SpO2)
-    private func fetchBloodOxygen() async -> Double {
+    private func fetchBloodOxygen(beforeDate: Date) async -> Double {
         return await withCheckedContinuation { continuation in
-            let now = Date()
-            let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
-            let predicate = HKQuery.predicateForSamples(withStart: yesterday, end: now)
+            // Look back up to 1 year for blood oxygen data
+            let startDate = Calendar.current.date(byAdding: .year, value: -1, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
             let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             
             let query = HKSampleQuery(
@@ -729,11 +1108,13 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No blood oxygen data found before \(beforeDate)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let spo2 = sample.quantity.doubleValue(for: HKUnit.percent()) * 100
+                print("✅ Blood Oxygen: \(spo2)% (from \(sample.startDate), requested date: \(beforeDate))")
                 continuation.resume(returning: spo2)
             }
             
@@ -742,11 +1123,11 @@ class HealthKitManager: ObservableObject {
     }
     
     /// Fetch respiratory rate
-    private func fetchRespiratoryRate() async -> Double {
+    private func fetchRespiratoryRate(beforeDate: Date) async -> Double {
         return await withCheckedContinuation { continuation in
-            let now = Date()
-            let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
-            let predicate = HKQuery.predicateForSamples(withStart: yesterday, end: now)
+            // Look back up to 1 year for respiratory rate data
+            let startDate = Calendar.current.date(byAdding: .year, value: -1, to: beforeDate) ?? beforeDate
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: beforeDate)
             let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             
             let query = HKSampleQuery(
@@ -762,11 +1143,13 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No respiratory rate data found before \(beforeDate)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let rate = sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
+                print("✅ Respiratory Rate: \(rate) breaths/min (from \(sample.startDate), requested date: \(beforeDate))")
                 continuation.resume(returning: rate)
             }
             
@@ -848,17 +1231,19 @@ class HealthKitManager: ObservableObject {
                 sortDescriptors: [sortDescriptor]
             ) { _, samples, error in
                 if let error = error {
-                    print("❌ Error fetching heart rate: \(error)")
+                    print("❌ Error fetching resting heart rate: \(error)")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
+                    print("⚠️ No resting heart rate data found for date range")
                     continuation.resume(returning: 0)
                     return
                 }
                 
                 let bpm = Int(sample.quantity.doubleValue(for: HKUnit(from: "count/min")))
+                print("✅ Resting Heart Rate: \(bpm) bpm (from \(sample.startDate))")
                 continuation.resume(returning: bpm)
             }
             
@@ -869,11 +1254,22 @@ class HealthKitManager: ObservableObject {
     // MARK: - Sync to Backend
     
     /// Sync health data to backend
-    func syncToBackend(authManager: AuthenticationManager) async throws {
+    func syncToBackend(authManager: AuthenticationManager, date: Date? = nil, isBackgroundSync: Bool = false) async throws {
+        // Add logging BEFORE the guard
+        let syncType = isBackgroundSync ? "Background" : "Manual"
+        print("🔐 \(syncType) sync - Checking authentication...")
+        print("   - Has token: \(authManager.sessionToken != nil)")
+        print("   - Has user: \(authManager.currentUser != nil)")
+        print("   - User ID: \(authManager.currentUser?.id ?? 0)")
+        
         guard let token = authManager.sessionToken,
-              let _ = authManager.currentUser?.id else {
+              let userId = authManager.currentUser?.id else {
+            print("❌ Authentication failed - cannot sync")
             throw HealthKitError.notAuthenticated
         }
+        
+        print("✅ Authenticated as user \(userId)")
+        print("🔄 \(syncType) sync starting...")
         
         await MainActor.run {
             self.isSyncing = true
@@ -886,23 +1282,25 @@ class HealthKitManager: ObservableObject {
             }
         }
         
-        // Fetch latest data
-        await fetchTodayData()
+        // Determine target date (use provided date or default to yesterday)
+        let calendar = Calendar.current
+        let targetDate = date ?? calendar.date(byAdding: .day, value: -1, to: Date())!
+        
+        // Fetch data for the target date
+        await fetchDataForDate(date: targetDate)
         
         print("🔄 Syncing to backend...")
         print("📊 Data: Steps=\(todaySteps), Exercise=\(todayExercise)min, Sleep=\(todaySleep)h, HR=\(restingHeartRate)bpm")
         
-        // Prepare data with yesterday's date (since we're fetching yesterday's data)
+        // Prepare data with target date
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        let calendar = Calendar.current
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: Date())!
-        let yesterdayString = dateFormatter.string(from: yesterday)
+        let dateString = dateFormatter.string(from: targetDate)
         
-        print("📅 Syncing data for date: \(yesterdayString)")
+        print("📅 \(syncType) syncing data for date: \(dateString)")
         
         let healthData: [String: Any] = [
-            "date": yesterdayString,
+            "date": dateString,
             "metrics": [
                 // Activity & Fitness
                 "steps": todaySteps,
@@ -980,10 +1378,13 @@ class HealthKitManager: ObservableObject {
                 
                 // Log success response
                 if let responseString = String(data: data, encoding: .utf8) {
-                    print("✅ Sync successful. Response: \(responseString)")
+                    print("✅ \(syncType) sync successful. Response: \(responseString)")
                 } else {
-                    print("✅ Sync successful")
+                    print("✅ \(syncType) sync successful")
                 }
+                
+                // Store last successful sync time (especially useful for background syncs)
+                UserDefaults.standard.set(Date(), forKey: isBackgroundSync ? "lastBackgroundHealthSync" : "lastManualHealthSync")
             } else {
                 // Try to parse error message
                 let responseString = String(data: data, encoding: .utf8) ?? "No response body"
@@ -1008,6 +1409,65 @@ class HealthKitManager: ObservableObject {
             print("❌ Network error: \(error)")
             print("❌ Error details: \(error.localizedDescription)")
             throw HealthKitError.syncFailed("Network error: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - Historical Backfill
+    
+    /// Backfill health data for a date range
+    func backfillHistoricalData(fromDate: Date, toDate: Date, authManager: AuthenticationManager) async throws {
+        let calendar = Calendar.current
+        let startDate = calendar.startOfDay(for: fromDate)
+        let endDate = calendar.startOfDay(for: toDate)
+        
+        guard startDate <= endDate else {
+            throw HealthKitError.syncFailed("Start date must be before or equal to end date")
+        }
+        
+        // Calculate total days
+        let days = calendar.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+        let totalDays = days + 1 // Include both start and end dates
+        
+        print("📚 Starting backfill from \(startDate) to \(endDate) (\(totalDays) days)")
+        
+        var currentDate = startDate
+        var dayCount = 0
+        var successCount = 0
+        var failureCount = 0
+        
+        while currentDate <= endDate {
+            dayCount += 1
+            
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            let dateString = dateFormatter.string(from: currentDate)
+            
+            print("📅 Processing day \(dayCount)/\(totalDays): \(dateString)")
+            
+            do {
+                // Fetch and sync data for this date
+                try await syncToBackend(authManager: authManager, date: currentDate, isBackgroundSync: false)
+                successCount += 1
+                print("✅ Successfully synced \(dateString)")
+            } catch {
+                failureCount += 1
+                print("❌ Failed to sync \(dateString): \(error.localizedDescription)")
+                // Continue with next day even if one fails
+            }
+            
+            // Move to next day
+            guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else {
+                break
+            }
+            currentDate = nextDate
+            
+            // Small delay to avoid overwhelming backend
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        }
+        
+        print("🎉 Backfill complete! Synced \(successCount)/\(totalDays) days successfully")
+        if failureCount > 0 {
+            print("⚠️ \(failureCount) days failed to sync")
         }
     }
     
@@ -1059,8 +1519,7 @@ class HealthKitManager: ObservableObject {
             
         case .sleep:
             return [
-                HealthMetric(name: "Sleep", value: todaySleep > 0 ? String(format: "%.1fh", todaySleep) : "No data", icon: "bed.double.fill", isPrimary: true),
-                HealthMetric(name: "HRV", value: heartRateVariability > 0 ? String(format: "%.0f ms", heartRateVariability) : "No data", icon: "waveform.path.ecg", isPrimary: false)
+                HealthMetric(name: "Sleep", value: todaySleep > 0 ? String(format: "%.1fh", todaySleep) : "No data", icon: "bed.double.fill", isPrimary: true)
             ]
             
         case .mindfulness:
@@ -1088,12 +1547,101 @@ class HealthKitManager: ObservableObject {
             let waterStr = water > 0 ? String(format: "%.0f oz", water) : ""
             return "\(calStr) • \(waterStr)"
         case .sleep:
-            let sleepStr = todaySleep > 0 ? String(format: "%.1fh", todaySleep) : "No data"
-            let hrvStr = heartRateVariability > 0 ? String(format: "%.0f HRV", heartRateVariability) : ""
-            return "\(sleepStr) • \(hrvStr)"
+            return todaySleep > 0 ? String(format: "%.1fh", todaySleep) : "No data"
         case .mindfulness:
             return mindfulMinutes > 0 ? "\(mindfulMinutes) minutes" : "No data"
         }
+    }
+    
+    // MARK: - Health Coach
+    
+    /// Get health coach recommendations
+    func getHealthCoachRecommendations(authManager: AuthenticationManager, timeRange: String = "week") async throws {
+        guard let token = authManager.sessionToken,
+              let userId = authManager.currentUser?.id else {
+            throw HealthKitError.notAuthenticated
+        }
+        
+        await MainActor.run {
+            self.isLoadingRecommendations = true
+        }
+        
+        defer {
+            Task { @MainActor in
+                self.isLoadingRecommendations = false
+            }
+        }
+        
+        let url = URL(string: "\(backendURL)/api/health/coach/recommendations")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "timeRange": timeRange
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            if let errorData = try? JSONDecoder().decode(AuthErrorResponse.self, from: data) {
+                throw HealthKitError.syncFailed(errorData.error)
+            }
+            throw HealthKitError.syncFailed("Failed to get recommendations")
+        }
+        
+        let responseData = try JSONDecoder().decode(HealthCoachResponse.self, from: data)
+        
+        await MainActor.run {
+            self.healthCoachRecommendations = responseData.data
+        }
+    }
+    
+    // MARK: - Notification Setup
+    
+    /// Setup notification rules (called when HealthKit is authorized)
+    private func setupNotificationRules() {
+        // Register step count notification rule
+        let stepRule = StepCountNotificationRule(
+            threshold: 5000,
+            checkHour: 16, // 4 PM
+            checkMinute: 0,
+            isEnabled: true,
+            currentSteps: { self.todaySteps }
+        )
+        NotificationScheduler.shared.registerRule(stepRule)
+        
+        // Register exercise reminder notification rule
+        setupExerciseNotificationRules()
+        
+        // Schedule next notification check
+        NotificationScheduler.shared.scheduleNextCheck()
+        
+        print("✅ Notification rules registered and scheduled")
+    }
+    
+    /// Setup exercise notification rules
+    private func setupExerciseNotificationRules() {
+        let exerciseRule = ExerciseReminderNotificationRule(
+            checkHour: 20, // 8 PM
+            checkMinute: 30, // 8:30 PM
+            isEnabled: true,
+            getTodayRoutine: {
+                ExerciseManager.shared.getTodayRoutine()
+            },
+            hasLoggedToday: { routineId in
+                do {
+                    return try await ExerciseManager.shared.hasLoggedToday(routineId: routineId)
+                } catch {
+                    return false
+                }
+            }
+        )
+        NotificationScheduler.shared.registerRule(exerciseRule)
+        print("✅ Exercise reminder notification rule registered")
     }
 }
 

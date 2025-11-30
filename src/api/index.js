@@ -6,6 +6,7 @@ const adminRouter = require("./admin");
 const { router: familyRouter } = require("./family");
 const chatgptEventDiscoveriesRouter = require("./chatgpt-event-discoveries");
 const createHealthRouter = require("./health");
+const createExerciseRouter = require("./exercise");
 const createMobileAuthRouter = require("./auth-mobile");
 const createCalendarRouter = require("./calendar");
 const GmailWebhookHandler = require("./gmail-webhooks");
@@ -30,6 +31,7 @@ function createApiRouter(
   router.use("/family", familyRouter);
   router.use("/chatgpt-event-discoveries", chatgptEventDiscoveriesRouter);
   router.use("/health", createHealthRouter(database, logger));
+  router.use("/exercise", createExerciseRouter(database, logger));
   router.use("/calendar", createCalendarRouter(database, logger));
   router.use("/auth", createMobileAuthRouter(database, logger));
 

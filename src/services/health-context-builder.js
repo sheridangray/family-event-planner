@@ -26,11 +26,12 @@ class HealthContextBuilder {
       );
 
       // Get all required data in parallel
-      const [metrics, goals, trends, user] = await Promise.all([
+      const [metrics, goals, trends, user, exerciseLogs] = await Promise.all([
         this._getRecentMetrics(userId, days),
         this._getActiveGoals(userId),
         this._calculateTrends(userId, days),
         this._getUserInfo(userId),
+        this._getRecentExerciseLogs(userId, days),
       ]);
 
       // Calculate insights
@@ -66,9 +67,14 @@ class HealthContextBuilder {
           patterns: insights.patterns || [],
           anomalies: insights.anomalies || [],
         },
+        exercise: {
+          recentWorkouts: exerciseLogs || [],
+          workoutFrequency: this._calculateWorkoutFrequency(exerciseLogs),
+          exerciseConsistency: this._assessExerciseConsistency(exerciseLogs),
+        },
       };
 
-      this.logger.debug(`Health context built: ${metrics.length} days of data`);
+      this.logger.debug(`Health context built: ${metrics.length} days of data, ${exerciseLogs.length} exercise logs`);
       return context;
     } catch (error) {
       this.logger.error(
@@ -567,6 +573,19 @@ CURRENT STATE (This Week):
       });
     }
 
+    // Add exercise data if available
+    if (context.exercise && context.exercise.recentWorkouts && context.exercise.recentWorkouts.length > 0) {
+      text += "\nEXERCISE & WORKOUTS:\n";
+      if (context.exercise.workoutFrequency) {
+        text += `- Workout frequency: ${context.exercise.workoutFrequency.totalWorkouts} workouts over ${context.exercise.workoutFrequency.uniqueDays} days\n`;
+        text += `- Average: ${context.exercise.workoutFrequency.averagePerWeek} workouts per week\n`;
+      }
+      if (context.exercise.exerciseConsistency) {
+        text += `- Consistency: ${context.exercise.exerciseConsistency}\n`;
+      }
+      text += `- Recent workouts: ${context.exercise.recentWorkouts.length} logged\n`;
+    }
+
     return text;
   }
 
@@ -587,6 +606,71 @@ CURRENT STATE (This Week):
       names[metric] ||
       metric.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
     );
+  }
+
+  /**
+   * Get recent exercise logs
+   */
+  async _getRecentExerciseLogs(userId, days) {
+    try {
+      const ExerciseService = require('./exercise-service');
+      const exerciseService = new ExerciseService(this.database, this.logger);
+      
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const logs = await exerciseService.getWorkoutHistory(
+        userId,
+        startDate.toISOString().split('T')[0],
+        null,
+        50
+      );
+      
+      return logs || [];
+    } catch (error) {
+      this.logger.warn(`Error fetching exercise logs for context: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate workout frequency
+   */
+  _calculateWorkoutFrequency(logs) {
+    if (!logs || logs.length === 0) return null;
+    
+    const uniqueDates = new Set(logs.map(log => log.exercise_date));
+    return {
+      totalWorkouts: logs.length,
+      uniqueDays: uniqueDates.size,
+      averagePerWeek: (uniqueDates.size / 7).toFixed(1),
+    };
+  }
+
+  /**
+   * Assess exercise consistency
+   */
+  _assessExerciseConsistency(logs) {
+    if (!logs || logs.length === 0) return "none";
+    
+    const uniqueDates = new Set(logs.map(log => log.exercise_date));
+    const daysWithWorkouts = uniqueDates.size;
+    
+    // Check last 7 days
+    const last7Days = 7;
+    const recentLogs = logs.filter(log => {
+      const logDate = new Date(log.exercise_date);
+      const daysAgo = (Date.now() - logDate.getTime()) / (1000 * 60 * 60 * 24);
+      return daysAgo <= last7Days;
+    });
+    
+    const recentUniqueDates = new Set(recentLogs.map(log => log.exercise_date));
+    
+    if (recentUniqueDates.size >= 5) return "excellent";
+    if (recentUniqueDates.size >= 3) return "good";
+    if (recentUniqueDates.size >= 1) return "fair";
+    return "poor";
   }
 }
 

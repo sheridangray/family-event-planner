@@ -50,10 +50,10 @@ class HealthCoachService {
         throw new Error('LLM client not available. TOGETHER_AI_API_KEY required.');
       }
 
-      // Build context
+      // Build context (includes exercise data)
       const context = await this.contextBuilder.buildContext(userId, { timeRange });
       
-      // Build prompt
+      // Build prompt (exercise data is already in context)
       const prompt = this._buildRecommendationPrompt(context, focusArea);
       
       // Call LLM

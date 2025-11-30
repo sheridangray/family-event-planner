@@ -4,7 +4,9 @@ import SwiftUI
 struct IntegrationsView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @EnvironmentObject var healthManager: HealthKitManager
+    @EnvironmentObject var calendarManager: CalendarManager
     @State private var isTogglingHealthKit = false
+    @State private var isTogglingCalendar = false
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var showingDisconnectAlert = false
@@ -19,7 +21,7 @@ struct IntegrationsView: View {
                         RoundedRectangle(cornerRadius: 10)
                             .fill(
                                 LinearGradient(
-                                    colors: [.red, .pink],
+                                    colors: [.sunsetCoral, .sunsetRose],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -70,21 +72,71 @@ struct IntegrationsView: View {
                 Text("Sync your steps, exercise, sleep, and heart rate data from Apple Health")
             }
             
+            // Google Calendar Section
+            Section {
+                HStack(spacing: 16) {
+                    // Calendar Icon
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.sunsetDustyBlue, .sunsetDustyBlueDark],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                        
+                        Image(systemName: "calendar")
+                            .font(.title3)
+                            .foregroundColor(.white)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Google Calendar")
+                            .font(.headline)
+                        
+                        if calendarManager.isAuthorized {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                                Text("Connected")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            Text("Not connected")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: Binding(
+                        get: { calendarManager.isAuthorized },
+                        set: { newValue in
+                            handleCalendarToggle(newValue)
+                        }
+                    ))
+                    .labelsHidden()
+                    .disabled(isTogglingCalendar)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Calendar Integration")
+            } footer: {
+                Text("View and create events in your Google Calendar")
+            }
+            
             // Coming Soon Section
             Section {
-                IntegrationRow(
-                    icon: "calendar",
-                    title: "Google Calendar",
-                    isConnected: false,
-                    color: .blue,
-                    isComingSoon: true
-                )
-                
                 IntegrationRow(
                     icon: "envelope.fill",
                     title: "Gmail",
                     isConnected: false,
-                    color: .red,
+                    color: .sunsetCoral,
                     isComingSoon: true
                 )
             } header: {
@@ -96,10 +148,13 @@ struct IntegrationsView: View {
         .onAppear {
             // Check actual HealthKit status when view appears
             healthManager.checkCurrentAuthorizationStatus()
+            // Check calendar status when view appears
+            calendarManager.checkAuthorizationStatus()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             // Re-check when returning from iOS Settings
             healthManager.checkCurrentAuthorizationStatus()
+            calendarManager.checkAuthorizationStatus()
         }
         .alert("Error", isPresented: $showingError) {
             Button("OK", role: .cancel) { }
@@ -160,6 +215,62 @@ struct IntegrationsView: View {
             showingError = true
         }
     }
+    
+    // MARK: - Calendar Integration Handlers
+    
+    private func handleCalendarToggle(_ newValue: Bool) {
+        if newValue {
+            // User wants to connect calendar
+            connectCalendar()
+        } else {
+            // User wants to disconnect calendar
+            disconnectCalendar()
+        }
+    }
+    
+    private func connectCalendar() {
+        isTogglingCalendar = true
+        
+        Task {
+            do {
+                try await calendarManager.requestAuthorization(authManager: authManager)
+                
+                await MainActor.run {
+                    isTogglingCalendar = false
+                }
+                
+                print("✅ Calendar connected successfully")
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to connect calendar: \(error.localizedDescription)"
+                    showingError = true
+                    isTogglingCalendar = false
+                }
+            }
+        }
+    }
+    
+    private func disconnectCalendar() {
+        isTogglingCalendar = true
+        
+        Task {
+            do {
+                try await calendarManager.disconnect(authManager: authManager)
+                
+                await MainActor.run {
+                    isTogglingCalendar = false
+                }
+                
+                print("✅ Calendar disconnected successfully")
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to disconnect calendar: \(error.localizedDescription)"
+                    showingError = true
+                    isTogglingCalendar = false
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Integration Row Component
@@ -197,7 +308,7 @@ struct IntegrationRow: View {
                 if isComingSoon {
                     Text("Coming soon")
                         .font(.caption)
-                        .foregroundColor(.orange)
+                        .foregroundColor(.sunsetGold)
                 } else if isConnected {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")

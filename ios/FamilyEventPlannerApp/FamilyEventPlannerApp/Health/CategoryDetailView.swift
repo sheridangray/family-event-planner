@@ -20,18 +20,53 @@ struct CategoryDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header with date
-                VStack(spacing: 4) {
-                    Text("Yesterday's Data")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
+                // Header with date and navigation
+                VStack(spacing: 12) {
+                    // Date display
+                    VStack(spacing: 4) {
+                        Text("Health Data")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        Text(healthManager.selectedDate, style: .date)
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                    }
                     
-                    let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
-                    Text(yesterday, style: .date)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    // Navigation buttons
+                    HStack(spacing: 20) {
+                        Button(action: {
+                            healthManager.goToPreviousDay()
+                        }) {
+                            Image(systemName: "chevron.left.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(healthManager.isOnOldestDate ? .gray.opacity(0.3) : .sunsetDustyBlue)
+                        }
+                        .disabled(healthManager.isOnOldestDate)
+                        
+                        Button(action: {
+                            healthManager.goToNextDay()
+                        }) {
+                            Image(systemName: "chevron.right.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(healthManager.isOnMostRecentDate ? .gray.opacity(0.3) : .sunsetDustyBlue)
+                        }
+                        .disabled(healthManager.isOnMostRecentDate)
+                    }
                 }
                 .padding(.top, 8)
+                .onAppear {
+                    // Fetch data for selected date when view appears
+                    Task {
+                        await healthManager.fetchDataForDate(date: healthManager.selectedDate)
+                    }
+                }
+                .onChange(of: healthManager.selectedDate) { newDate in
+                    // Fetch data when date changes
+                    Task {
+                        await healthManager.fetchDataForDate(date: newDate)
+                    }
+                }
                 
                 // Primary Metrics
                 if !primaryMetrics.isEmpty {
@@ -43,7 +78,11 @@ struct CategoryDetailView: View {
                         
                         VStack(spacing: 12) {
                             ForEach(primaryMetrics) { metric in
-                                MetricDetailRow(metric: metric, color: category.color)
+                                NavigationLink(destination: MetricDetailView(metric: metric, category: category)
+                                    .environmentObject(healthManager)) {
+                                    MetricDetailRow(metric: metric, color: category.color)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
                         .padding(.horizontal)
@@ -60,9 +99,52 @@ struct CategoryDetailView: View {
                         
                         VStack(spacing: 12) {
                             ForEach(secondaryMetrics) { metric in
-                                MetricDetailRow(metric: metric, color: category.color)
+                                NavigationLink(destination: MetricDetailView(metric: metric, category: category)
+                                    .environmentObject(healthManager)) {
+                                    MetricDetailRow(metric: metric, color: category.color)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
+                        .padding(.horizontal)
+                    }
+                }
+                
+                // Exercise connection (for Activity category)
+                if category == .activity {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Divider()
+                            .padding(.horizontal)
+                        
+                        Text("Related Exercise Data")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+                        
+                        NavigationLink(destination: ExerciseView()
+                            .environmentObject(ExerciseManager.shared)) {
+                            HStack {
+                                Image(systemName: "dumbbell.fill")
+                                    .foregroundColor(.sunsetCoral)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("View Workout Logs")
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                    Text("See your structured exercise routines")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.secondarySystemBackground))
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
                         .padding(.horizontal)
                     }
                 }

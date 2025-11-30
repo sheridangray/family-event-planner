@@ -4,8 +4,7 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @EnvironmentObject var healthManager: HealthKitManager
-    @State private var navigateToHealth = false
-    @State private var navigateToSettings = false
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
     
     var body: some View {
         NavigationStack {
@@ -21,26 +20,25 @@ struct DashboardView: View {
                 }
                 
                 // Navigation destination for Health view
-                .navigationDestination(isPresented: $navigateToHealth) {
+                .navigationDestination(isPresented: $navigationCoordinator.navigateToHealth) {
                     HealthSyncView()
                         .environmentObject(authManager)
                         .environmentObject(healthManager)
+                        .environmentObject(navigationCoordinator)
                 }
                 
                 // Navigation destination for Settings view
-                .navigationDestination(isPresented: $navigateToSettings) {
+                .navigationDestination(isPresented: $navigationCoordinator.navigateToSettings) {
                     SettingsView()
                         .environmentObject(authManager)
                         .environmentObject(healthManager)
+                        .environmentObject(navigationCoordinator)
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    ProfileMenuButton(
-                        navigateToHealth: $navigateToHealth,
-                        navigateToSettings: $navigateToSettings
-                    )
-                    .environmentObject(authManager)
+                    ProfileMenuButton()
+                        .environmentObject(authManager)
                 }
             }
         }
@@ -49,6 +47,7 @@ struct DashboardView: View {
 
 #Preview {
     DashboardView()
-        .environmentObject(AuthenticationManager())
-        .environmentObject(HealthKitManager())
+        .environmentObject(AuthenticationManager.shared)
+        .environmentObject(HealthKitManager.shared)
+        .environmentObject(NavigationCoordinator.shared)
 }

@@ -24,29 +24,35 @@ enum HealthCategory: String, CaseIterable, Identifiable {
     
     var color: Color {
         switch self {
-        case .activity: return .blue
-        case .body: return .purple
-        case .heart: return .red
-        case .nutrition: return .green
-        case .sleep: return .indigo
-        case .mindfulness: return .orange
+        case .activity: return .sunsetDustyBlue
+        case .body: return .sunsetLavender
+        case .heart: return .sunsetCoral
+        case .nutrition: return .sunsetGold
+        case .sleep: return .sunsetSlate
+        case .mindfulness: return .sunsetPeach
         }
     }
     
     var gradient: LinearGradient {
         switch self {
         case .activity:
-            return LinearGradient(colors: [.blue, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+            // Dusty blue → soft periwinkle
+            return LinearGradient(colors: [.sunsetDustyBlue, .sunsetLavender], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .body:
-            return LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+            // Soft lavender → peachy pink
+            return LinearGradient(colors: [.sunsetLavender, .sunsetPeach], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .heart:
-            return LinearGradient(colors: [.red, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
+            // Rose → warm coral
+            return LinearGradient(colors: [.sunsetCoral, .sunsetRose], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .nutrition:
-            return LinearGradient(colors: [.green, .mint], startPoint: .topLeading, endPoint: .bottomTrailing)
+            // Warm gold → peach
+            return LinearGradient(colors: [.sunsetGold, .sunsetGoldLight], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .sleep:
-            return LinearGradient(colors: [.indigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
+            // Deep slate → dusty blue
+            return LinearGradient(colors: [.sunsetSlate, .sunsetDustyBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .mindfulness:
-            return LinearGradient(colors: [.orange, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing)
+            // Peachy pink → soft lavender
+            return LinearGradient(colors: [.sunsetPeach, .sunsetLavender], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 }

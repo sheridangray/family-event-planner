@@ -15,10 +15,27 @@
 			</array>
 		</dict>
 	</array>
-    <key>NSHealthShareUsageDescription</key>
-    <string>We need access to your health data to sync your activity metrics, including steps, exercise time, sleep, and heart rate.</string>
-    <key>NSHealthUpdateUsageDescription</key>
-    <string>We need permission to update your health data to keep your activity information synchronized.</string>
-    
+	<key>NSHealthShareUsageDescription</key>
+	<string>We need access to your health data to sync your activity metrics, including steps, exercise time, sleep, and heart rate.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>We need permission to update your health data to keep your activity information synchronized.</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.sheridangray.FamilyEventPlanner.healthSync</string>
+		<string>com.sheridangray.FamilyEventPlanner.currentDayHealthSync</string>
+		<string>com.sheridangray.FamilyEventPlanner.notificationCheck</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIImageName</key>
+		<string>LaunchImage</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<false/>
+	</dict>
 </dict>
 </plist>

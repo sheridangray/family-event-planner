@@ -4,6 +4,8 @@ import Combine
 
 /// Manages user authentication with Google Sign-In and backend validation
 class AuthenticationManager: ObservableObject {
+    static let shared = AuthenticationManager()
+    
     @Published var isAuthenticated = false
     @Published var currentUser: User?
     @Published var sessionToken: String?
@@ -17,8 +19,13 @@ class AuthenticationManager: ObservableObject {
     // private let backendURL = "http://localhost:3000"
     
     init() {
+        print("🔐 AuthenticationManager singleton initialized")
         // Try to restore session from Keychain on app launch
         restoreSession()
+    }
+    
+    deinit {
+        print("⚠️ AuthenticationManager deallocated - THIS SHOULD NEVER HAPPEN WITH SINGLETON!")
     }
     
     // MARK: - Google Sign-In
@@ -46,7 +53,8 @@ class AuthenticationManager: ObservableObject {
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
         
-        // Perform sign-in
+        // Perform sign-in with optional calendar scopes
+        // Note: Calendar scopes can also be requested later via addScopes()
         let result = try await GIDSignIn.sharedInstance.signIn(
             withPresenting: rootViewController
         )
@@ -180,6 +188,38 @@ class AuthenticationManager: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         return request
+    }
+    
+    /// Validate that the current session token is still valid
+    func validateSession() async -> Bool {
+        guard let token = sessionToken else {
+            print("⚠️ No session token to validate")
+            return false
+        }
+        
+        guard currentUser != nil else {
+            print("⚠️ No current user")
+            return false
+        }
+        
+        // Try a simple authenticated endpoint to validate token
+        let url = URL(string: "\(backendURL)/api/user/profile")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 10
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                let isValid = httpResponse.statusCode == 200
+                print(isValid ? "✅ Session valid" : "❌ Session expired (HTTP \(httpResponse.statusCode))")
+                return isValid
+            }
+        } catch {
+            print("❌ Session validation error: \(error.localizedDescription)")
+        }
+        
+        return false
     }
 }
 

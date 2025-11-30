@@ -5,8 +5,7 @@ import SwiftUI
 /// Reusable profile menu button that appears in the navigation bar
 struct ProfileMenuButton: View {
     @EnvironmentObject var authManager: AuthenticationManager
-    @Binding var navigateToHealth: Bool
-    @Binding var navigateToSettings: Bool
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
     
     var body: some View {
         Menu {
@@ -25,14 +24,14 @@ struct ProfileMenuButton: View {
             
             // Health option
             Button(action: {
-                navigateToHealth = true
+                navigationCoordinator.showHealth()
             }) {
                 Label("Health", systemImage: "heart.fill")
             }
             
             // Settings option
             Button(action: {
-                navigateToSettings = true
+                navigationCoordinator.showSettings()
             }) {
                 Label("Settings", systemImage: "gearshape.fill")
             }
@@ -75,7 +74,7 @@ struct ProfileAvatar: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [.blue, .purple],
+                        colors: [.sunsetDustyBlue, .sunsetLavender],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )

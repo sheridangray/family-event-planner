@@ -3,6 +3,7 @@ import SwiftUI
 /// Main settings view with various configuration options
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthenticationManager
+    @EnvironmentObject var healthManager: HealthKitManager
     @State private var navigateToIntegrations = false
     
     var body: some View {
@@ -33,6 +34,17 @@ struct SettingsView: View {
                 Text("Connected Services")
             } footer: {
                 Text("Manage connections to external services and data sources")
+            }
+            
+            // Health Data Section
+            Section {
+                NavigationLink(destination: BackfillView(healthManager: healthManager, authManager: authManager)) {
+                    Label("Backfill Historical Data", systemImage: "arrow.counterclockwise.circle.fill")
+                }
+            } header: {
+                Text("Health Data")
+            } footer: {
+                Text("Sync historical health data from Apple Health to your account")
             }
             
             // About Section
