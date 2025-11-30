@@ -29,6 +29,7 @@ struct FamilyEventPlannerApp: App {
                     DashboardView()
                         .environmentObject(AuthenticationManager.shared)
                         .environmentObject(HealthKitManager.shared)
+                        .environmentObject(ExerciseManager.shared)
                         .environmentObject(calendarManager)
                         .environmentObject(NavigationCoordinator.shared)
                         .onAppear {

@@ -207,7 +207,7 @@ struct ExerciseSuggestion: Codable, Identifiable {
 
 // MARK: - Exercise Conversation
 
-struct ExerciseConversation: Codable, Identifiable {
+struct ExerciseConversation: Decodable, Identifiable {
     let id: Int
     let userId: Int
     let conversationTitle: String?
@@ -253,7 +253,7 @@ struct ExerciseConversation: Codable, Identifiable {
 
 // MARK: - Chat Message
 
-struct ChatMessage: Codable, Identifiable {
+struct ChatMessage: Decodable, Identifiable {
     let id: Int
     let conversationId: Int
     let role: String // "user" or "assistant"
@@ -321,12 +321,12 @@ struct ExerciseSuggestionsResponse: Codable {
     let data: [ExerciseSuggestion]
 }
 
-struct ExerciseConversationsResponse: Codable {
+struct ExerciseConversationsResponse: Decodable {
     let success: Bool
     let data: [ExerciseConversation]
 }
 
-struct ExerciseConversationHistoryResponse: Codable {
+struct ExerciseConversationHistoryResponse: Decodable {
     let success: Bool
     let data: [ChatMessage]
 }

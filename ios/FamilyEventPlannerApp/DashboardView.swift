@@ -24,6 +24,7 @@ struct DashboardView: View {
                     HealthSyncView()
                         .environmentObject(authManager)
                         .environmentObject(healthManager)
+                        .environmentObject(ExerciseManager.shared)
                         .environmentObject(navigationCoordinator)
                 }
                 
