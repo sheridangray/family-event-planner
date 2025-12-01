@@ -21,7 +21,7 @@ class ExerciseLLMService {
       const prompt = `Given the exercise name "${exerciseName}", provide detailed information in JSON format with the following structure:
 
 {
-  "instructions": "Easy-to-follow step-by-step instructions for performing this exercise. Be clear and concise, breaking down the movement into numbered steps.",
+  "instructions": "Easy-to-follow step-by-step instructions for performing this exercise. Be clear and concise, breaking down the movement into numbered steps, each with a newline character.",
   "youtube_url": "A YouTube video URL with instructions for this exercise. Search for a high-quality instructional video and provide the full URL. If no good video is found, return null.",
   "body_parts": ["array", "of", "targeted", "body", "parts"],
   "exercise_type": "weight" | "bodyweight" | "treadmill"
@@ -40,7 +40,7 @@ Examples:
 Return ONLY valid JSON, no additional text or markdown formatting.`;
 
       const response = await this.llm.callTogetherAI(prompt, {
-        model: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+        model: "Qwen/Qwen2.5-72B-Instruct-Turbo",
         max_tokens: 1000,
         temperature: 0.7,
       });

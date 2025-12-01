@@ -1292,7 +1292,7 @@ function createAutomationRouter(
       let llmResponse;
       try {
         llmResponse = await llmEvaluator.callTogetherAI(processedPrompt, {
-          model: "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+          model: "Qwen/Qwen2.5-72B-Instruct-Turbo",
           max_tokens: 4000,
           temperature: 0.7,
         });

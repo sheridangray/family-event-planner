@@ -72,7 +72,7 @@ class ExerciseCoachService {
 
       // Call LLM
       const llmResponse = await this.llmClient.callTogetherAI(prompt, {
-        model: 'openai/gpt-oss-20b',
+        model: 'Qwen/Qwen2.5-72B-Instruct-Turbo',
         max_tokens: 500,
         temperature: 0.7,
         systemMessage: this._getSystemPrompt(),

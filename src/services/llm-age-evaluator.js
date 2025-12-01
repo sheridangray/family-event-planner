@@ -26,7 +26,7 @@ class LLMAgeEvaluator {
       const prompt = this.buildEvaluationPrompt(event, childAges, rawContent);
       
       const response = await axios.post(this.baseUrl, {
-        model: 'meta-llama/Llama-3.2-3B-Instruct-Turbo', // Fast, reliable model
+        model: 'Qwen/Qwen2.5-72B-Instruct-Turbo', // High-performance model
         messages: [
           {
             role: 'system',
@@ -82,7 +82,7 @@ class LLMAgeEvaluator {
   async callTogetherAI(prompt, options = {}) {
     try {
       const {
-        model = 'meta-llama/Llama-3.2-3B-Instruct-Turbo',
+        model = 'Qwen/Qwen2.5-72B-Instruct-Turbo',
         max_tokens = 200,
         temperature = 0.1,
         systemMessage = 'You are a helpful assistant.'

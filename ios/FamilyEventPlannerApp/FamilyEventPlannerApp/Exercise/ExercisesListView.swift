@@ -149,8 +149,8 @@ struct ExerciseRow: View {
     }
     
     var body: some View {
-        HStack(spacing: 0) {
-            // Tappable area for detail view
+        ZStack(alignment: .trailing) {
+            // Tappable area for detail view - expands to fill space
             Button(action: action) {
                 HStack(spacing: 16) {
                     // Type icon
@@ -180,14 +180,14 @@ struct ExerciseRow: View {
                     
                     Spacer()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 8)
                 .padding(.leading, 16)
-                .padding(.trailing, 8)
+                .padding(.trailing, 110) // Make room for Start button
             }
             .buttonStyle(PlainButtonStyle())
+            .frame(maxWidth: .infinity, alignment: .leading)
             
-            // Start button - separate from tappable area
+            // Start button - positioned at far right
             NavigationLink {
                 StartExerciseView(exercise: exercise, workoutId: nil)
             } label: {
@@ -196,7 +196,7 @@ struct ExerciseRow: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
                     .frame(maxHeight: .infinity)
-                    .frame(width: 80)
+                    .padding(.horizontal, 28)
                     .background(typeColor)
             }
             .buttonStyle(PlainButtonStyle())

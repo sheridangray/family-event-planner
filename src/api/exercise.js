@@ -826,7 +826,7 @@ function createExerciseRouter(database, logger) {
       }
 
       const llmResponse = await llmClient.callTogetherAI(prompt, {
-        model: "openai/gpt-oss-20b",
+        model: "Qwen/Qwen2.5-72B-Instruct-Turbo",
         max_tokens: 1000,
         temperature: 0.7,
         systemMessage: getSystemPrompt(),

@@ -3,20 +3,20 @@
  * Generates personalized health and fitness recommendations using LLM
  */
 
-const HealthContextBuilder = require('./health-context-builder');
-const LLMAgeEvaluator = require('./llm-age-evaluator');
+const HealthContextBuilder = require("./health-context-builder");
+const LLMAgeEvaluator = require("./llm-age-evaluator");
 
 class HealthCoachService {
   constructor(database, logger) {
     this.database = database;
     this.logger = logger;
     this.contextBuilder = new HealthContextBuilder(database, logger);
-    
+
     // Initialize LLM client (reusing LLMAgeEvaluator's callTogetherAI method)
     try {
       this.llmClient = new LLMAgeEvaluator(logger);
     } catch (error) {
-      this.logger.warn('LLM client not available:', error.message);
+      this.logger.warn("LLM client not available:", error.message);
       this.llmClient = null;
     }
 
@@ -34,8 +34,8 @@ class HealthCoachService {
    */
   async generateRecommendations(userId, options = {}) {
     try {
-      const { focusArea, timeRange = 'month' } = options;
-      
+      const { focusArea, timeRange = "month" } = options;
+
       // Check cache first
       const cacheKey = this._getCacheKey(userId, focusArea, timeRange);
       const cached = this.recommendationCache.get(cacheKey);
@@ -44,30 +44,38 @@ class HealthCoachService {
         return cached.data;
       }
 
-      this.logger.info(`Generating health coach recommendations for user ${userId}`);
+      this.logger.info(
+        `Generating health coach recommendations for user ${userId}`
+      );
 
       if (!this.llmClient) {
-        throw new Error('LLM client not available. TOGETHER_AI_API_KEY required.');
+        throw new Error(
+          "LLM client not available. TOGETHER_AI_API_KEY required."
+        );
       }
 
       // Build context (includes exercise data)
-      const context = await this.contextBuilder.buildContext(userId, { timeRange });
-      
+      const context = await this.contextBuilder.buildContext(userId, {
+        timeRange,
+      });
+
       // Build prompt (exercise data is already in context)
       const prompt = this._buildRecommendationPrompt(context, focusArea);
-      
+
       // Call LLM
       const startTime = Date.now();
       const llmResponse = await this.llmClient.callTogetherAI(prompt, {
-        model: 'openai/gpt-oss-20b', // Serverless model for health recommendations
+        model: "Qwen/Qwen2.5-72B-Instruct-Turbo", // High-performance model for health recommendations
         max_tokens: 2000,
         temperature: 0.7,
-        systemMessage: this._getSystemPrompt()
+        systemMessage: this._getSystemPrompt(),
       });
       const tokensUsed = this._estimateTokens(prompt + llmResponse);
       const latency = Date.now() - startTime;
 
-      this.logger.info(`LLM response received (${latency}ms, ~${tokensUsed} tokens)`);
+      this.logger.info(
+        `LLM response received (${latency}ms, ~${tokensUsed} tokens)`
+      );
 
       // Parse response
       const recommendations = this._parseRecommendations(llmResponse, context);
@@ -77,7 +85,7 @@ class HealthCoachService {
         userId,
         recommendations,
         context,
-        'openai/gpt-oss-20b',
+        "openai/gpt-oss-20b",
         tokensUsed,
         false // cache_hit
       );
@@ -86,12 +94,15 @@ class HealthCoachService {
       this.recommendationCache.set(cacheKey, {
         data: recommendations,
         timestamp: Date.now(),
-        id: recommendationId
+        id: recommendationId,
       });
 
       return recommendations;
     } catch (error) {
-      this.logger.error(`Error generating recommendations for user ${userId}:`, error);
+      this.logger.error(
+        `Error generating recommendations for user ${userId}:`,
+        error
+      );
       throw error;
     }
   }
@@ -101,19 +112,19 @@ class HealthCoachService {
    */
   _buildRecommendationPrompt(context, focusArea) {
     const contextText = this.contextBuilder.formatContextForPrompt(context);
-    
+
     let prompt = `${contextText}
 
 Based on this health data, provide personalized health and fitness recommendations.`;
 
     if (focusArea) {
       const focusMap = {
-        activity: 'Focus on activity and exercise recommendations',
-        sleep: 'Focus on sleep quality and duration recommendations',
-        nutrition: 'Focus on nutrition and diet recommendations',
-        overall: 'Provide overall health recommendations'
+        activity: "Focus on activity and exercise recommendations",
+        sleep: "Focus on sleep quality and duration recommendations",
+        nutrition: "Focus on nutrition and diet recommendations",
+        overall: "Provide overall health recommendations",
       };
-      prompt += ` ${focusMap[focusArea] || ''}`;
+      prompt += ` ${focusMap[focusArea] || ""}`;
     }
 
     prompt += `
@@ -181,28 +192,35 @@ Guidelines:
       const jsonMatch = llmResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        
+
         // Validate and structure
         return {
-          focusAreas: (parsed.focusAreas || []).slice(0, 3).map(area => ({
-            metric: area.metric || 'overall',
-            priority: area.priority || 'medium',
-            currentState: area.currentState || 'No data available',
-            trend: area.trend || 'stable',
-            recommendation: area.recommendation || 'Continue current routine',
-            actionItems: Array.isArray(area.actionItems) ? area.actionItems.slice(0, 3) : [],
-            targetTimeline: area.targetTimeline || '2-4 weeks'
+          focusAreas: (parsed.focusAreas || []).slice(0, 3).map((area) => ({
+            metric: area.metric || "overall",
+            priority: area.priority || "medium",
+            currentState: area.currentState || "No data available",
+            trend: area.trend || "stable",
+            recommendation: area.recommendation || "Continue current routine",
+            actionItems: Array.isArray(area.actionItems)
+              ? area.actionItems.slice(0, 3)
+              : [],
+            targetTimeline: area.targetTimeline || "2-4 weeks",
           })),
-          quickWins: Array.isArray(parsed.quickWins) ? parsed.quickWins.slice(0, 3) : [],
-          encouragement: parsed.encouragement || 'Keep up the great work!',
-          nextReviewDate: this._getNextReviewDate()
+          quickWins: Array.isArray(parsed.quickWins)
+            ? parsed.quickWins.slice(0, 3)
+            : [],
+          encouragement: parsed.encouragement || "Keep up the great work!",
+          nextReviewDate: this._getNextReviewDate(),
         };
       }
 
       // Fallback: parse from text
       return this._parseTextResponse(llmResponse, context);
     } catch (error) {
-      this.logger.warn('Error parsing JSON response, using fallback:', error.message);
+      this.logger.warn(
+        "Error parsing JSON response, using fallback:",
+        error.message
+      );
       return this._parseTextResponse(llmResponse, context);
     }
   }
@@ -214,34 +232,42 @@ Guidelines:
     const recommendations = {
       focusAreas: [],
       quickWins: [],
-      encouragement: 'Keep up the great work!',
-      nextReviewDate: this._getNextReviewDate()
+      encouragement: "Keep up the great work!",
+      nextReviewDate: this._getNextReviewDate(),
     };
 
     // Extract focus areas (look for numbered lists or headers)
-    const focusMatches = response.match(/(?:Priority|Focus|Area)[\s\S]{0,200}/gi);
+    const focusMatches = response.match(
+      /(?:Priority|Focus|Area)[\s\S]{0,200}/gi
+    );
     if (focusMatches) {
       focusMatches.slice(0, 3).forEach((match, index) => {
         recommendations.focusAreas.push({
-          metric: 'overall',
-          priority: index === 0 ? 'high' : 'medium',
-          currentState: 'See recommendation',
-          trend: 'stable',
+          metric: "overall",
+          priority: index === 0 ? "high" : "medium",
+          currentState: "See recommendation",
+          trend: "stable",
           recommendation: match.substring(0, 200),
           actionItems: [],
-          targetTimeline: '2-4 weeks'
+          targetTimeline: "2-4 weeks",
         });
       });
     }
 
     // Extract quick wins
-    const quickWinMatches = response.match(/(?:Quick|Easy|Simple)[\s\S]{0,150}/gi);
+    const quickWinMatches = response.match(
+      /(?:Quick|Easy|Simple)[\s\S]{0,150}/gi
+    );
     if (quickWinMatches) {
-      recommendations.quickWins = quickWinMatches.slice(0, 3).map(m => m.substring(0, 150));
+      recommendations.quickWins = quickWinMatches
+        .slice(0, 3)
+        .map((m) => m.substring(0, 150));
     }
 
     // Extract encouragement
-    const encouragementMatch = response.match(/(?:Great|Good|Excellent|Keep|Continue)[\s\S]{0,100}/i);
+    const encouragementMatch = response.match(
+      /(?:Great|Good|Excellent|Keep|Continue)[\s\S]{0,100}/i
+    );
     if (encouragementMatch) {
       recommendations.encouragement = encouragementMatch[0].substring(0, 200);
     }
@@ -252,12 +278,15 @@ Guidelines:
       if (declining.length > 0) {
         recommendations.focusAreas.push({
           metric: declining[0],
-          priority: 'high',
-          currentState: 'See trends',
-          trend: 'declining',
+          priority: "high",
+          currentState: "See trends",
+          trend: "declining",
           recommendation: `Focus on improving ${declining[0]}`,
-          actionItems: [`Set a daily goal for ${declining[0]}`, 'Track progress daily'],
-          targetTimeline: '2-3 weeks'
+          actionItems: [
+            `Set a daily goal for ${declining[0]}`,
+            "Track progress daily",
+          ],
+          targetTimeline: "2-3 weeks",
         });
       }
     }
@@ -268,7 +297,14 @@ Guidelines:
   /**
    * Store recommendation in database
    */
-  async _storeRecommendation(userId, recommendations, context, modelUsed, tokensUsed, cacheHit) {
+  async _storeRecommendation(
+    userId,
+    recommendations,
+    context,
+    modelUsed,
+    tokensUsed,
+    cacheHit
+  ) {
     try {
       const sql = `
         INSERT INTO health_coach_recommendations (
@@ -285,12 +321,12 @@ Guidelines:
         JSON.stringify(context),
         modelUsed,
         tokensUsed,
-        cacheHit
+        cacheHit,
       ]);
 
       return result.rows[0].id;
     } catch (error) {
-      this.logger.error('Error storing recommendation:', error);
+      this.logger.error("Error storing recommendation:", error);
       // Don't throw - this is not critical
       return null;
     }
@@ -299,9 +335,14 @@ Guidelines:
   /**
    * Send recommendation notification to user
    */
-  async sendRecommendationNotification(userId, userEmail, userName, recommendations) {
+  async sendRecommendationNotification(
+    userId,
+    userEmail,
+    userName,
+    recommendations
+  ) {
     try {
-      const { EmailApprovalManager } = require('../mcp/email-notifications');
+      const { EmailApprovalManager } = require("../mcp/email-notifications");
       const emailManager = new EmailApprovalManager(
         this.logger,
         this.database,
@@ -311,12 +352,15 @@ Guidelines:
       await emailManager.init();
 
       const subject = `Your Weekly Health Coach Recommendations - ${new Date().toLocaleDateString()}`;
-      const emailBody = this._buildRecommendationEmailBody(userName, recommendations);
+      const emailBody = this._buildRecommendationEmailBody(
+        userName,
+        recommendations
+      );
 
       // Use GmailClient directly to send email
-      const GmailClient = require('../mcp/gmail-client');
+      const GmailClient = require("../mcp/gmail-client");
       const gmailClient = new GmailClient(this.logger, this.database);
-      
+
       const result = await gmailClient.sendEmail(
         userId,
         userEmail,
@@ -328,7 +372,7 @@ Guidelines:
       // Save notification to database
       await this.database.saveNotification(
         null, // event_id (not applicable)
-        'email',
+        "email",
         userEmail,
         subject,
         emailBody,
@@ -341,7 +385,7 @@ Guidelines:
       this.logger.info(`Health coach notification sent to ${userEmail}`);
       return result;
     } catch (error) {
-      this.logger.error('Error sending health coach notification:', error);
+      this.logger.error("Error sending health coach notification:", error);
       throw error;
     }
   }
@@ -362,17 +406,27 @@ Guidelines:
       html += `<h3 style="color: #2c3e50; margin-top: 30px;">🎯 Priority Areas</h3>`;
       recommendations.focusAreas.forEach((area, index) => {
         html += `
-          <div style="background: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 8px; border-left: 4px solid ${this._getPriorityColor(area.priority)};">
-            <h4 style="margin-top: 0; color: #2c3e50;">${index + 1}. ${this._formatMetricName(area.metric)}</h4>
+          <div style="background: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 8px; border-left: 4px solid ${this._getPriorityColor(
+            area.priority
+          )};">
+            <h4 style="margin-top: 0; color: #2c3e50;">${
+              index + 1
+            }. ${this._formatMetricName(area.metric)}</h4>
             <p><strong>Current State:</strong> ${area.currentState}</p>
             <p><strong>Trend:</strong> ${this._formatTrend(area.trend)}</p>
             <p><strong>Recommendation:</strong> ${area.recommendation}</p>
-            ${area.actionItems && area.actionItems.length > 0 ? `
+            ${
+              area.actionItems && area.actionItems.length > 0
+                ? `
               <ul>
-                ${area.actionItems.map(item => `<li>${item}</li>`).join('')}
+                ${area.actionItems.map((item) => `<li>${item}</li>`).join("")}
               </ul>
-            ` : ''}
-            <p style="color: #7f8c8d; font-size: 14px;"><em>Target timeline: ${area.targetTimeline}</em></p>
+            `
+                : ""
+            }
+            <p style="color: #7f8c8d; font-size: 14px;"><em>Target timeline: ${
+              area.targetTimeline
+            }</em></p>
           </div>
         `;
       });
@@ -381,7 +435,7 @@ Guidelines:
     // Add quick wins
     if (recommendations.quickWins && recommendations.quickWins.length > 0) {
       html += `<h3 style="color: #27ae60; margin-top: 30px;">⚡ Quick Wins</h3><ul>`;
-      recommendations.quickWins.forEach(win => {
+      recommendations.quickWins.forEach((win) => {
         html += `<li>${win}</li>`;
       });
       html += `</ul>`;
@@ -416,39 +470,44 @@ Guidelines:
    */
   _getPriorityColor(priority) {
     const colors = {
-      high: '#e74c3c',
-      medium: '#f39c12',
-      low: '#3498db'
+      high: "#e74c3c",
+      medium: "#f39c12",
+      low: "#3498db",
     };
-    return colors[priority] || '#95a5a6';
+    return colors[priority] || "#95a5a6";
   }
 
   _formatMetricName(metric) {
     const names = {
-      steps: 'Daily Steps',
-      exercise_minutes: 'Exercise Minutes',
-      sleep_hours: 'Sleep Hours',
-      resting_heart_rate: 'Resting Heart Rate',
-      weight_lbs: 'Weight',
-      active_calories: 'Active Calories',
-      distance_miles: 'Distance',
-      overall: 'Overall Health'
+      steps: "Daily Steps",
+      exercise_minutes: "Exercise Minutes",
+      sleep_hours: "Sleep Hours",
+      resting_heart_rate: "Resting Heart Rate",
+      weight_lbs: "Weight",
+      active_calories: "Active Calories",
+      distance_miles: "Distance",
+      overall: "Overall Health",
     };
-    return names[metric] || metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return (
+      names[metric] ||
+      metric.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+    );
   }
 
   _formatTrend(trend) {
     const emojis = {
-      improving: '📈 Improving',
-      declining: '📉 Declining',
-      stable: '➡️ Stable'
+      improving: "📈 Improving",
+      declining: "📉 Declining",
+      stable: "➡️ Stable",
     };
     return emojis[trend] || trend;
   }
 
   _getCacheKey(userId, focusArea, timeRange) {
-    const today = new Date().toISOString().split('T')[0];
-    return `health_coach_${userId}_${focusArea || 'overall'}_${timeRange}_${today}`;
+    const today = new Date().toISOString().split("T")[0];
+    return `health_coach_${userId}_${
+      focusArea || "overall"
+    }_${timeRange}_${today}`;
   }
 
   _isCacheValid(cached) {
@@ -459,7 +518,11 @@ Guidelines:
   _getNextReviewDate() {
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
-    return nextWeek.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    return nextWeek.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    });
   }
 
   _estimateTokens(text) {
@@ -477,10 +540,9 @@ Guidelines:
       `;
       await this.database.query(sql, [userId]);
     } catch (error) {
-      this.logger.error('Error marking notification as sent:', error);
+      this.logger.error("Error marking notification as sent:", error);
     }
   }
 }
 
 module.exports = HealthCoachService;
-
