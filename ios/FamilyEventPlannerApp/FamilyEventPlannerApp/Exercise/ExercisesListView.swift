@@ -56,6 +56,8 @@ struct ExercisesListView: View {
                     ExerciseRow(exercise: exercise) {
                         selectedExercise = exercise
                     }
+                    .listRowSeparator(.visible)
+                    .listRowInsets(EdgeInsets())
                 }
                 .listStyle(.plain)
             }
@@ -178,8 +180,9 @@ struct ExerciseRow: View {
                     
                     Spacer()
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 8)
-                .padding(.leading, 0)
+                .padding(.leading, 16)
                 .padding(.trailing, 8)
             }
             .buttonStyle(PlainButtonStyle())
@@ -193,11 +196,12 @@ struct ExerciseRow: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
                     .frame(maxHeight: .infinity)
-                    .padding(.horizontal, 20)
+                    .frame(width: 80)
                     .background(typeColor)
             }
             .buttonStyle(PlainButtonStyle())
         }
+        .listRowInsets(EdgeInsets())
     }
 }
 
