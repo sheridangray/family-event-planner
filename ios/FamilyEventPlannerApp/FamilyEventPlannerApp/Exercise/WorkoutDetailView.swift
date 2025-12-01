@@ -17,7 +17,7 @@ struct WorkoutDetailView: View {
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     
-                    Text(workout.exerciseDate, format: .dateTime.day().month().year())
+                    Text(formatDate(workout.exerciseDate))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
@@ -81,6 +81,17 @@ struct WorkoutDetailView: View {
         }
     }
     
+    private func formatDate(_ dateString: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        if let date = formatter.date(from: dateString) {
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            return formatter.string(from: date)
+        }
+        return dateString
+    }
+    
     private func loadWorkoutDetails() {
         isLoading = true
         Task {
@@ -120,7 +131,8 @@ struct ExerciseEntryCard: View {
                     .foregroundColor(.secondary)
             }
             
-            if let weights = entry.weightUsed.compactMap({ $0 }), !weights.isEmpty {
+            let weights = entry.weightUsed.compactMap { $0 }
+            if !weights.isEmpty {
                 Text("Weight: \(weights.map { String(format: "%.0f", $0) }.joined(separator: ", ")) lbs")
                     .font(.caption)
                     .foregroundColor(.secondary)

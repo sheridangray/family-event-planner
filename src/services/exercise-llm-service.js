@@ -3,7 +3,7 @@
  * Generates exercise details using LLM (instructions, YouTube link, body parts, type detection)
  */
 
-const { LLMAgeEvaluator } = require('./llm-age-evaluator');
+const { LLMAgeEvaluator } = require("./llm-age-evaluator");
 
 class ExerciseLLMService {
   constructor(logger) {
@@ -40,7 +40,7 @@ Examples:
 Return ONLY valid JSON, no additional text or markdown formatting.`;
 
       const response = await this.llm.callTogetherAI(prompt, {
-        model: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+        model: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
         max_tokens: 1000,
         temperature: 0.7,
       });
@@ -56,37 +56,46 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
           exerciseData = JSON.parse(response);
         }
       } catch (parseError) {
-        this.logger.error('Failed to parse LLM response as JSON', {
+        this.logger.error("Failed to parse LLM response as JSON", {
           response,
           error: parseError.message,
         });
-        throw new Error('Failed to parse exercise details from LLM response');
+        throw new Error("Failed to parse exercise details from LLM response");
       }
 
       // Validate required fields
       if (!exerciseData.instructions) {
-        throw new Error('LLM response missing instructions');
+        throw new Error("LLM response missing instructions");
       }
       if (!exerciseData.exercise_type) {
-        throw new Error('LLM response missing exercise_type');
+        throw new Error("LLM response missing exercise_type");
       }
       if (!Array.isArray(exerciseData.body_parts)) {
         exerciseData.body_parts = [];
       }
 
       // Normalize exercise type
-      const validTypes = ['weight', 'bodyweight', 'treadmill'];
+      const validTypes = ["weight", "bodyweight", "treadmill"];
       if (!validTypes.includes(exerciseData.exercise_type.toLowerCase())) {
         // Try to infer from exercise name if type is invalid
         const nameLower = exerciseName.toLowerCase();
-        if (nameLower.includes('treadmill') || nameLower.includes('run') || nameLower.includes('jog')) {
-          exerciseData.exercise_type = 'treadmill';
-        } else if (nameLower.includes('push') || nameLower.includes('pull') || nameLower.includes('squat') || nameLower.includes('plank')) {
-          exerciseData.exercise_type = 'bodyweight';
+        if (
+          nameLower.includes("treadmill") ||
+          nameLower.includes("run") ||
+          nameLower.includes("jog")
+        ) {
+          exerciseData.exercise_type = "treadmill";
+        } else if (
+          nameLower.includes("push") ||
+          nameLower.includes("pull") ||
+          nameLower.includes("squat") ||
+          nameLower.includes("plank")
+        ) {
+          exerciseData.exercise_type = "bodyweight";
         } else {
-          exerciseData.exercise_type = 'weight';
+          exerciseData.exercise_type = "weight";
         }
-        this.logger.warn('Invalid exercise type from LLM, inferred from name', {
+        this.logger.warn("Invalid exercise type from LLM, inferred from name", {
           exerciseName,
           inferredType: exerciseData.exercise_type,
         });
@@ -101,7 +110,7 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
         exerciseType: exerciseData.exercise_type,
       };
     } catch (error) {
-      this.logger.error('Error generating exercise details', {
+      this.logger.error("Error generating exercise details", {
         exerciseName,
         error: error.message,
       });
@@ -110,5 +119,4 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
   }
 }
 
-module.exports = { ExerciseLLMService };
-
+module.exports = ExerciseLLMService;

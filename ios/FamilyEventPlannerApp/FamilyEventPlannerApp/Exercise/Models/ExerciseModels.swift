@@ -10,7 +10,7 @@ enum ExerciseType: String, Codable {
 
 // MARK: - Exercise
 
-struct Exercise: Codable, Identifiable {
+struct Exercise: Codable, Identifiable, Hashable {
     let id: Int
     let exerciseName: String
     let instructions: String
@@ -29,6 +29,15 @@ struct Exercise: Codable, Identifiable {
         case exerciseType = "exercise_type"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+    
+    // Hashable conformance - use id for hashing
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    static func == (lhs: Exercise, rhs: Exercise) -> Bool {
+        lhs.id == rhs.id
     }
 }
 
@@ -56,6 +65,27 @@ struct ExerciseSet: Codable, Identifiable {
     // Custom Codable implementation to exclude id from encoding/decoding
     enum CodingKeys: String, CodingKey {
         case reps, weight, restSeconds, incline, speed, duration
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = UUID()
+        reps = try container.decodeIfPresent(Int.self, forKey: .reps)
+        weight = try container.decodeIfPresent(Double.self, forKey: .weight)
+        restSeconds = try container.decodeIfPresent(Int.self, forKey: .restSeconds)
+        incline = try container.decodeIfPresent(Double.self, forKey: .incline)
+        speed = try container.decodeIfPresent(Double.self, forKey: .speed)
+        duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(reps, forKey: .reps)
+        try container.encodeIfPresent(weight, forKey: .weight)
+        try container.encodeIfPresent(restSeconds, forKey: .restSeconds)
+        try container.encodeIfPresent(incline, forKey: .incline)
+        try container.encodeIfPresent(speed, forKey: .speed)
+        try container.encodeIfPresent(duration, forKey: .duration)
     }
 }
 
@@ -139,7 +169,7 @@ struct RoutineExercise: Codable, Identifiable {
 
 // MARK: - Exercise Log
 
-struct ExerciseLog: Codable, Identifiable {
+struct ExerciseLog: Codable, Identifiable, Hashable {
     let id: Int
     let userId: Int
     let routineId: Int?
@@ -164,6 +194,15 @@ struct ExerciseLog: Codable, Identifiable {
         case entries
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+    
+    // Hashable conformance - use id for hashing
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    static func == (lhs: ExerciseLog, rhs: ExerciseLog) -> Bool {
+        lhs.id == rhs.id
     }
 }
 

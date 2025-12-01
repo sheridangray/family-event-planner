@@ -140,7 +140,7 @@ struct ExerciseDetailView: View {
             }
         }
         .sheet(isPresented: $showingStartExercise) {
-            StartExerciseView(exercise: exercise)
+            StartExerciseView(exercise: exercise, workoutId: nil)
                 .environmentObject(exerciseManager)
         }
         .task {
@@ -194,7 +194,8 @@ struct HistoryRow: View {
             }
             
             if exerciseType == .weight {
-                if let weights = entry.weightUsed.compactMap({ $0 }), !weights.isEmpty {
+                let weights = entry.weightUsed.compactMap { $0 }
+                if !weights.isEmpty {
                     Text("Weights: \(weights.map { String(format: "%.0f", $0) }.joined(separator: ", ")) lbs")
                         .font(.caption)
                         .foregroundColor(.secondary)

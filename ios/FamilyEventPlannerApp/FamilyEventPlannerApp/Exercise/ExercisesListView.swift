@@ -19,74 +19,70 @@ struct ExercisesListView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Search bar
-                SearchBar(text: $searchText, placeholder: "Search exercises...")
-                    .padding()
-                    .onChange(of: searchText) { newValue in
-                        if !newValue.isEmpty {
-                            searchExercises(query: newValue)
-                        } else {
-                            loadExercises()
-                        }
+        VStack(spacing: 0) {
+            // Search bar
+            SearchBar(text: $searchText, placeholder: "Search exercises...")
+                .padding()
+                .onChange(of: searchText) { newValue in
+                    if !newValue.isEmpty {
+                        searchExercises(query: newValue)
+                    } else {
+                        loadExercises()
                     }
-                
-                // Exercise list
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if filteredExercises.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 50))
-                            .foregroundColor(.secondary)
-                        Text(searchText.isEmpty ? "No exercises found" : "No exercises match '\(searchText)'")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        if searchText.isEmpty {
-                            Button("Add Exercise") {
-                                showingAddExercise = true
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    }
+                }
+            
+            // Exercise list
+            if isLoading {
+                ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(filteredExercises) { exercise in
-                        ExerciseRow(exercise: exercise) {
-                            selectedExercise = exercise
+            } else if filteredExercises.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 50))
+                        .foregroundColor(.secondary)
+                    Text(searchText.isEmpty ? "No exercises found" : "No exercises match '\(searchText)'")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    if searchText.isEmpty {
+                        Button("Add Exercise") {
+                            showingAddExercise = true
                         }
-                    }
-                    .listStyle(.plain)
-                }
-            }
-            .navigationTitle("Exercises")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingAddExercise = true
-                    } label: {
-                        Image(systemName: "plus")
+                        .buttonStyle(.borderedProminent)
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    ProfileMenuButton()
-                        .environmentObject(AuthenticationManager.shared)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(filteredExercises) { exercise in
+                    ExerciseRow(exercise: exercise) {
+                        selectedExercise = exercise
+                    }
+                }
+                .listStyle(.plain)
+            }
+        }
+        .navigationTitle("Exercises")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingAddExercise = true
+                } label: {
+                    Image(systemName: "plus")
                 }
             }
-            .sheet(isPresented: $showingAddExercise) {
+        }
+        .sheet(isPresented: $showingAddExercise) {
+            NavigationStack {
                 AddExerciseView()
                     .environmentObject(exerciseManager)
             }
-            .navigationDestination(item: $selectedExercise) { exercise in
-                ExerciseDetailView(exercise: exercise)
-                    .environmentObject(exerciseManager)
-            }
-            .task {
-                loadExercises()
-            }
+        }
+        .navigationDestination(item: $selectedExercise) { exercise in
+            ExerciseDetailView(exercise: exercise)
+                .environmentObject(exerciseManager)
+        }
+        .task {
+            loadExercises()
         }
     }
     
