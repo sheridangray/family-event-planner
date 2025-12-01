@@ -101,8 +101,8 @@ struct ExerciseChatView: View {
             role: "user",
             content: userMessageText,
             messageOrder: messages.count + 1,
-            metadata: nil,
-            tokensUsed: nil,
+            metadata: nil as [String: Any]?,
+            tokensUsed: nil as Int?,
             createdAt: ISO8601DateFormatter().string(from: Date())
         )
         messages.append(userMessage)
@@ -152,8 +152,8 @@ struct ExerciseChatView: View {
                         role: "assistant",
                         content: result.data.response,
                         messageOrder: messages.count + 1,
-                        metadata: nil,
-                        tokensUsed: nil,
+                        metadata: nil as [String: Any]?,
+                        tokensUsed: nil as Int?,
                         createdAt: ISO8601DateFormatter().string(from: Date())
                     )
                     messages.append(assistantMessage)

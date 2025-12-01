@@ -73,6 +73,10 @@ struct BackfillView: View {
             .navigationTitle("Backfill Health Data")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    ProfileMenuButton()
+                        .environmentObject(authManager)
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()

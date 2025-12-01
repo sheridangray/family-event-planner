@@ -8,6 +8,8 @@ class ExerciseManager: ObservableObject {
     @Published var routines: [ExerciseRoutine] = []
     @Published var todayRoutine: ExerciseRoutine?
     @Published var recentLogs: [ExerciseLog] = []
+    @Published var exercises: [Exercise] = []
+    @Published var currentWorkout: ExerciseLog?
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -273,6 +275,264 @@ class ExerciseManager: ObservableObject {
         
         let decoder = JSONDecoder()
         let result = try decoder.decode(ExerciseConversationHistoryResponse.self, from: data)
+        
+        return result.data
+    }
+    
+    // MARK: - Exercises
+    
+    /// Fetch exercises (with optional search query)
+    func fetchExercises(query: String?) async throws {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url: URL
+        if let query = query, !query.isEmpty {
+            url = URL(string: "\(backendURL)/api/exercise/exercises/search?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")!
+        } else {
+            url = URL(string: "\(backendURL)/api/exercise/exercises")!
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ExerciseError.serverError("Invalid response")
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let errorMsg = errorData?["error"] as? String ?? "Failed to fetch exercises"
+            throw ExerciseError.serverError(errorMsg)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(ExercisesResponse.self, from: data)
+        
+        await MainActor.run {
+            exercises = result.data
+        }
+    }
+    
+    /// Create a new exercise (triggers LLM generation)
+    func createExercise(name: String) async throws {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/exercises")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = ["exerciseName": name]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ExerciseError.serverError("Invalid response")
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let errorMsg = errorData?["error"] as? String ?? "Failed to create exercise"
+            throw ExerciseError.serverError(errorMsg)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(ExerciseResponse.self, from: data)
+        
+        await MainActor.run {
+            exercises.insert(result.data, at: 0)
+        }
+    }
+    
+    /// Get exercise by ID
+    func getExercise(id: Int) async throws -> Exercise {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/exercises/\(id)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ExerciseError.serverError("Invalid response")
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw ExerciseError.serverError("Failed to fetch exercise")
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(ExerciseResponse.self, from: data)
+        
+        return result.data
+    }
+    
+    // MARK: - Workouts
+    
+    /// Create a new workout
+    func createWorkout() async throws -> ExerciseLog {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/workouts")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: [:])
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ExerciseError.serverError("Invalid response")
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let errorMsg = errorData?["error"] as? String ?? "Failed to create workout"
+            throw ExerciseError.serverError(errorMsg)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(WorkoutResponse.self, from: data)
+        
+        await MainActor.run {
+            currentWorkout = result.data
+        }
+        
+        return result.data
+    }
+    
+    /// Add exercise to workout
+    func addExerciseToWorkout(workoutId: Int, exerciseId: Int, sets: [ExerciseSet], restSeconds: Int?, equipmentUsed: String?, notes: String?) async throws {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/workouts/\(workoutId)/exercises")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Convert ExerciseSet array to dictionary array
+        let setsData = sets.map { set in
+            var dict: [String: Any] = [:]
+            if let reps = set.reps { dict["reps"] = reps }
+            if let weight = set.weight { dict["weight"] = weight }
+            if let rest = set.restSeconds { dict["restSeconds"] = rest }
+            if let incline = set.incline { dict["incline"] = incline }
+            if let speed = set.speed { dict["speed"] = speed }
+            if let duration = set.duration { dict["duration"] = duration }
+            return dict
+        }
+        
+        var body: [String: Any] = [
+            "exerciseId": exerciseId,
+            "sets": setsData
+        ]
+        if let rest = restSeconds { body["restSeconds"] = rest }
+        if let equipment = equipmentUsed { body["equipmentUsed"] = equipment }
+        if let notes = notes { body["notes"] = notes }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ExerciseError.serverError("Invalid response")
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let errorMsg = errorData?["error"] as? String ?? "Failed to add exercise to workout"
+            throw ExerciseError.serverError(errorMsg)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(WorkoutResponse.self, from: data)
+        
+        await MainActor.run {
+            currentWorkout = result.data
+        }
+    }
+    
+    /// Repeat a workout (copy previous sets/weights)
+    func repeatWorkout(workoutId: Int) async throws -> ExerciseLog {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/workouts/\(workoutId)/repeat")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ExerciseError.serverError("Invalid response")
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let errorMsg = errorData?["error"] as? String ?? "Failed to repeat workout"
+            throw ExerciseError.serverError(errorMsg)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(WorkoutResponse.self, from: data)
+        
+        await MainActor.run {
+            currentWorkout = result.data
+            recentLogs.insert(result.data, at: 0)
+        }
+        
+        return result.data
+    }
+    
+    /// Get workout by ID
+    func getWorkout(id: Int) async throws -> ExerciseLog {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/workouts/\(id)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ExerciseError.serverError("Invalid response")
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw ExerciseError.serverError("Failed to fetch workout")
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(WorkoutResponse.self, from: data)
         
         return result.data
     }

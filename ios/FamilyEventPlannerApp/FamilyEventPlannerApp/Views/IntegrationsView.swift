@@ -145,6 +145,12 @@ struct IntegrationsView: View {
         }
         .navigationTitle("Integrations")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                ProfileMenuButton()
+                    .environmentObject(authManager)
+            }
+        }
         .onAppear {
             // Check actual HealthKit status when view appears
             healthManager.checkCurrentAuthorizationStatus()

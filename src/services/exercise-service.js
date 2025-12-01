@@ -561,6 +561,388 @@ class ExerciseService {
       // Don't throw - history update failure shouldn't break workout logging
     }
   }
+
+  // ==================== NEW EXERCISE METHODS ====================
+
+  /**
+   * Create a new exercise (with LLM-generated details)
+   * @param {string} exerciseName - Name of the exercise
+   * @param {Object} llmService - ExerciseLLMService instance
+   * @returns {Promise<Object>} Created exercise
+   */
+  async createExercise(exerciseName, llmService) {
+    try {
+      // Check if exercise already exists
+      const existing = await this.database.query(
+        `SELECT * FROM exercises WHERE LOWER(exercise_name) = LOWER($1)`,
+        [exerciseName]
+      );
+
+      if (existing.rows.length > 0) {
+        return existing.rows[0];
+      }
+
+      // Generate details using LLM
+      const details = await llmService.generateExerciseDetails(exerciseName);
+
+      // Insert exercise
+      const result = await this.database.query(
+        `INSERT INTO exercises (exercise_name, instructions, youtube_url, body_parts, exercise_type)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          exerciseName,
+          details.instructions,
+          details.youtubeUrl,
+          details.bodyParts,
+          details.exerciseType,
+        ]
+      );
+
+      return result.rows[0];
+    } catch (error) {
+      this.logger.error(`Error creating exercise "${exerciseName}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get exercise by ID
+   * @param {number} exerciseId - Exercise ID
+   * @returns {Promise<Object|null>} Exercise or null
+   */
+  async getExercise(exerciseId) {
+    try {
+      const result = await this.database.query(
+        `SELECT * FROM exercises WHERE id = $1`,
+        [exerciseId]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      this.logger.error(`Error fetching exercise ${exerciseId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search exercises by name (autocomplete)
+   * @param {string} query - Search query
+   * @param {number} limit - Max results (default 20)
+   * @returns {Promise<Array>} List of matching exercises
+   */
+  async searchExercises(query, limit = 20) {
+    try {
+      const result = await this.database.query(
+        `SELECT * FROM exercises
+         WHERE exercise_name ILIKE $1
+         ORDER BY exercise_name ASC
+         LIMIT $2`,
+        [`%${query}%`, limit]
+      );
+      return result.rows;
+    } catch (error) {
+      this.logger.error(`Error searching exercises:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all exercises with pagination
+   * @param {number} limit - Max results (default 50)
+   * @param {number} offset - Offset for pagination (default 0)
+   * @returns {Promise<Array>} List of exercises
+   */
+  async getAllExercises(limit = 50, offset = 0) {
+    try {
+      const result = await this.database.query(
+        `SELECT * FROM exercises
+         ORDER BY exercise_name ASC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+      return result.rows;
+    } catch (error) {
+      this.logger.error(`Error fetching all exercises:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update exercise
+   * @param {number} exerciseId - Exercise ID
+   * @param {Object} updates - Fields to update
+   * @returns {Promise<Object>} Updated exercise
+   */
+  async updateExercise(exerciseId, updates) {
+    try {
+      const fields = [];
+      const values = [];
+      let paramIndex = 1;
+
+      if (updates.instructions !== undefined) {
+        fields.push(`instructions = $${paramIndex++}`);
+        values.push(updates.instructions);
+      }
+      if (updates.youtubeUrl !== undefined) {
+        fields.push(`youtube_url = $${paramIndex++}`);
+        values.push(updates.youtubeUrl);
+      }
+      if (updates.bodyParts !== undefined) {
+        fields.push(`body_parts = $${paramIndex++}`);
+        values.push(updates.bodyParts);
+      }
+      if (updates.exerciseType !== undefined) {
+        fields.push(`exercise_type = $${paramIndex++}`);
+        values.push(updates.exerciseType);
+      }
+
+      if (fields.length === 0) {
+        return await this.getExercise(exerciseId);
+      }
+
+      values.push(exerciseId);
+      const sql = `UPDATE exercises SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
+
+      const result = await this.database.query(sql, values);
+      return result.rows[0];
+    } catch (error) {
+      this.logger.error(`Error updating exercise ${exerciseId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete exercise (only if not referenced)
+   * @param {number} exerciseId - Exercise ID
+   * @returns {Promise<boolean>} Success
+   */
+  async deleteExercise(exerciseId) {
+    try {
+      // Check if exercise is referenced
+      const routineRefs = await this.database.query(
+        `SELECT COUNT(*) as count FROM routine_exercises WHERE exercise_id = $1`,
+        [exerciseId]
+      );
+      const logRefs = await this.database.query(
+        `SELECT COUNT(*) as count FROM exercise_log_entries WHERE exercise_id = $1`,
+        [exerciseId]
+      );
+
+      if (parseInt(routineRefs.rows[0].count) > 0 || parseInt(logRefs.rows[0].count) > 0) {
+        throw new Error('Cannot delete exercise that is referenced in routines or workout logs');
+      }
+
+      const result = await this.database.query(
+        `DELETE FROM exercises WHERE id = $1`,
+        [exerciseId]
+      );
+      return result.rowCount > 0;
+    } catch (error) {
+      this.logger.error(`Error deleting exercise ${exerciseId}:`, error);
+      throw error;
+    }
+  }
+
+  // ==================== NEW WORKOUT METHODS ====================
+
+  /**
+   * Create a new workout
+   * @param {number} userId - User ID
+   * @param {Object} workoutData - Workout data
+   * @returns {Promise<Object>} Created workout
+   */
+  async createWorkout(userId, workoutData = {}) {
+    try {
+      const {
+        routineId,
+        exerciseDate,
+        totalDurationMinutes,
+        location,
+        notes,
+      } = workoutData;
+
+      const today = new Date(exerciseDate || new Date());
+      const dayOfWeek = today.getDay();
+
+      const result = await this.database.query(
+        `INSERT INTO exercise_logs (
+          user_id, routine_id, exercise_date, day_of_week,
+          total_duration_minutes, location, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *`,
+        [
+          userId,
+          routineId || null,
+          today.toISOString().split('T')[0],
+          dayOfWeek,
+          totalDurationMinutes || null,
+          location || null,
+          notes || null,
+        ]
+      );
+
+      return await this.getWorkoutLog(result.rows[0].id);
+    } catch (error) {
+      this.logger.error(`Error creating workout for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add exercise to workout
+   * @param {number} workoutId - Workout ID
+   * @param {number} exerciseId - Exercise ID
+   * @param {Object} setsData - Sets data (sets array with reps, weight, etc.)
+   * @returns {Promise<Object>} Updated workout
+   */
+  async addExerciseToWorkout(workoutId, exerciseId, setsData) {
+    try {
+      const exercise = await this.getExercise(exerciseId);
+      if (!exercise) {
+        throw new Error(`Exercise ${exerciseId} not found`);
+      }
+
+      // Get current max exercise_order in workout
+      const maxOrderResult = await this.database.query(
+        `SELECT MAX(exercise_order) as max_order FROM exercise_log_entries WHERE log_id = $1`,
+        [workoutId]
+      );
+      const nextOrder = (maxOrderResult.rows[0].max_order || 0) + 1;
+
+      // Prepare sets data based on exercise type
+      const sets = setsData.sets || [];
+      const repsPerformed = [];
+      const weightUsed = [];
+      const durationSeconds = [];
+      const restSeconds = setsData.restSeconds || null;
+
+      for (const set of sets) {
+        if (exercise.exercise_type === 'treadmill') {
+          durationSeconds.push(set.duration || null);
+          // For treadmill, we might store incline/speed in notes or separate fields
+        } else {
+          repsPerformed.push(set.reps || null);
+          if (exercise.exercise_type === 'weight') {
+            weightUsed.push(set.weight || null);
+          }
+        }
+      }
+
+      // Insert exercise entry
+      await this.database.query(
+        `INSERT INTO exercise_log_entries (
+          log_id, exercise_id, exercise_name, exercise_order,
+          equipment_used, sets_performed, reps_performed, weight_used,
+          duration_seconds, rest_seconds, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          workoutId,
+          exerciseId,
+          exercise.exercise_name,
+          nextOrder,
+          setsData.equipmentUsed || null,
+          sets.length,
+          JSON.stringify(repsPerformed),
+          JSON.stringify(weightUsed),
+          JSON.stringify(durationSeconds),
+          restSeconds,
+          setsData.notes || null,
+        ]
+      );
+
+      // Update exercise history
+      await this._updateExerciseHistory(
+        (await this.getWorkoutLog(workoutId)).user_id,
+        [{
+          exerciseName: exercise.exercise_name,
+          equipmentUsed: setsData.equipmentUsed || null,
+          setsPerformed: sets.length,
+          repsPerformed,
+          weightUsed,
+          durationSeconds,
+        }]
+      );
+
+      return await this.getWorkoutLog(workoutId);
+    } catch (error) {
+      this.logger.error(`Error adding exercise to workout ${workoutId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Repeat a workout (copy previous sets/weights)
+   * @param {number} workoutId - Original workout ID
+   * @param {number} userId - User ID
+   * @returns {Promise<Object>} New workout with copied data
+   */
+  async repeatWorkout(workoutId, userId) {
+    try {
+      const originalWorkout = await this.getWorkoutLog(workoutId);
+      if (!originalWorkout) {
+        throw new Error(`Workout ${workoutId} not found`);
+      }
+
+      if (originalWorkout.user_id !== userId) {
+        throw new Error('Cannot repeat workout from another user');
+      }
+
+      // Create new workout
+      const newWorkout = await this.createWorkout(userId, {
+        routineId: originalWorkout.routine_id,
+        exerciseDate: new Date().toISOString().split('T')[0],
+        location: originalWorkout.location,
+        notes: `Repeated from ${originalWorkout.exercise_date}`,
+      });
+
+      // Copy all exercises with their sets
+      for (const entry of originalWorkout.entries) {
+        const sets = [];
+        
+        // Reconstruct sets from entry data
+        const reps = entry.repsPerformed || [];
+        const weights = entry.weightUsed || [];
+        const durations = entry.durationSeconds || [];
+
+        const maxLength = Math.max(reps.length, weights.length, durations.length);
+        for (let i = 0; i < maxLength; i++) {
+          sets.push({
+            reps: reps[i] || null,
+            weight: weights[i] || null,
+            duration: durations[i] || null,
+          });
+        }
+
+        if (entry.exercise_id) {
+          await this.addExerciseToWorkout(newWorkout.id, entry.exercise_id, {
+            sets,
+            restSeconds: entry.rest_seconds,
+            equipmentUsed: entry.equipment_used,
+            notes: entry.notes,
+          });
+        } else {
+          // Fallback for entries without exercise_id
+          const exercise = await this.database.query(
+            `SELECT id FROM exercises WHERE exercise_name = $1 LIMIT 1`,
+            [entry.exercise_name]
+          );
+          if (exercise.rows.length > 0) {
+            await this.addExerciseToWorkout(newWorkout.id, exercise.rows[0].id, {
+              sets,
+              restSeconds: entry.rest_seconds,
+              equipmentUsed: entry.equipment_used,
+              notes: entry.notes,
+            });
+          }
+        }
+      }
+
+      return await this.getWorkoutLog(newWorkout.id);
+    } catch (error) {
+      this.logger.error(`Error repeating workout ${workoutId}:`, error);
+      throw error;
+    }
+  }
 }
 
 module.exports = ExerciseService;

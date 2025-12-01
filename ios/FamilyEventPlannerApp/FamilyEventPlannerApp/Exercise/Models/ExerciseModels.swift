@@ -1,5 +1,84 @@
 import Foundation
 
+// MARK: - Exercise Type
+
+enum ExerciseType: String, Codable {
+    case weight = "weight"
+    case bodyweight = "bodyweight"
+    case treadmill = "treadmill"
+}
+
+// MARK: - Exercise
+
+struct Exercise: Codable, Identifiable {
+    let id: Int
+    let exerciseName: String
+    let instructions: String
+    let youtubeUrl: String?
+    let bodyParts: [String]
+    let exerciseType: ExerciseType
+    let createdAt: String?
+    let updatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case exerciseName = "exercise_name"
+        case instructions
+        case youtubeUrl = "youtube_url"
+        case bodyParts = "body_parts"
+        case exerciseType = "exercise_type"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+// MARK: - Exercise Set
+
+struct ExerciseSet: Codable, Identifiable {
+    var id: UUID
+    var reps: Int?
+    var weight: Double? // For weight exercises
+    var restSeconds: Int?
+    var incline: Double? // For treadmill (%)
+    var speed: Double? // For treadmill (MPH)
+    var duration: Int? // For treadmill (seconds)
+    
+    init(id: UUID = UUID(), reps: Int? = nil, weight: Double? = nil, restSeconds: Int? = nil, incline: Double? = nil, speed: Double? = nil, duration: Int? = nil) {
+        self.id = id
+        self.reps = reps
+        self.weight = weight
+        self.restSeconds = restSeconds
+        self.incline = incline
+        self.speed = speed
+        self.duration = duration
+    }
+    
+    // Custom Codable implementation to exclude id from encoding/decoding
+    enum CodingKeys: String, CodingKey {
+        case reps, weight, restSeconds, incline, speed, duration
+    }
+}
+
+// MARK: - Exercise Session
+
+struct ExerciseSession: Codable {
+    let exerciseId: Int
+    let exerciseName: String
+    let exerciseType: ExerciseType
+    var sets: [ExerciseSet]
+    let notes: String?
+    let equipmentUsed: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case exerciseId = "exercise_id"
+        case exerciseName = "exercise_name"
+        case exerciseType = "exercise_type"
+        case sets
+        case notes
+        case equipmentUsed = "equipment_used"
+    }
+}
+
 // MARK: - Exercise Routine
 
 struct ExerciseRoutine: Codable, Identifiable {
@@ -93,6 +172,7 @@ struct ExerciseLog: Codable, Identifiable {
 struct ExerciseLogEntry: Codable, Identifiable {
     let id: Int
     let logId: Int
+    let exerciseId: Int? // Reference to master exercise
     let exerciseName: String
     let exerciseOrder: Int
     let equipmentUsed: String?
@@ -107,6 +187,7 @@ struct ExerciseLogEntry: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case logId = "log_id"
+        case exerciseId = "exercise_id"
         case exerciseName = "exercise_name"
         case exerciseOrder = "exercise_order"
         case equipmentUsed = "equipment_used"
@@ -119,11 +200,43 @@ struct ExerciseLogEntry: Codable, Identifiable {
         case difficultyRating = "difficulty_rating"
     }
     
+    // Regular initializer for creating instances programmatically
+    init(
+        id: Int,
+        logId: Int,
+        exerciseId: Int? = nil,
+        exerciseName: String,
+        exerciseOrder: Int,
+        equipmentUsed: String?,
+        setsPerformed: Int,
+        repsPerformed: [Int],
+        weightUsed: [Double?],
+        durationSeconds: [Int],
+        restSeconds: Int?,
+        notes: String?,
+        difficultyRating: Int?
+    ) {
+        self.id = id
+        self.logId = logId
+        self.exerciseId = exerciseId
+        self.exerciseName = exerciseName
+        self.exerciseOrder = exerciseOrder
+        self.equipmentUsed = equipmentUsed
+        self.setsPerformed = setsPerformed
+        self.repsPerformed = repsPerformed
+        self.weightUsed = weightUsed
+        self.durationSeconds = durationSeconds
+        self.restSeconds = restSeconds
+        self.notes = notes
+        self.difficultyRating = difficultyRating
+    }
+    
     // Custom decoder to handle JSONB arrays that might come as JSON strings
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(Int.self, forKey: .id)
         logId = try container.decode(Int.self, forKey: .logId)
+        exerciseId = try container.decodeIfPresent(Int.self, forKey: .exerciseId)
         exerciseName = try container.decode(String.self, forKey: .exerciseName)
         exerciseOrder = try container.decode(Int.self, forKey: .exerciseOrder)
         equipmentUsed = try container.decodeIfPresent(String.self, forKey: .equipmentUsed)
@@ -274,6 +387,27 @@ struct ChatMessage: Decodable, Identifiable {
         case createdAt = "created_at"
     }
     
+    // Regular initializer for creating instances programmatically
+    init(
+        id: Int,
+        conversationId: Int,
+        role: String,
+        content: String,
+        messageOrder: Int,
+        metadata: [String: Any]?,
+        tokensUsed: Int?,
+        createdAt: String
+    ) {
+        self.id = id
+        self.conversationId = conversationId
+        self.role = role
+        self.content = content
+        self.messageOrder = messageOrder
+        self.metadata = metadata
+        self.tokensUsed = tokensUsed
+        self.createdAt = createdAt
+    }
+    
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(Int.self, forKey: .id)
@@ -354,5 +488,37 @@ struct HasLoggedResponse: Codable {
 
 struct HasLoggedData: Codable {
     let hasLogged: Bool
+}
+
+// MARK: - Exercise API Responses
+
+struct ExercisesResponse: Codable {
+    let success: Bool
+    let data: [Exercise]
+}
+
+struct ExerciseResponse: Codable {
+    let success: Bool
+    let data: Exercise
+}
+
+struct WorkoutsResponse: Codable {
+    let success: Bool
+    let data: [ExerciseLog] // Using ExerciseLog as Workout
+}
+
+struct WorkoutResponse: Codable {
+    let success: Bool
+    let data: ExerciseLog
+}
+
+struct StartExerciseResponse: Codable {
+    let success: Bool
+    let data: StartExerciseData
+}
+
+struct StartExerciseData: Codable {
+    let exercise: Exercise
+    let workoutId: Int?
 }
 

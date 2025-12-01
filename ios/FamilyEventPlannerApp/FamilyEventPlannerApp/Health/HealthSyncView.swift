@@ -75,11 +75,18 @@ struct HealthSyncView: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
                     
-                    // Exercise Quick View (separate section)
-                    ExerciseQuickView()
-                        .environmentObject(ExerciseManager.shared)
-                        .environmentObject(healthManager)
-                        .padding(.horizontal)
+                    // Exercise & Workouts section
+                    VStack(spacing: 16) {
+                        Text("Exercise & Workouts")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 4)
+                        
+                        ExerciseQuickView()
+                            .environmentObject(ExerciseManager.shared)
+                    }
+                    .padding(.horizontal)
                     
                     // Category cards for passive health metrics
                     VStack(spacing: 16) {

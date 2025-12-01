@@ -4,11 +4,13 @@ const { authenticateFlexible } = require("../middleware/auth");
 function createExerciseRouter(database, logger) {
   const router = express.Router();
   const ExerciseService = require("../services/exercise-service");
+  const ExerciseLLMService = require("../services/exercise-llm-service");
   const ExerciseConversationService = require("../services/exercise-conversation-service");
   const ExerciseCoachService = require("../services/exercise-coach-service");
   const LLMAgeEvaluator = require("../services/llm-age-evaluator");
 
   const exerciseService = new ExerciseService(database, logger);
+  const exerciseLLMService = new ExerciseLLMService(logger);
   const conversationService = new ExerciseConversationService(database, logger);
   const coachService = new ExerciseCoachService(database, logger);
 
@@ -16,6 +18,387 @@ function createExerciseRouter(database, logger) {
   const getUserId = (req) => {
     return req.user?.id || req.body.userId || parseInt(req.params.userId);
   };
+
+  // ==================== EXERCISES ====================
+
+  /**
+   * POST /api/exercise/exercises
+   * Create a new exercise (triggers LLM generation)
+   */
+  router.post("/exercises", authenticateFlexible, async (req, res) => {
+    try {
+      const { exerciseName } = req.body;
+
+      if (!exerciseName) {
+        return res.status(400).json({
+          success: false,
+          error: "exerciseName required",
+        });
+      }
+
+      const exercise = await exerciseService.createExercise(exerciseName, exerciseLLMService);
+
+      res.json({
+        success: true,
+        data: exercise,
+      });
+    } catch (error) {
+      logger.error("Error creating exercise:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to create exercise",
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /api/exercise/exercises
+   * Get all exercises with pagination
+   */
+  router.get("/exercises", authenticateFlexible, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+      const offset = req.query.offset ? parseInt(req.query.offset) : 0;
+
+      const exercises = await exerciseService.getAllExercises(limit, offset);
+
+      res.json({
+        success: true,
+        data: exercises,
+      });
+    } catch (error) {
+      logger.error("Error fetching exercises:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch exercises",
+      });
+    }
+  });
+
+  /**
+   * GET /api/exercise/exercises/search?q=query
+   * Search exercises by name (autocomplete)
+   */
+  router.get("/exercises/search", authenticateFlexible, async (req, res) => {
+    try {
+      const query = req.query.q || "";
+      const limit = req.query.limit ? parseInt(req.query.limit) : 20;
+
+      if (!query) {
+        return res.json({
+          success: true,
+          data: [],
+        });
+      }
+
+      const exercises = await exerciseService.searchExercises(query, limit);
+
+      res.json({
+        success: true,
+        data: exercises,
+      });
+    } catch (error) {
+      logger.error("Error searching exercises:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to search exercises",
+      });
+    }
+  });
+
+  /**
+   * GET /api/exercise/exercises/:id
+   * Get exercise by ID
+   */
+  router.get("/exercises/:id", authenticateFlexible, async (req, res) => {
+    try {
+      const exerciseId = parseInt(req.params.id);
+      const exercise = await exerciseService.getExercise(exerciseId);
+
+      if (!exercise) {
+        return res.status(404).json({
+          success: false,
+          error: "Exercise not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: exercise,
+      });
+    } catch (error) {
+      logger.error("Error fetching exercise:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch exercise",
+      });
+    }
+  });
+
+  /**
+   * PUT /api/exercise/exercises/:id
+   * Update exercise
+   */
+  router.put("/exercises/:id", authenticateFlexible, async (req, res) => {
+    try {
+      const exerciseId = parseInt(req.params.id);
+      const exercise = await exerciseService.updateExercise(exerciseId, req.body);
+
+      res.json({
+        success: true,
+        data: exercise,
+      });
+    } catch (error) {
+      logger.error("Error updating exercise:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to update exercise",
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/exercise/exercises/:id
+   * Delete exercise
+   */
+  router.delete("/exercises/:id", authenticateFlexible, async (req, res) => {
+    try {
+      const exerciseId = parseInt(req.params.id);
+      const success = await exerciseService.deleteExercise(exerciseId);
+
+      if (!success) {
+        return res.status(404).json({
+          success: false,
+          error: "Exercise not found or cannot be deleted",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Exercise deleted",
+      });
+    } catch (error) {
+      logger.error("Error deleting exercise:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to delete exercise",
+        message: error.message,
+      });
+    }
+  });
+
+  // ==================== WORKOUTS ====================
+
+  /**
+   * POST /api/exercise/workouts
+   * Create a new workout
+   */
+  router.post("/workouts", authenticateFlexible, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId required",
+        });
+      }
+
+      const workout = await exerciseService.createWorkout(userId, req.body);
+
+      res.json({
+        success: true,
+        data: workout,
+      });
+    } catch (error) {
+      logger.error("Error creating workout:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to create workout",
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /api/exercise/workouts
+   * Get workout history
+   */
+  router.get("/workouts", authenticateFlexible, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId required",
+        });
+      }
+
+      const { startDate, endDate, limit } = req.query;
+      const workouts = await exerciseService.getWorkoutHistory(
+        userId,
+        startDate ? new Date(startDate) : null,
+        endDate ? new Date(endDate) : null,
+        limit ? parseInt(limit) : 50
+      );
+
+      // Fetch full workout details for each
+      const workoutsWithEntries = await Promise.all(
+        workouts.map(workout => exerciseService.getWorkoutLog(workout.id))
+      );
+
+      res.json({
+        success: true,
+        data: workoutsWithEntries,
+      });
+    } catch (error) {
+      logger.error("Error fetching workout history:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch workout history",
+      });
+    }
+  });
+
+  /**
+   * GET /api/exercise/workouts/:id
+   * Get workout by ID
+   */
+  router.get("/workouts/:id", authenticateFlexible, async (req, res) => {
+    try {
+      const workoutId = parseInt(req.params.id);
+      const workout = await exerciseService.getWorkoutLog(workoutId);
+
+      if (!workout) {
+        return res.status(404).json({
+          success: false,
+          error: "Workout not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: workout,
+      });
+    } catch (error) {
+      logger.error("Error fetching workout:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch workout",
+      });
+    }
+  });
+
+  /**
+   * POST /api/exercise/workouts/:id/exercises
+   * Add exercise to workout
+   */
+  router.post("/workouts/:id/exercises", authenticateFlexible, async (req, res) => {
+    try {
+      const workoutId = parseInt(req.params.id);
+      const { exerciseId, sets, restSeconds, equipmentUsed, notes } = req.body;
+
+      if (!exerciseId || !sets) {
+        return res.status(400).json({
+          success: false,
+          error: "exerciseId and sets required",
+        });
+      }
+
+      const workout = await exerciseService.addExerciseToWorkout(workoutId, exerciseId, {
+        sets,
+        restSeconds,
+        equipmentUsed,
+        notes,
+      });
+
+      res.json({
+        success: true,
+        data: workout,
+      });
+    } catch (error) {
+      logger.error("Error adding exercise to workout:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to add exercise to workout",
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * POST /api/exercise/workouts/:id/repeat
+   * Repeat a workout (copy previous sets/weights)
+   */
+  router.post("/workouts/:id/repeat", authenticateFlexible, async (req, res) => {
+    try {
+      const workoutId = parseInt(req.params.id);
+      const userId = getUserId(req);
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId required",
+        });
+      }
+
+      const workout = await exerciseService.repeatWorkout(workoutId, userId);
+
+      res.json({
+        success: true,
+        data: workout,
+      });
+    } catch (error) {
+      logger.error("Error repeating workout:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to repeat workout",
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * POST /api/exercise/start
+   * Start new exercise session (returns exercise details with type info)
+   */
+  router.post("/start", authenticateFlexible, async (req, res) => {
+    try {
+      const { exerciseId, workoutId } = req.body;
+
+      if (!exerciseId) {
+        return res.status(400).json({
+          success: false,
+          error: "exerciseId required",
+        });
+      }
+
+      const exercise = await exerciseService.getExercise(exerciseId);
+
+      if (!exercise) {
+        return res.status(404).json({
+          success: false,
+          error: "Exercise not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          exercise,
+          workoutId: workoutId || null,
+        },
+      });
+    } catch (error) {
+      logger.error("Error starting exercise:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to start exercise",
+        message: error.message,
+      });
+    }
+  });
 
   // ==================== ROUTINES ====================
 

@@ -11,7 +11,7 @@ class HealthKitManager: ObservableObject {
     @Published var isAuthorized = false
     @Published var lastSyncDate: Date?
     @Published var isSyncing = false
-    @Published var selectedDate: Date = Calendar.current.date(byAdding: .day, value: -1, to: Date())! // Default to yesterday
+    @Published var selectedDate: Date = Date() // Default to today
     @Published var lastCurrentDayUpdate: Date? // Last time current day data was updated
     
     // Activity & Fitness

@@ -103,20 +103,20 @@ struct ExerciseLogView: View {
                 let dateFormatter = ISO8601DateFormatter()
                 dateFormatter.formatOptions = [.withFullDate]
                 
-                let entries = logEntries.map { entry in
+                let entries = logEntries.enumerated().map { index, entry in
                     ExerciseLogEntry(
                         id: 0,
                         logId: 0,
                         exerciseName: entry.exerciseName,
-                        exerciseOrder: 0,
+                        exerciseOrder: index + 1,
                         equipmentUsed: location,
                         setsPerformed: entry.setsPerformed,
                         repsPerformed: entry.repsPerformed,
                         weightUsed: entry.weightUsed,
                         durationSeconds: entry.durationSeconds,
-                        restSeconds: nil,
-                        notes: nil,
-                        difficultyRating: nil
+                        restSeconds: nil as Int?,
+                        notes: nil as String?,
+                        difficultyRating: nil as Int?
                     )
                 }
                 

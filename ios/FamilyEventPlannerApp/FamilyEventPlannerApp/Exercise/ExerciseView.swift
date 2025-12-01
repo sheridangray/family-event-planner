@@ -9,32 +9,34 @@ struct ExerciseView: View {
         VStack(spacing: 0) {
             // Tab selector
             Picker("View", selection: $selectedTab) {
-                Text("Today").tag(0)
-                Text("Routines").tag(1)
-                Text("History").tag(2)
-                Text("AI Coach").tag(3)
+                Text("Exercises").tag(0)
+                Text("Workouts").tag(1)
+                Text("Routines").tag(2)
             }
             .pickerStyle(.segmented)
             .padding()
             
             // Content based on tab
             TabView(selection: $selectedTab) {
-                ExerciseTodayView()
+                ExercisesListView()
                     .tag(0)
                 
-                ExerciseRoutinesView()
+                WorkoutHistoryView()
                     .tag(1)
                 
-                ExerciseHistoryView()
+                ExerciseRoutinesView()
                     .tag(2)
-                
-                ExerciseChatView()
-                    .tag(3)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .navigationTitle("Exercise")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                ProfileMenuButton()
+                    .environmentObject(AuthenticationManager.shared)
+            }
+        }
         .task {
             // Fetch data on appear
             do {

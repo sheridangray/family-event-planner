@@ -297,6 +297,12 @@ struct MetricDetailView: View {
         }
         .navigationTitle(metric.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                ProfileMenuButton()
+                    .environmentObject(AuthenticationManager.shared)
+            }
+        }
         .background(Color(.systemGroupedBackground))
         .onAppear {
             loadData()

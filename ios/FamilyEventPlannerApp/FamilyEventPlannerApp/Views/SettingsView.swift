@@ -83,6 +83,12 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                ProfileMenuButton()
+                    .environmentObject(authManager)
+            }
+        }
     }
 }
 

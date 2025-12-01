@@ -155,6 +155,12 @@ struct CategoryDetailView: View {
         }
         .navigationTitle(category.rawValue)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                ProfileMenuButton()
+                    .environmentObject(AuthenticationManager.shared)
+            }
+        }
         .background(Color(.systemGroupedBackground))
     }
 }

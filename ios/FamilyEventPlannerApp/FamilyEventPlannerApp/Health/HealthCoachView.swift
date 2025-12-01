@@ -120,6 +120,12 @@ struct HealthCoachView: View {
         }
         .navigationTitle("Health Coach")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                ProfileMenuButton()
+                    .environmentObject(authManager)
+            }
+        }
         .alert("Error", isPresented: $showingError) {
             Button("OK", role: .cancel) { }
         } message: {
