@@ -392,6 +392,65 @@ class ExerciseManager: ObservableObject {
         return result.data
     }
     
+    /// Update an exercise
+    func updateExercise(
+        exerciseId: Int,
+        instructions: String? = nil,
+        youtubeUrl: String? = nil,
+        bodyParts: [String]? = nil,
+        exerciseType: ExerciseType? = nil
+    ) async throws -> Exercise {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/exercises/\(exerciseId)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var body: [String: Any] = [:]
+        if let instructions = instructions {
+            body["instructions"] = instructions
+        }
+        if let youtubeUrl = youtubeUrl {
+            body["youtubeUrl"] = youtubeUrl
+        }
+        if let bodyParts = bodyParts {
+            body["bodyParts"] = bodyParts
+        }
+        if let exerciseType = exerciseType {
+            body["exerciseType"] = exerciseType.rawValue
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ExerciseError.serverError("Invalid response")
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let errorMsg = errorData?["error"] as? String ?? "Failed to update exercise"
+            throw ExerciseError.serverError(errorMsg)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(ExerciseResponse.self, from: data)
+        
+        // Update the exercise in the exercises array
+        await MainActor.run {
+            if let index = exercises.firstIndex(where: { $0.id == exerciseId }) {
+                exercises[index] = result.data
+            }
+        }
+        
+        return result.data
+    }
+    
     // MARK: - Workouts
     
     /// Create a new workout

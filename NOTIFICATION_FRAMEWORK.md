@@ -303,3 +303,4 @@ All features implemented and ready for testing:
 - Rules are automatically re-registered when HealthKit is authorized
 - All rules can be enabled/disabled individually
 
+

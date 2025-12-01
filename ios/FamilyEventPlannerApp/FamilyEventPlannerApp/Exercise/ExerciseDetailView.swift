@@ -5,20 +5,27 @@ struct ExerciseDetailView: View {
     let exercise: Exercise
     @EnvironmentObject var exerciseManager: ExerciseManager
     @State private var showingStartExercise = false
+    @State private var showingEditExercise = false
+    @State private var currentExercise: Exercise
     @State private var history: [ExerciseLogEntry] = []
     @State private var isLoadingHistory = false
+    
+    init(exercise: Exercise) {
+        self.exercise = exercise
+        _currentExercise = State(initialValue: exercise)
+    }
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // Header
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(exercise.exerciseName)
+                    Text(currentExercise.exerciseName)
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     
                     // Type badge
-                    Text(exercise.exerciseType.rawValue.capitalized)
+                    Text(currentExercise.exerciseType.rawValue.capitalized)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .padding(.horizontal, 12)
@@ -30,7 +37,7 @@ struct ExerciseDetailView: View {
                 .padding(.horizontal)
                 
                 // Body Parts
-                if !exercise.bodyParts.isEmpty {
+                if !currentExercise.bodyParts.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Body Parts Targeted")
                             .font(.headline)
@@ -38,7 +45,7 @@ struct ExerciseDetailView: View {
                         
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                ForEach(exercise.bodyParts, id: \.self) { part in
+                                ForEach(currentExercise.bodyParts, id: \.self) { part in
                                     Text(part)
                                         .font(.subheadline)
                                         .padding(.horizontal, 12)
@@ -59,7 +66,7 @@ struct ExerciseDetailView: View {
                         .font(.headline)
                         .padding(.horizontal)
                     
-                    Text(exercise.instructions)
+                    Text(currentExercise.instructions)
                         .font(.body)
                         .padding()
                         .background(Color(.systemGray6))
@@ -68,7 +75,7 @@ struct ExerciseDetailView: View {
                 }
                 
                 // YouTube Link
-                if let youtubeUrl = exercise.youtubeUrl, let url = URL(string: youtubeUrl) {
+                if let youtubeUrl = currentExercise.youtubeUrl, let url = URL(string: youtubeUrl) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Video Instructions")
                             .font(.headline)
@@ -100,7 +107,7 @@ struct ExerciseDetailView: View {
                             .padding(.horizontal)
                         
                         ForEach(history.prefix(5)) { entry in
-                            HistoryRow(entry: entry, exerciseType: exercise.exerciseType)
+                            HistoryRow(entry: entry, exerciseType: currentExercise.exerciseType)
                                 .padding(.horizontal)
                         }
                     }
@@ -134,14 +141,38 @@ struct ExerciseDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    showingEditExercise = true
+                } label: {
+                    Text("Edit")
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 ProfileMenuButton()
                     .environmentObject(AuthenticationManager.shared)
             }
         }
         .sheet(isPresented: $showingStartExercise) {
-            StartExerciseView(exercise: exercise, workoutId: nil)
+            StartExerciseView(exercise: currentExercise, workoutId: nil)
                 .environmentObject(exerciseManager)
+        }
+        .sheet(isPresented: $showingEditExercise) {
+            EditExerciseView(exercise: currentExercise)
+                .environmentObject(exerciseManager)
+                .onDisappear {
+                    // Refresh exercise data after editing
+                    Task {
+                        do {
+                            let updated = try await exerciseManager.getExercise(id: currentExercise.id)
+                            await MainActor.run {
+                                currentExercise = updated
+                            }
+                        } catch {
+                            print("Error refreshing exercise: \(error)")
+                        }
+                    }
+                }
         }
         .task {
             loadHistory()
@@ -149,7 +180,7 @@ struct ExerciseDetailView: View {
     }
     
     var typeColor: Color {
-        switch exercise.exerciseType {
+        switch currentExercise.exerciseType {
         case .weight:
             return .blue
         case .bodyweight:
@@ -166,7 +197,7 @@ struct ExerciseDetailView: View {
             await MainActor.run {
                 history = exerciseManager.recentLogs
                     .flatMap { $0.entries }
-                    .filter { $0.exerciseName == exercise.exerciseName || $0.exerciseId == exercise.id }
+                    .filter { $0.exerciseName == currentExercise.exerciseName || $0.exerciseId == currentExercise.id }
                     .sorted { entry1, entry2 in
                         // Sort by date (most recent first)
                         // This is a simplified version - in production, you'd want to sort by workout date
