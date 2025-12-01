@@ -45,22 +45,70 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
         temperature: 0.7,
       });
 
+      this.logger.debug("LLM response for exercise generation", {
+        exerciseName,
+        responseLength: response.length,
+        responsePreview: response.substring(0, 200),
+      });
+
       // Parse JSON response
       let exerciseData;
       try {
-        // Try to extract JSON from response (handle markdown code blocks)
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        // Clean up the response - remove markdown code blocks if present
+        let cleanedResponse = response.trim();
+
+        // Remove markdown code block markers
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/i, "");
+        cleanedResponse = cleanedResponse.replace(/^```\s*/i, "");
+        cleanedResponse = cleanedResponse.replace(/\s*```$/i, "");
+        cleanedResponse = cleanedResponse.trim();
+
+        // Try to extract JSON object from response
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           exerciseData = JSON.parse(jsonMatch[0]);
         } else {
-          exerciseData = JSON.parse(response);
+          // Try parsing the whole cleaned response
+          exerciseData = JSON.parse(cleanedResponse);
         }
       } catch (parseError) {
         this.logger.error("Failed to parse LLM response as JSON", {
-          response,
+          exerciseName,
+          response: response.substring(0, 500), // Log first 500 chars
           error: parseError.message,
         });
-        throw new Error("Failed to parse exercise details from LLM response");
+
+        // Fallback: create a basic exercise structure with inferred type
+        const nameLower = exerciseName.toLowerCase();
+        let inferredType = "weight";
+        if (
+          nameLower.includes("treadmill") ||
+          nameLower.includes("run") ||
+          nameLower.includes("jog")
+        ) {
+          inferredType = "treadmill";
+        } else if (
+          nameLower.includes("push") ||
+          nameLower.includes("pull") ||
+          nameLower.includes("squat") ||
+          nameLower.includes("plank") ||
+          nameLower.includes("sit-up") ||
+          nameLower.includes("crunch")
+        ) {
+          inferredType = "bodyweight";
+        }
+
+        this.logger.warn("Using fallback exercise data due to parse error", {
+          exerciseName,
+          inferredType,
+        });
+
+        exerciseData = {
+          instructions: `Perform ${exerciseName}. Focus on proper form and controlled movements.`,
+          youtube_url: null,
+          body_parts: [],
+          exercise_type: inferredType,
+        };
       }
 
       // Validate required fields

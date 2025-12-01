@@ -43,7 +43,11 @@ function createExerciseRouter(database, logger) {
         data: exercise,
       });
     } catch (error) {
-      logger.error("Error creating exercise:", error);
+      logger.error("Error creating exercise:", {
+        exerciseName,
+        error: error.message,
+        stack: error.stack,
+      });
       res.status(500).json({
         success: false,
         error: "Failed to create exercise",
