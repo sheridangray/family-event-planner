@@ -77,12 +77,12 @@ struct ExercisesListView: View {
                     .environmentObject(exerciseManager)
             }
         }
+        .task {
+            loadExercises()
+        }
         .navigationDestination(item: $selectedExercise) { exercise in
             ExerciseDetailView(exercise: exercise)
                 .environmentObject(exerciseManager)
-        }
-        .task {
-            loadExercises()
         }
     }
     
