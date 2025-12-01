@@ -308,7 +308,12 @@ class ExerciseManager: ObservableObject {
         guard httpResponse.statusCode == 200 else {
             let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let errorMsg = errorData?["error"] as? String ?? "Failed to fetch exercises"
-            throw ExerciseError.serverError(errorMsg)
+            let statusMsg = "Status \(httpResponse.statusCode): \(errorMsg)"
+            print("❌ Error fetching exercises: \(statusMsg)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("Response body: \(responseString)")
+            }
+            throw ExerciseError.serverError(statusMsg)
         }
         
         let decoder = JSONDecoder()
@@ -343,7 +348,12 @@ class ExerciseManager: ObservableObject {
         guard httpResponse.statusCode == 200 else {
             let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let errorMsg = errorData?["error"] as? String ?? "Failed to create exercise"
-            throw ExerciseError.serverError(errorMsg)
+            let statusMsg = "Status \(httpResponse.statusCode): \(errorMsg)"
+            print("❌ Error creating exercise: \(statusMsg)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("Response body: \(responseString)")
+            }
+            throw ExerciseError.serverError(statusMsg)
         }
         
         let decoder = JSONDecoder()

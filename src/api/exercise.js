@@ -53,32 +53,9 @@ function createExerciseRouter(database, logger) {
   });
 
   /**
-   * GET /api/exercise/exercises
-   * Get all exercises with pagination
-   */
-  router.get("/exercises", authenticateFlexible, async (req, res) => {
-    try {
-      const limit = req.query.limit ? parseInt(req.query.limit) : 50;
-      const offset = req.query.offset ? parseInt(req.query.offset) : 0;
-
-      const exercises = await exerciseService.getAllExercises(limit, offset);
-
-      res.json({
-        success: true,
-        data: exercises,
-      });
-    } catch (error) {
-      logger.error("Error fetching exercises:", error);
-      res.status(500).json({
-        success: false,
-        error: "Failed to fetch exercises",
-      });
-    }
-  });
-
-  /**
    * GET /api/exercise/exercises/search?q=query
    * Search exercises by name (autocomplete)
+   * NOTE: This must come before /exercises/:id to avoid route conflicts
    */
   router.get("/exercises/search", authenticateFlexible, async (req, res) => {
     try {
@@ -103,6 +80,32 @@ function createExerciseRouter(database, logger) {
       res.status(500).json({
         success: false,
         error: "Failed to search exercises",
+      });
+    }
+  });
+
+  /**
+   * GET /api/exercise/exercises
+   * Get all exercises with pagination
+   * NOTE: This comes after /exercises/search to avoid route conflicts
+   */
+  router.get("/exercises", authenticateFlexible, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+      const offset = req.query.offset ? parseInt(req.query.offset) : 0;
+
+      const exercises = await exerciseService.getAllExercises(limit, offset);
+
+      res.json({
+        success: true,
+        data: exercises,
+      });
+    } catch (error) {
+      logger.error("Error fetching exercises:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch exercises",
+        message: error.message,
       });
     }
   });
