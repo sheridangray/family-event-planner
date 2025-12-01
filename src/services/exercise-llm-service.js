@@ -22,7 +22,7 @@ class ExerciseLLMService {
 
 {
   "instructions": "Easy-to-follow step-by-step instructions for performing this exercise. Be clear and concise, breaking down the movement into numbered steps, each with a newline character.",
-  "youtube_url": "A YouTube video URL with instructions for this exercise. Search for a high-quality instructional video and provide the full URL. If no good video is found, return null.",
+  "youtube_url": "A YouTube video URL with instructions for this exercise. Validate that this is a valid and working YouTube video URL. Search for a high-quality instructional video and provide the full URL. If no good video is found, return null.",
   "body_parts": ["array", "of", "targeted", "body", "parts"],
   "exercise_type": "weight" | "bodyweight" | "treadmill"
 }
