@@ -3,7 +3,7 @@
  * Generates exercise details using LLM (instructions, YouTube link, body parts, type detection)
  */
 
-const { LLMAgeEvaluator } = require("./llm-age-evaluator");
+const LLMAgeEvaluator = require("./llm-age-evaluator");
 
 class ExerciseLLMService {
   constructor(logger) {
