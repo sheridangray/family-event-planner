@@ -16,104 +16,115 @@ struct ExerciseDetailView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(currentExercise.exerciseName)
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
-                    // Type badge
-                    Text(currentExercise.exerciseType.rawValue.capitalized)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(typeColor.opacity(0.2))
-                        .foregroundColor(typeColor)
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal)
-                
-                // Body Parts
-                if !currentExercise.bodyParts.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Body Parts Targeted")
-                            .font(.headline)
-                            .padding(.horizontal)
+        ZStack {
+            // Scrollable content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(currentExercise.exerciseName)
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
                         
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(currentExercise.bodyParts, id: \.self) { part in
-                                    Text(part)
-                                        .font(.subheadline)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.blue.opacity(0.2))
-                                        .foregroundColor(.blue)
-                                        .cornerRadius(8)
+                        // Type badge
+                        Text(currentExercise.exerciseType.rawValue.capitalized)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(typeColor.opacity(0.2))
+                            .foregroundColor(typeColor)
+                            .cornerRadius(8)
+                    }
+                    .padding(.horizontal)
+                    
+                    // Body Parts
+                    if !currentExercise.bodyParts.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Body Parts Targeted")
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(currentExercise.bodyParts, id: \.self) { part in
+                                        Text(part)
+                                            .font(.subheadline)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(Color.blue.opacity(0.2))
+                                            .foregroundColor(.blue)
+                                            .cornerRadius(8)
+                                    }
                                 }
+                                .padding(.horizontal)
                             }
-                            .padding(.horizontal)
                         }
                     }
-                }
-                
-                // Instructions
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Instructions")
-                        .font(.headline)
-                        .padding(.horizontal)
                     
-                    Text(currentExercise.instructions)
-                        .font(.body)
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                }
-                
-                // YouTube Link
-                if let youtubeUrl = currentExercise.youtubeUrl, let url = URL(string: youtubeUrl) {
+                    // YouTube Link (moved above Instructions)
+                    if let youtubeUrl = currentExercise.youtubeUrl, let url = URL(string: youtubeUrl) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Video Instructions")
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            Link(destination: url) {
+                                HStack {
+                                    Image(systemName: "play.circle.fill")
+                                        .font(.title2)
+                                    Text("Watch on YouTube")
+                                        .font(.headline)
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right.square")
+                                }
+                                .padding()
+                                .background(Color.red.opacity(0.1))
+                                .foregroundColor(.red)
+                                .cornerRadius(12)
+                                .padding(.horizontal)
+                            }
+                        }
+                    }
+                    
+                    // Instructions
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Video Instructions")
+                        Text("Instructions")
                             .font(.headline)
                             .padding(.horizontal)
                         
-                        Link(destination: url) {
-                            HStack {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.title2)
-                                Text("Watch on YouTube")
-                                    .font(.headline)
-                                Spacer()
-                                Image(systemName: "arrow.up.right.square")
-                            }
+                        Text(currentExercise.instructions)
+                            .font(.body)
                             .padding()
-                            .background(Color.red.opacity(0.1))
-                            .foregroundColor(.red)
+                            .background(Color(.systemGray6))
                             .cornerRadius(12)
                             .padding(.horizontal)
-                        }
                     }
-                }
-                
-                // History
-                if !history.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Previous Performances")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        ForEach(history.prefix(5)) { entry in
-                            HistoryRow(entry: entry, exerciseType: currentExercise.exerciseType)
+                    
+                    // History
+                    if !history.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Previous Performances")
+                                .font(.headline)
                                 .padding(.horizontal)
+                            
+                            ForEach(history.prefix(5)) { entry in
+                                HistoryRow(entry: entry, exerciseType: currentExercise.exerciseType)
+                                    .padding(.horizontal)
+                            }
                         }
                     }
+                    
+                    // Spacer to prevent content from being hidden behind fixed button
+                    Spacer()
+                        .frame(height: 100)
                 }
-                
-                // Start Exercise Button
+                .padding(.vertical)
+            }
+            
+            // Fixed Start Exercise Button at bottom
+            VStack {
+                Spacer()
                 Button {
                     showingStartExercise = true
                 } label: {
@@ -135,9 +146,13 @@ struct ExerciseDetailView: View {
                     .cornerRadius(12)
                 }
                 .padding(.horizontal)
-                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(
+                    // Add subtle shadow and background to make button stand out
+                    Color(.systemBackground)
+                        .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: -2)
+                )
             }
-            .padding(.vertical)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
