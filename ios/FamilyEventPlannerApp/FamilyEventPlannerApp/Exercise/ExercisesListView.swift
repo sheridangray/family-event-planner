@@ -147,35 +147,44 @@ struct ExerciseRow: View {
     }
     
     var body: some View {
-        HStack(spacing: 16) {
-            // Type icon
-            ZStack {
-                Circle()
-                    .fill(typeColor.opacity(0.2))
-                    .frame(width: 44, height: 44)
-                
-                Image(systemName: typeIcon)
-                    .foregroundColor(typeColor)
-                    .font(.title3)
-            }
-            
-            // Exercise info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(exercise.exerciseName)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                
-                if !exercise.bodyParts.isEmpty {
-                    Text(exercise.bodyParts.prefix(3).joined(separator: ", "))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+        HStack(spacing: 0) {
+            // Tappable area for detail view
+            Button(action: action) {
+                HStack(spacing: 16) {
+                    // Type icon
+                    ZStack {
+                        Circle()
+                            .fill(typeColor.opacity(0.2))
+                            .frame(width: 44, height: 44)
+                        
+                        Image(systemName: typeIcon)
+                            .foregroundColor(typeColor)
+                            .font(.title3)
+                    }
+                    
+                    // Exercise info
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(exercise.exerciseName)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        if !exercise.bodyParts.isEmpty {
+                            Text(exercise.bodyParts.prefix(3).joined(separator: ", "))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    
+                    Spacer()
                 }
+                .padding(.vertical, 8)
+                .padding(.leading, 0)
+                .padding(.trailing, 8)
             }
+            .buttonStyle(PlainButtonStyle())
             
-            Spacer()
-            
-            // Start button
+            // Start button - separate from tappable area
             NavigationLink {
                 StartExerciseView(exercise: exercise, workoutId: nil)
             } label: {
@@ -183,17 +192,11 @@ struct ExerciseRow: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .frame(maxHeight: .infinity)
+                    .padding(.horizontal, 20)
                     .background(typeColor)
-                    .cornerRadius(8)
             }
             .buttonStyle(PlainButtonStyle())
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            action()
         }
     }
 }
