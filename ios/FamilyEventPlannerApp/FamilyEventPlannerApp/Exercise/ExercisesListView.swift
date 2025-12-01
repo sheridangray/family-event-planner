@@ -147,52 +147,54 @@ struct ExerciseRow: View {
     }
     
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                // Type icon
-                ZStack {
-                    Circle()
-                        .fill(typeColor.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: typeIcon)
-                        .foregroundColor(typeColor)
-                        .font(.title3)
-                }
+        HStack(spacing: 16) {
+            // Type icon
+            ZStack {
+                Circle()
+                    .fill(typeColor.opacity(0.2))
+                    .frame(width: 44, height: 44)
                 
-                // Exercise info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(exercise.exerciseName)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    if !exercise.bodyParts.isEmpty {
-                        Text(exercise.bodyParts.prefix(3).joined(separator: ", "))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                
-                Spacer()
-                
-                // Type badge
-                Text(exercise.exerciseType.rawValue.capitalized)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(typeColor.opacity(0.2))
+                Image(systemName: typeIcon)
                     .foregroundColor(typeColor)
-                    .cornerRadius(8)
-                
-                Image(systemName: "chevron.right")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+                    .font(.title3)
             }
-            .padding(.vertical, 8)
+            
+            // Exercise info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(exercise.exerciseName)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                if !exercise.bodyParts.isEmpty {
+                    Text(exercise.bodyParts.prefix(3).joined(separator: ", "))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer()
+            
+            // Start button
+            NavigationLink {
+                StartExerciseView(exercise: exercise, workoutId: nil)
+            } label: {
+                Text("Start")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(typeColor)
+                    .cornerRadius(8)
+            }
+            .buttonStyle(PlainButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            action()
+        }
     }
 }
 
