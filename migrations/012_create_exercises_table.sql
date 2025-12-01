@@ -15,6 +15,15 @@ CREATE TABLE IF NOT EXISTS exercises (
 -- Enable pg_trgm extension for fuzzy text search if not already enabled
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+-- Create function to update updated_at timestamp if it doesn't exist
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Index for search/autocomplete
 CREATE INDEX IF NOT EXISTS idx_exercises_name ON exercises(exercise_name);
 CREATE INDEX IF NOT EXISTS idx_exercises_type ON exercises(exercise_type);
