@@ -8,6 +8,7 @@ struct ExercisesListView: View {
     @State private var isLoading = false
     @State private var showingAddExercise = false
     @State private var selectedExercise: Exercise?
+    @State private var exerciseToStart: Exercise?
     
     var filteredExercises: [Exercise] {
         if searchText.isEmpty {
@@ -38,8 +39,8 @@ struct ExercisesListView: View {
             } else if filteredExercises.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 50))
-                        .foregroundColor(.secondary)
+                    .font(.system(size: 50))
+                    .foregroundColor(.secondary)
                     Text(searchText.isEmpty ? "No exercises found" : "No exercises match '\(searchText)'")
                         .font(.headline)
                         .foregroundColor(.secondary)
@@ -53,9 +54,11 @@ struct ExercisesListView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(filteredExercises) { exercise in
-                    ExerciseRow(exercise: exercise) {
+                    ExerciseRow(exercise: exercise, action: {
                         selectedExercise = exercise
-                    }
+                    }, onStart: {
+                        exerciseToStart = exercise
+                    })
                     .listRowSeparator(.visible)
                     .listRowInsets(EdgeInsets())
                 }
@@ -69,7 +72,7 @@ struct ExercisesListView: View {
                 Button {
                     showingAddExercise = true
                 } label: {
-                    Image(systemName: "plus")
+                    Text("Add")
                 }
             }
         }
@@ -85,6 +88,9 @@ struct ExercisesListView: View {
         .navigationDestination(item: $selectedExercise) { exercise in
             ExerciseDetailView(exercise: exercise)
                 .environmentObject(exerciseManager)
+        }
+        .navigationDestination(item: $exerciseToStart) { exercise in
+            StartExerciseView(exercise: exercise, workoutId: nil)
         }
     }
     
@@ -125,6 +131,7 @@ struct ExercisesListView: View {
 struct ExerciseRow: View {
     let exercise: Exercise
     let action: () -> Void
+    let onStart: () -> Void
     
     var typeColor: Color {
         switch exercise.exerciseType {
@@ -149,7 +156,7 @@ struct ExerciseRow: View {
     }
     
     var body: some View {
-        ZStack(alignment: .trailing) {
+        HStack(spacing: 0) {
             // Tappable area for detail view - expands to fill space
             Button(action: action) {
                 HStack(spacing: 16) {
@@ -182,24 +189,20 @@ struct ExerciseRow: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.leading, 16)
-                .padding(.trailing, 110) // Make room for Start button
             }
             .buttonStyle(PlainButtonStyle())
-            .frame(maxWidth: .infinity, alignment: .leading)
             
             // Start button - positioned at far right
-            NavigationLink {
-                StartExerciseView(exercise: exercise, workoutId: nil)
-            } label: {
+            Button(action: onStart) {
                 Text("Start")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .frame(maxHeight: .infinity)
-                    .padding(.horizontal, 28)
-                    .background(typeColor)
+                    .frame(minWidth: 60)
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .padding(.trailing, 16)
+            .padding(.leading, 8)
         }
         .listRowInsets(EdgeInsets())
     }
@@ -224,7 +227,7 @@ struct SearchBar: View {
                     text = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                    .foregroundColor(.secondary)
                 }
             }
         }
@@ -239,4 +242,3 @@ struct SearchBar: View {
     ExercisesListView()
         .environmentObject(ExerciseManager.shared)
 }
-

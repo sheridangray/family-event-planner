@@ -1,11 +1,33 @@
 import Foundation
 
-// MARK: - Exercise Type
+// MARK: - Exercise Category
 
-enum ExerciseType: String, Codable {
-    case weight = "weight"
+enum ExerciseCategory: String, Codable, CaseIterable {
+    case barbellDumbbell = "barbell_dumbbell"
     case bodyweight = "bodyweight"
-    case treadmill = "treadmill"
+    case assisted = "assisted"
+    case machine = "machine"
+    case isometric = "isometric"
+    case cardioDistance = "cardio_distance"
+    case cardioTime = "cardio_time"
+    case interval = "interval"
+    case mobility = "mobility"
+    case skill = "skill"
+    
+    var displayName: String {
+        switch self {
+        case .barbellDumbbell: return "Barbell & Dumbbell"
+        case .bodyweight: return "Bodyweight"
+        case .assisted: return "Assisted"
+        case .machine: return "Machine"
+        case .isometric: return "Isometric"
+        case .cardioDistance: return "Cardio (Distance)"
+        case .cardioTime: return "Cardio (Time)"
+        case .interval: return "Interval / HIIT"
+        case .mobility: return "Mobility"
+        case .skill: return "Skill"
+        }
+    }
 }
 
 // MARK: - Exercise
@@ -16,7 +38,7 @@ struct Exercise: Codable, Identifiable, Hashable {
     let instructions: String
     let youtubeUrl: String?
     let bodyParts: [String]
-    let exerciseType: ExerciseType
+    let exerciseType: ExerciseCategory // Mapped from 'category' column
     let createdAt: String?
     let updatedAt: String?
     
@@ -26,7 +48,7 @@ struct Exercise: Codable, Identifiable, Hashable {
         case instructions
         case youtubeUrl = "youtube_url"
         case bodyParts = "body_parts"
-        case exerciseType = "exercise_type"
+        case exerciseType = "category" // Map 'category' from DB to 'exerciseType' property
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -46,13 +68,33 @@ struct Exercise: Codable, Identifiable, Hashable {
 struct ExerciseSet: Codable, Identifiable {
     var id: UUID
     var reps: Int?
-    var weight: Double? // For weight exercises
+    var weight: Double?
     var restSeconds: Int?
-    var incline: Double? // For treadmill (%)
-    var speed: Double? // For treadmill (MPH)
-    var duration: Int? // For treadmill (seconds)
+    var incline: Double?
+    var speed: Double?
+    var duration: Int?
+    var distance: Double?
+    var bandLevel: String?
+    var resistanceLevel: String?
+    var calories: Int?
+    var heartRate: Int?
+    var rpe: Int?
     
-    init(id: UUID = UUID(), reps: Int? = nil, weight: Double? = nil, restSeconds: Int? = nil, incline: Double? = nil, speed: Double? = nil, duration: Int? = nil) {
+    init(
+        id: UUID = UUID(),
+        reps: Int? = nil,
+        weight: Double? = nil,
+        restSeconds: Int? = nil,
+        incline: Double? = nil,
+        speed: Double? = nil,
+        duration: Int? = nil,
+        distance: Double? = nil,
+        bandLevel: String? = nil,
+        resistanceLevel: String? = nil,
+        calories: Int? = nil,
+        heartRate: Int? = nil,
+        rpe: Int? = nil
+    ) {
         self.id = id
         self.reps = reps
         self.weight = weight
@@ -60,11 +102,18 @@ struct ExerciseSet: Codable, Identifiable {
         self.incline = incline
         self.speed = speed
         self.duration = duration
+        self.distance = distance
+        self.bandLevel = bandLevel
+        self.resistanceLevel = resistanceLevel
+        self.calories = calories
+        self.heartRate = heartRate
+        self.rpe = rpe
     }
     
     // Custom Codable implementation to exclude id from encoding/decoding
     enum CodingKeys: String, CodingKey {
         case reps, weight, restSeconds, incline, speed, duration
+        case distance, bandLevel, resistanceLevel, calories, heartRate, rpe
     }
     
     init(from decoder: Decoder) throws {
@@ -76,6 +125,12 @@ struct ExerciseSet: Codable, Identifiable {
         incline = try container.decodeIfPresent(Double.self, forKey: .incline)
         speed = try container.decodeIfPresent(Double.self, forKey: .speed)
         duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+        distance = try container.decodeIfPresent(Double.self, forKey: .distance)
+        bandLevel = try container.decodeIfPresent(String.self, forKey: .bandLevel)
+        resistanceLevel = try container.decodeIfPresent(String.self, forKey: .resistanceLevel)
+        calories = try container.decodeIfPresent(Int.self, forKey: .calories)
+        heartRate = try container.decodeIfPresent(Int.self, forKey: .heartRate)
+        rpe = try container.decodeIfPresent(Int.self, forKey: .rpe)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -86,6 +141,12 @@ struct ExerciseSet: Codable, Identifiable {
         try container.encodeIfPresent(incline, forKey: .incline)
         try container.encodeIfPresent(speed, forKey: .speed)
         try container.encodeIfPresent(duration, forKey: .duration)
+        try container.encodeIfPresent(distance, forKey: .distance)
+        try container.encodeIfPresent(bandLevel, forKey: .bandLevel)
+        try container.encodeIfPresent(resistanceLevel, forKey: .resistanceLevel)
+        try container.encodeIfPresent(calories, forKey: .calories)
+        try container.encodeIfPresent(heartRate, forKey: .heartRate)
+        try container.encodeIfPresent(rpe, forKey: .rpe)
     }
 }
 
@@ -94,7 +155,7 @@ struct ExerciseSet: Codable, Identifiable {
 struct ExerciseSession: Codable {
     let exerciseId: Int
     let exerciseName: String
-    let exerciseType: ExerciseType
+    let exerciseType: ExerciseCategory
     var sets: [ExerciseSet]
     let notes: String?
     let equipmentUsed: String?
@@ -102,7 +163,7 @@ struct ExerciseSession: Codable {
     enum CodingKeys: String, CodingKey {
         case exerciseId = "exercise_id"
         case exerciseName = "exercise_name"
-        case exerciseType = "exercise_type"
+        case exerciseType = "category" // Map 'category'
         case sets
         case notes
         case equipmentUsed = "equipment_used"
@@ -223,6 +284,16 @@ struct ExerciseLogEntry: Codable, Identifiable {
     let notes: String?
     let difficultyRating: Int?
     
+    // New fields (arrays matching sets)
+    let distanceMeters: [Double]
+    let bandLevel: [String]
+    let resistanceLevel: [String]
+    let inclinePercentage: [Double]
+    let calories: [Int]
+    let heartRate: [Int]
+    let speedMph: [Double]
+    let rpe: [Int]
+    
     enum CodingKeys: String, CodingKey {
         case id
         case logId = "log_id"
@@ -237,6 +308,15 @@ struct ExerciseLogEntry: Codable, Identifiable {
         case restSeconds = "rest_seconds"
         case notes
         case difficultyRating = "difficulty_rating"
+        
+        case distanceMeters = "distance_meters"
+        case bandLevel = "band_level"
+        case resistanceLevel = "resistance_level"
+        case inclinePercentage = "incline_percentage"
+        case calories
+        case heartRate = "heart_rate"
+        case speedMph = "speed_mph"
+        case rpe
     }
     
     // Regular initializer for creating instances programmatically
@@ -253,7 +333,15 @@ struct ExerciseLogEntry: Codable, Identifiable {
         durationSeconds: [Int],
         restSeconds: Int?,
         notes: String?,
-        difficultyRating: Int?
+        difficultyRating: Int?,
+        distanceMeters: [Double] = [],
+        bandLevel: [String] = [],
+        resistanceLevel: [String] = [],
+        inclinePercentage: [Double] = [],
+        calories: [Int] = [],
+        heartRate: [Int] = [],
+        speedMph: [Double] = [],
+        rpe: [Int] = []
     ) {
         self.id = id
         self.logId = logId
@@ -268,9 +356,17 @@ struct ExerciseLogEntry: Codable, Identifiable {
         self.restSeconds = restSeconds
         self.notes = notes
         self.difficultyRating = difficultyRating
+        self.distanceMeters = distanceMeters
+        self.bandLevel = bandLevel
+        self.resistanceLevel = resistanceLevel
+        self.inclinePercentage = inclinePercentage
+        self.calories = calories
+        self.heartRate = heartRate
+        self.speedMph = speedMph
+        self.rpe = rpe
     }
     
-    // Custom decoder to handle JSONB arrays that might come as JSON strings
+    // Custom decoder to handle JSONB arrays
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(Int.self, forKey: .id)
@@ -284,44 +380,42 @@ struct ExerciseLogEntry: Codable, Identifiable {
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         difficultyRating = try container.decodeIfPresent(Int.self, forKey: .difficultyRating)
         
-        // Handle reps_performed - could be array or JSON string
-        if let repsArray = try? container.decode([Int].self, forKey: .repsPerformed) {
-            repsPerformed = repsArray
-        } else if let repsString = try? container.decode(String.self, forKey: .repsPerformed),
-                  let data = repsString.data(using: .utf8),
-                  let repsArray = try? JSONDecoder().decode([Int].self, from: data) {
-            repsPerformed = repsArray
-        } else {
-            repsPerformed = []
+        // Helper to decode array or JSON string
+        func decodeArray<T: Decodable>(_ key: CodingKeys) -> [T] {
+            if let array = try? container.decode([T].self, forKey: key) {
+                return array
+            } else if let string = try? container.decode(String.self, forKey: key),
+                      let data = string.data(using: .utf8),
+                      let array = try? JSONDecoder().decode([T].self, from: data) {
+                return array
+            }
+            return []
         }
         
-        // Handle weight_used - could be array or JSON string, may contain nulls
+        repsPerformed = decodeArray(.repsPerformed)
+        // weightUsed needs special handling for nulls
         if let weightArray = try? container.decode([Double?].self, forKey: .weightUsed) {
             weightUsed = weightArray
         } else if let weightString = try? container.decode(String.self, forKey: .weightUsed),
                   let data = weightString.data(using: .utf8) {
-            // Try decoding as array of doubles or nulls
-            if let weightArray = try? JSONDecoder().decode([Double?].self, from: data) {
+             if let weightArray = try? JSONDecoder().decode([Double?].self, from: data) {
                 weightUsed = weightArray
-            } else if let weightArray = try? JSONDecoder().decode([Double].self, from: data) {
-                weightUsed = weightArray.map { $0 }
-            } else {
+             } else {
                 weightUsed = []
-            }
+             }
         } else {
             weightUsed = []
         }
         
-        // Handle duration_seconds - could be array or JSON string
-        if let durationArray = try? container.decode([Int].self, forKey: .durationSeconds) {
-            durationSeconds = durationArray
-        } else if let durationString = try? container.decode(String.self, forKey: .durationSeconds),
-                  let data = durationString.data(using: .utf8),
-                  let durationArray = try? JSONDecoder().decode([Int].self, from: data) {
-            durationSeconds = durationArray
-        } else {
-            durationSeconds = []
-        }
+        durationSeconds = decodeArray(.durationSeconds)
+        distanceMeters = decodeArray(.distanceMeters)
+        bandLevel = decodeArray(.bandLevel)
+        resistanceLevel = decodeArray(.resistanceLevel)
+        inclinePercentage = decodeArray(.inclinePercentage)
+        calories = decodeArray(.calories)
+        heartRate = decodeArray(.heartRate)
+        speedMph = decodeArray(.speedMph)
+        rpe = decodeArray(.rpe)
     }
 }
 
@@ -560,4 +654,3 @@ struct StartExerciseData: Codable {
     let exercise: Exercise
     let workoutId: Int?
 }
-

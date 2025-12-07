@@ -1,5 +1,151 @@
 import SwiftUI
 
+/// Reusable content view for exercise details
+struct ExerciseDetailContent: View {
+    let exercise: Exercise
+    @EnvironmentObject var exerciseManager: ExerciseManager
+    @State private var history: [ExerciseLogEntry] = []
+    @State private var isLoadingHistory = false
+    
+    var typeColor: Color {
+        switch exercise.exerciseType {
+        case .weight:
+            return .blue
+        case .bodyweight:
+            return .green
+        case .treadmill:
+            return .orange
+        }
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(exercise.exerciseName)
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    // Type badge
+                    Text(exercise.exerciseType.rawValue.capitalized)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(typeColor.opacity(0.2))
+                        .foregroundColor(typeColor)
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal)
+                
+                // Body Parts
+                if !exercise.bodyParts.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Body Parts Targeted")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(exercise.bodyParts, id: \.self) { part in
+                                    Text(part)
+                                        .font(.subheadline)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.blue.opacity(0.2))
+                                        .foregroundColor(.blue)
+                                        .cornerRadius(8)
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                    }
+                }
+                
+                // YouTube Link (moved above Instructions)
+                if let youtubeUrl = exercise.youtubeUrl, let url = URL(string: youtubeUrl) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Video Instructions")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        
+                        Link(destination: url) {
+                            HStack {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.title2)
+                                    Text("Watch on YouTube")
+                                    .font(.headline)
+                                Spacer()
+                                Image(systemName: "arrow.up.right.square")
+                            }
+                            .padding()
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                        }
+                    }
+                }
+                
+                // Instructions
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Instructions")
+                        .font(.headline)
+                        .padding(.horizontal)
+                    
+                    Text(exercise.instructions)
+                        .font(.body)
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                }
+                
+                // History
+                if !history.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Previous Performances")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        
+                        ForEach(history.prefix(5)) { entry in
+                            HistoryRow(entry: entry, exerciseType: exercise.exerciseType)
+                                .padding(.horizontal)
+                        }
+                    }
+                }
+                
+                // Spacer to prevent content from being hidden behind fixed button
+                Spacer()
+                    .frame(height: 100)
+            }
+            .padding(.vertical)
+        }
+        .task {
+            loadHistory()
+        }
+    }
+    
+    private func loadHistory() {
+        isLoadingHistory = true
+        Task {
+            // Load history from recent logs
+            await MainActor.run {
+                history = exerciseManager.recentLogs
+                    .flatMap { $0.entries }
+                    .filter { $0.exerciseName == exercise.exerciseName || $0.exerciseId == exercise.id }
+                    .sorted { entry1, entry2 in
+                        // Sort by date (most recent first)
+                        // This is a simplified version - in production, you'd want to sort by workout date
+                        return true
+                    }
+                isLoadingHistory = false
+            }
+        }
+    }
+}
+
 /// Detail view for an exercise showing instructions, YouTube link, body parts, and history
 struct ExerciseDetailView: View {
     let exercise: Exercise
@@ -7,120 +153,28 @@ struct ExerciseDetailView: View {
     @State private var showingStartExercise = false
     @State private var showingEditExercise = false
     @State private var currentExercise: Exercise
-    @State private var history: [ExerciseLogEntry] = []
-    @State private var isLoadingHistory = false
     
     init(exercise: Exercise) {
         self.exercise = exercise
         _currentExercise = State(initialValue: exercise)
     }
     
+    var typeColor: Color {
+        switch currentExercise.exerciseType {
+        case .weight:
+            return .blue
+        case .bodyweight:
+            return .green
+        case .treadmill:
+            return .orange
+        }
+    }
+    
     var body: some View {
         ZStack {
-            // Scrollable content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Header
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(currentExercise.exerciseName)
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                        
-                        // Type badge
-                        Text(currentExercise.exerciseType.rawValue.capitalized)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(typeColor.opacity(0.2))
-                            .foregroundColor(typeColor)
-                            .cornerRadius(8)
-                    }
-                    .padding(.horizontal)
-                    
-                    // Body Parts
-                    if !currentExercise.bodyParts.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Body Parts Targeted")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(currentExercise.bodyParts, id: \.self) { part in
-                                        Text(part)
-                                            .font(.subheadline)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color.blue.opacity(0.2))
-                                            .foregroundColor(.blue)
-                                            .cornerRadius(8)
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
-                    }
-                    
-                    // YouTube Link (moved above Instructions)
-                    if let youtubeUrl = currentExercise.youtubeUrl, let url = URL(string: youtubeUrl) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Video Instructions")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            Link(destination: url) {
-                                HStack {
-                                    Image(systemName: "play.circle.fill")
-                                        .font(.title2)
-                                    Text("Watch on YouTube")
-                                        .font(.headline)
-                                    Spacer()
-                                    Image(systemName: "arrow.up.right.square")
-                                }
-                                .padding()
-                                .background(Color.red.opacity(0.1))
-                                .foregroundColor(.red)
-                                .cornerRadius(12)
-                                .padding(.horizontal)
-                            }
-                        }
-                    }
-                    
-                    // Instructions
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Instructions")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        Text(currentExercise.instructions)
-                            .font(.body)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                    }
-                    
-                    // History
-                    if !history.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Previous Performances")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            ForEach(history.prefix(5)) { entry in
-                                HistoryRow(entry: entry, exerciseType: currentExercise.exerciseType)
-                                    .padding(.horizontal)
-                            }
-                        }
-                    }
-                    
-                    // Spacer to prevent content from being hidden behind fixed button
-                    Spacer()
-                        .frame(height: 100)
-                }
-                .padding(.vertical)
-            }
+            // Reusable Content
+            ExerciseDetailContent(exercise: currentExercise)
+                .environmentObject(exerciseManager)
             
             // Fixed Start Exercise Button at bottom
             VStack {
@@ -154,18 +208,20 @@ struct ExerciseDetailView: View {
                 )
             }
         }
+        .background(Color(.systemBackground))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    showingEditExercise = true
-                } label: {
-                    Text("Edit")
-                }
-            }
             ToolbarItem(placement: .navigationBarTrailing) {
-                ProfileMenuButton()
-                    .environmentObject(AuthenticationManager.shared)
+                HStack {
+                    Button {
+                        showingEditExercise = true
+                    } label: {
+                        Text("Edit")
+                    }
+                    
+                    ProfileMenuButton()
+                        .environmentObject(AuthenticationManager.shared)
+                }
             }
         }
         .sheet(isPresented: $showingStartExercise) {
@@ -188,38 +244,6 @@ struct ExerciseDetailView: View {
                         }
                     }
                 }
-        }
-        .task {
-            loadHistory()
-        }
-    }
-    
-    var typeColor: Color {
-        switch currentExercise.exerciseType {
-        case .weight:
-            return .blue
-        case .bodyweight:
-            return .green
-        case .treadmill:
-            return .orange
-        }
-    }
-    
-    private func loadHistory() {
-        isLoadingHistory = true
-        Task {
-            // Load history from recent logs
-            await MainActor.run {
-                history = exerciseManager.recentLogs
-                    .flatMap { $0.entries }
-                    .filter { $0.exerciseName == currentExercise.exerciseName || $0.exerciseId == currentExercise.id }
-                    .sorted { entry1, entry2 in
-                        // Sort by date (most recent first)
-                        // This is a simplified version - in production, you'd want to sort by workout date
-                        return true
-                    }
-                isLoadingHistory = false
-            }
         }
     }
 }
@@ -287,4 +311,3 @@ struct HistoryRow: View {
         .environmentObject(ExerciseManager.shared)
     }
 }
-

@@ -183,11 +183,11 @@ struct ExercisesSelectionView: View {
                     .padding()
                 
                 List(filteredExercises) { exercise in
-                    Button {
-                        selectedExercise = exercise
-                    } label: {
-                        ExerciseRow(exercise: exercise) {}
-                    }
+                    ExerciseRow(
+                        exercise: exercise,
+                        action: { selectedExercise = exercise },
+                        onStart: { selectedExercise = exercise }
+                    )
                 }
                 .listStyle(.plain)
             }

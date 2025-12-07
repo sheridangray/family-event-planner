@@ -323,12 +323,21 @@ class ExerciseService {
       if (entries && entries.length > 0) {
         for (let i = 0; i < entries.length; i++) {
           const entry = entries[i];
+          
+          // Prepare data arrays for new fields
+          // Use entry fields directly if they are pre-formatted arrays, or extract from nested sets if necessary
+          // The addExerciseToWorkout method handles the array construction from sets
+          // Here we assume 'entries' might come from a direct API call matching the new schema or old
+          // For robust support, we'll rely on the values passed being correct or defaulted to []
+          
           await this.database.query(
             `INSERT INTO exercise_log_entries (
               log_id, exercise_name, exercise_order, equipment_used,
               sets_performed, reps_performed, weight_used, duration_seconds,
-              rest_seconds, notes, difficulty_rating
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+              rest_seconds, notes, difficulty_rating,
+              distance_meters, band_level, resistance_level, incline_percentage,
+              calories, heart_rate, speed_mph, rpe
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
             [
               log.id,
               entry.exerciseName,
@@ -341,6 +350,14 @@ class ExerciseService {
               entry.restSeconds || null,
               entry.notes || null,
               entry.difficultyRating || null,
+              JSON.stringify(entry.distanceMeters || []),
+              JSON.stringify(entry.bandLevel || []),
+              JSON.stringify(entry.resistanceLevel || []),
+              JSON.stringify(entry.inclinePercentage || []),
+              JSON.stringify(entry.calories || []),
+              JSON.stringify(entry.heartRate || []),
+              JSON.stringify(entry.speedMph || []),
+              JSON.stringify(entry.rpe || [])
             ]
           );
         }
@@ -389,6 +406,14 @@ class ExerciseService {
         repsPerformed: entry.reps_performed || [],
         weightUsed: entry.weight_used || [],
         durationSeconds: entry.duration_seconds || [],
+        distanceMeters: entry.distance_meters || [],
+        bandLevel: entry.band_level || [],
+        resistanceLevel: entry.resistance_level || [],
+        inclinePercentage: entry.incline_percentage || [],
+        calories: entry.calories || [],
+        heartRate: entry.heart_rate || [],
+        speedMph: entry.speed_mph || [],
+        rpe: entry.rpe || [],
       }));
 
       return log;
@@ -587,8 +612,8 @@ class ExerciseService {
 
       // Insert exercise
       const result = await this.database.query(
-        `INSERT INTO exercises (exercise_name, instructions, youtube_url, body_parts, exercise_type)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO exercises (exercise_name, instructions, youtube_url, body_parts, exercise_type, category)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *`,
         [
           exerciseName,
@@ -596,6 +621,7 @@ class ExerciseService {
           details.youtubeUrl,
           details.bodyParts,
           details.exerciseType,
+          details.category || 'barbell_dumbbell', // Default to barbell/dumbbell
         ]
       );
 
@@ -694,6 +720,10 @@ class ExerciseService {
       if (updates.exerciseType !== undefined) {
         fields.push(`exercise_type = $${paramIndex++}`);
         values.push(updates.exerciseType);
+      }
+      if (updates.category !== undefined) {
+        fields.push(`category = $${paramIndex++}`);
+        values.push(updates.category);
       }
 
       if (fields.length === 0) {
@@ -809,23 +839,33 @@ class ExerciseService {
       );
       const nextOrder = (maxOrderResult.rows[0].max_order || 0) + 1;
 
-      // Prepare sets data based on exercise type
+      // Prepare sets data based on exercise type/category
       const sets = setsData.sets || [];
       const repsPerformed = [];
       const weightUsed = [];
       const durationSeconds = [];
+      const distanceMeters = [];
+      const bandLevel = [];
+      const resistanceLevel = [];
+      const inclinePercentage = [];
+      const calories = [];
+      const heartRate = [];
+      const speedMph = [];
+      const rpe = [];
       const restSeconds = setsData.restSeconds || null;
 
       for (const set of sets) {
-        if (exercise.exercise_type === 'treadmill') {
-          durationSeconds.push(set.duration || null);
-          // For treadmill, we might store incline/speed in notes or separate fields
-        } else {
-          repsPerformed.push(set.reps || null);
-          if (exercise.exercise_type === 'weight') {
-            weightUsed.push(set.weight || null);
-          }
-        }
+        repsPerformed.push(set.reps || null);
+        weightUsed.push(set.weight || null);
+        durationSeconds.push(set.duration || null);
+        distanceMeters.push(set.distance || null);
+        bandLevel.push(set.bandLevel || null);
+        resistanceLevel.push(set.resistanceLevel || null);
+        inclinePercentage.push(set.incline || null);
+        calories.push(set.calories || null);
+        heartRate.push(set.heartRate || null);
+        speedMph.push(set.speed || null);
+        rpe.push(set.rpe || null);
       }
 
       // Insert exercise entry
@@ -833,8 +873,10 @@ class ExerciseService {
         `INSERT INTO exercise_log_entries (
           log_id, exercise_id, exercise_name, exercise_order,
           equipment_used, sets_performed, reps_performed, weight_used,
-          duration_seconds, rest_seconds, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          duration_seconds, rest_seconds, notes, difficulty_rating,
+          distance_meters, band_level, resistance_level, incline_percentage,
+          calories, heart_rate, speed_mph, rpe
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
         [
           workoutId,
           exerciseId,
@@ -847,6 +889,15 @@ class ExerciseService {
           JSON.stringify(durationSeconds),
           restSeconds,
           setsData.notes || null,
+          setsData.difficultyRating || null,
+          JSON.stringify(distanceMeters),
+          JSON.stringify(bandLevel),
+          JSON.stringify(resistanceLevel),
+          JSON.stringify(inclinePercentage),
+          JSON.stringify(calories),
+          JSON.stringify(heartRate),
+          JSON.stringify(speedMph),
+          JSON.stringify(rpe)
         ]
       );
 
@@ -903,13 +954,29 @@ class ExerciseService {
         const reps = entry.repsPerformed || [];
         const weights = entry.weightUsed || [];
         const durations = entry.durationSeconds || [];
+        const distances = entry.distanceMeters || [];
+        const bands = entry.bandLevel || [];
+        const resistances = entry.resistanceLevel || [];
+        const inclines = entry.inclinePercentage || [];
+        const cals = entry.calories || [];
+        const hrs = entry.heartRate || [];
+        const speeds = entry.speedMph || [];
+        const rpes = entry.rpe || [];
 
-        const maxLength = Math.max(reps.length, weights.length, durations.length);
+        const maxLength = Math.max(reps.length, weights.length, durations.length, distances.length);
         for (let i = 0; i < maxLength; i++) {
           sets.push({
             reps: reps[i] || null,
             weight: weights[i] || null,
             duration: durations[i] || null,
+            distance: distances[i] || null,
+            bandLevel: bands[i] || null,
+            resistanceLevel: resistances[i] || null,
+            incline: inclines[i] || null,
+            calories: cals[i] || null,
+            heartRate: hrs[i] || null,
+            speed: speeds[i] || null,
+            rpe: rpes[i] || null,
           });
         }
 
@@ -946,4 +1013,3 @@ class ExerciseService {
 }
 
 module.exports = ExerciseService;
-
