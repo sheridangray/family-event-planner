@@ -40,7 +40,7 @@ struct AddExerciseView: View {
                         HStack {
                             Text("Type")
                             Spacer()
-                            Text(exercise.exerciseType.rawValue.capitalized)
+                            Text(exercise.exerciseType.displayName)
                                 .foregroundColor(.secondary)
                         }
                         

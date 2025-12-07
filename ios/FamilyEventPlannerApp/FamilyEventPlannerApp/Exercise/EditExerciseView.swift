@@ -10,7 +10,7 @@ struct EditExerciseView: View {
     @State private var instructions: String
     @State private var youtubeUrl: String
     @State private var bodyParts: [String]
-    @State private var exerciseType: ExerciseType
+    @State private var exerciseType: ExerciseCategory
     @State private var newBodyPart: String = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -39,9 +39,9 @@ struct EditExerciseView: View {
                 
                 Section {
                     Picker("Exercise Type", selection: $exerciseType) {
-                        Text("Weight").tag(ExerciseType.weight)
-                        Text("Bodyweight").tag(ExerciseType.bodyweight)
-                        Text("Treadmill").tag(ExerciseType.treadmill)
+                        ForEach(ExerciseCategory.allCases, id: \.self) { category in
+                            Text(category.displayName).tag(category)
+                        }
                     }
                 } header: {
                     Text("Exercise Type")
@@ -170,7 +170,7 @@ struct EditExerciseView: View {
         instructions: "Lie on bench, lower bar to chest, press up",
         youtubeUrl: "https://youtube.com/watch?v=example",
         bodyParts: ["chest", "shoulders", "triceps"],
-        exerciseType: .weight,
+        exerciseType: .barbellDumbbell,
         createdAt: nil,
         updatedAt: nil
     ))

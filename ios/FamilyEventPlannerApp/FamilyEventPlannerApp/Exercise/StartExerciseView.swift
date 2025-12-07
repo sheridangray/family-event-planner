@@ -37,7 +37,7 @@ struct StartExerciseView: View {
     // Helper for dynamic labels
     var labels: (String, String, String) {
         switch exercise.exerciseType {
-        case .barbellDumbbell, .machine, .weight:
+        case .barbellDumbbell, .machine:
             return ("Repetitions", "Lbs", "Rest")
         case .bodyweight:
             return ("Repetitions", "Lbs (+/-)", "Rest")
@@ -412,7 +412,7 @@ struct SetRowView: View {
             // COLUMN 2 (Secondary Metric)
             VStack(spacing: 4) {
                 switch exerciseType {
-                case .barbellDumbbell, .machine, .weight, .isometric, .bodyweight, .mobility, .skill:
+                case .barbellDumbbell, .machine, .isometric, .bodyweight, .mobility, .skill:
                     // Weight (Optional for some)
                     TextField("0", value: $set.weight, format: .number)
                         .keyboardType(.decimalPad)

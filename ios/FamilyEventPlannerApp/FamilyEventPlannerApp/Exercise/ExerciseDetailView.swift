@@ -9,12 +9,16 @@ struct ExerciseDetailContent: View {
     
     var typeColor: Color {
         switch exercise.exerciseType {
-        case .weight:
+        case .barbellDumbbell, .machine:
             return .blue
-        case .bodyweight:
+        case .bodyweight, .assisted:
             return .green
-        case .treadmill:
+        case .cardioDistance, .cardioTime, .interval:
             return .orange
+        case .isometric, .mobility:
+            return .purple
+        case .skill:
+            return .indigo
         }
     }
     
@@ -28,7 +32,7 @@ struct ExerciseDetailContent: View {
                         .fontWeight(.bold)
                     
                     // Type badge
-                    Text(exercise.exerciseType.rawValue.capitalized)
+                    Text(exercise.exerciseType.displayName)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .padding(.horizontal, 12)
@@ -161,12 +165,16 @@ struct ExerciseDetailView: View {
     
     var typeColor: Color {
         switch currentExercise.exerciseType {
-        case .weight:
+        case .barbellDumbbell, .machine:
             return .blue
-        case .bodyweight:
+        case .bodyweight, .assisted:
             return .green
-        case .treadmill:
+        case .cardioDistance, .cardioTime, .interval:
             return .orange
+        case .isometric, .mobility:
+            return .purple
+        case .skill:
+            return .indigo
         }
     }
     
@@ -252,7 +260,7 @@ struct ExerciseDetailView: View {
 
 struct HistoryRow: View {
     let entry: ExerciseLogEntry
-    let exerciseType: ExerciseType
+    let exerciseType: ExerciseCategory
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -263,36 +271,42 @@ struct HistoryRow: View {
                 Spacer()
             }
             
-            if exerciseType == .weight {
-                let weights = entry.weightUsed.compactMap { $0 }
-                if !weights.isEmpty {
+            Group {
+                // Weight
+                if entry.weightUsed.contains(where: { $0 != nil }) {
+                    let weights = entry.weightUsed.compactMap { $0 }
                     Text("Weights: \(weights.map { String(format: "%.0f", $0) }.joined(separator: ", ")) lbs")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
-                if !entry.repsPerformed.isEmpty {
-                    Text("Reps: \(entry.repsPerformed.map { String($0) }.joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                
+                // Reps
+                if entry.repsPerformed.contains(where: { $0 != nil }) {
+                    let reps = entry.repsPerformed.compactMap { $0 }
+                    Text("Reps: \(reps.map { String($0) }.joined(separator: ", "))")
                 }
-            } else if exerciseType == .bodyweight {
-                if !entry.repsPerformed.isEmpty {
-                    Text("Reps: \(entry.repsPerformed.map { String($0) }.joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                
+                // Distance
+                if !entry.distanceMeters.isEmpty {
+                    Text("Distance: \(entry.distanceMeters.map { String(format: "%.0f m", $0) }.joined(separator: ", "))")
                 }
-            } else if exerciseType == .treadmill {
-                if !entry.durationSeconds.isEmpty {
-                    let durations = entry.durationSeconds.map { "\($0 / 60) min" }
-                    Text("Duration: \(durations.joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                
+                // Duration
+                if entry.durationSeconds.contains(where: { $0 != nil }) {
+                    let durations = entry.durationSeconds.compactMap { $0 }
+                    Text("Duration: \(durations.map { formatDuration($0) }.joined(separator: ", "))")
                 }
             }
+            .font(.caption)
+            .foregroundColor(.secondary)
         }
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(8)
+    }
+    
+    private func formatDuration(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        let remainingSeconds = seconds % 60
+        return String(format: "%d:%02d", minutes, remainingSeconds)
     }
 }
 
@@ -304,7 +318,7 @@ struct HistoryRow: View {
             instructions: "Lie on bench, lower bar to chest, press up",
             youtubeUrl: "https://youtube.com/watch?v=example",
             bodyParts: ["chest", "shoulders", "triceps"],
-            exerciseType: .weight,
+            exerciseType: .barbellDumbbell,
             createdAt: nil,
             updatedAt: nil
         ))

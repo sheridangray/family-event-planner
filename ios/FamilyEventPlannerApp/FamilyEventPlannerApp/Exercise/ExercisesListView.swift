@@ -135,23 +135,31 @@ struct ExerciseRow: View {
     
     var typeColor: Color {
         switch exercise.exerciseType {
-        case .weight:
+        case .barbellDumbbell, .machine:
             return .blue
-        case .bodyweight:
+        case .bodyweight, .assisted:
             return .green
-        case .treadmill:
+        case .cardioDistance, .cardioTime, .interval:
             return .orange
+        case .isometric, .mobility:
+            return .purple
+        case .skill:
+            return .indigo
         }
     }
     
     var typeIcon: String {
         switch exercise.exerciseType {
-        case .weight:
-            return "dumbbell.fill"
-        case .bodyweight:
-            return "figure.walk"
-        case .treadmill:
-            return "figure.run"
+        case .barbellDumbbell: return "dumbbell.fill"
+        case .bodyweight: return "figure.walk"
+        case .assisted: return "figure.mixed.cardio"
+        case .machine: return "gearshape.fill"
+        case .isometric: return "timer"
+        case .cardioDistance: return "figure.run"
+        case .cardioTime: return "heart.fill"
+        case .interval: return "stopwatch.fill"
+        case .mobility: return "figure.mind.and.body"
+        case .skill: return "star.fill"
         }
     }
     
