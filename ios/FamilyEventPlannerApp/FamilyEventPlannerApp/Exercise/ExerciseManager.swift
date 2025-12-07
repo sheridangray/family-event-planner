@@ -401,7 +401,7 @@ class ExerciseManager: ObservableObject {
         instructions: String? = nil,
         youtubeUrl: String? = nil,
         bodyParts: [String]? = nil,
-        exerciseType: ExerciseType? = nil
+        exerciseType: ExerciseCategory? = nil
     ) async throws -> Exercise {
         guard let token = sessionToken else {
             throw ExerciseError.notAuthenticated
