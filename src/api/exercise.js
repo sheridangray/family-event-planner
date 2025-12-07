@@ -27,7 +27,7 @@ function createExerciseRouter(database, logger) {
    */
   router.post("/exercises", authenticateFlexible, async (req, res) => {
     try {
-      const { exerciseName } = req.body;
+      const { exerciseName, category } = req.body;
 
       if (!exerciseName) {
         return res.status(400).json({
@@ -36,7 +36,7 @@ function createExerciseRouter(database, logger) {
         });
       }
 
-      const exercise = await exerciseService.createExercise(exerciseName, exerciseLLMService);
+      const exercise = await exerciseService.createExercise(exerciseName, exerciseLLMService, { category });
 
       res.json({
         success: true,

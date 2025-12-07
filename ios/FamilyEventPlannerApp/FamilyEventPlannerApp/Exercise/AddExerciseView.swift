@@ -11,6 +11,12 @@ struct AddExerciseView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
     
+    // New state for editing generated details
+    @State private var editedCategory: ExerciseCategory = .barbellDumbbell
+    @State private var editedInstructions: String = ""
+    @State private var editedYoutubeUrl: String = ""
+    @State private var isSaving = false
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -36,15 +42,14 @@ struct AddExerciseView: View {
                 
                 if let exercise = generatedExercise {
                     Section {
-                        // Exercise Type
-                        HStack {
-                            Text("Type")
-                            Spacer()
-                            Text(exercise.exerciseType.displayName)
-                                .foregroundColor(.secondary)
+                        // Editable Category Picker
+                        Picker("Type", selection: $editedCategory) {
+                            ForEach(ExerciseCategory.allCases, id: \.self) { category in
+                                Text(category.displayName).tag(category)
+                            }
                         }
                         
-                        // Body Parts
+                        // Body Parts (Keep read-only or make editable if desired)
                         if !exercise.bodyParts.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Body Parts")
@@ -62,28 +67,41 @@ struct AddExerciseView: View {
                                     }
                                 }
                             }
+                            .padding(.vertical, 4)
                         }
                         
-                        // Instructions
+                        // Editable Instructions
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Instructions")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            Text(exercise.instructions)
-                                .font(.body)
+                            TextEditor(text: $editedInstructions)
+                                .frame(minHeight: 100)
                         }
                         
-                        // YouTube Link
-                        if let youtubeUrl = exercise.youtubeUrl, let url = URL(string: youtubeUrl) {
+                        // Editable YouTube URL
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("YouTube URL")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            TextField("https://youtube.com/...", text: $editedYoutubeUrl)
+                                .keyboardType(.URL)
+                                .autocapitalization(.none)
+                        }
+                        
+                        // Link preview
+                        if let url = URL(string: editedYoutubeUrl), !editedYoutubeUrl.isEmpty {
                             Link(destination: url) {
                                 HStack {
                                     Image(systemName: "play.circle.fill")
-                                    Text("Watch Video")
+                                    Text("Test Video Link")
                                 }
                             }
                         }
                     } header: {
-                        Text("Generated Details")
+                        Text("Review & Edit Details")
+                    } footer: {
+                        Text("The AI has filled these in. Review and adjust if necessary before saving.")
                     }
                 }
             }
@@ -106,7 +124,7 @@ struct AddExerciseView: View {
                         Button("Save") {
                             saveExercise()
                         }
-                        .disabled(isGenerating)
+                        .disabled(isSaving)
                     }
                 }
             }
@@ -130,6 +148,10 @@ struct AddExerciseView: View {
                 await MainActor.run {
                     if let exercise = exerciseManager.exercises.first(where: { $0.exerciseName == exerciseName }) {
                         generatedExercise = exercise
+                        // Pre-fill editable fields with generated data
+                        editedCategory = exercise.exerciseType
+                        editedInstructions = exercise.instructions
+                        editedYoutubeUrl = exercise.youtubeUrl ?? ""
                     }
                     isGenerating = false
                 }
@@ -144,8 +166,32 @@ struct AddExerciseView: View {
     }
     
     private func saveExercise() {
-        // Exercise is already saved when generated
-        dismiss()
+        guard let exercise = generatedExercise else { return }
+        
+        isSaving = true
+        
+        Task {
+            do {
+                // Update the exercise with any user edits
+                _ = try await exerciseManager.updateExercise(
+                    exerciseId: exercise.id,
+                    instructions: editedInstructions,
+                    youtubeUrl: editedYoutubeUrl.isEmpty ? nil : editedYoutubeUrl,
+                    exerciseType: editedCategory
+                )
+                
+                await MainActor.run {
+                    isSaving = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                    isSaving = false
+                }
+            }
+        }
     }
 }
 

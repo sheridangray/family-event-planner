@@ -24,18 +24,20 @@ class ExerciseLLMService {
   "instructions": "Easy-to-follow step-by-step instructions for performing this exercise. Be clear and concise, breaking down the movement into numbered steps, each with a newline character.",
   "youtube_url": "A YouTube video URL with instructions for this exercise. Validate that this is a valid and working YouTube video URL. Search for a high-quality instructional video and provide the full URL. If no good video is found, return null.",
   "body_parts": ["array", "of", "targeted", "body", "parts"],
-  "exercise_type": "weight" | "bodyweight" | "treadmill"
+  "category": "category_enum_value"
 }
 
-Exercise type detection rules:
-- "weight": Exercises that use external weights (dumbbells, barbells, machines, resistance bands)
-- "bodyweight": Exercises that use only body weight (push-ups, pull-ups, squats, planks, etc.)
-- "treadmill": Any treadmill or running exercise
-
-Examples:
-- "Bench Press" → type: "weight", body_parts: ["chest", "shoulders", "triceps"]
-- "Push-ups" → type: "bodyweight", body_parts: ["chest", "shoulders", "triceps", "core"]
-- "Treadmill Run" → type: "treadmill", body_parts: ["legs", "cardiovascular"]
+Category rules (select ONE based on exercise mechanics):
+- "barbell_dumbbell": Weighted movements (Bench press, squats, curls, deadlifts)
+- "bodyweight": Bodyweight strength (Push-ups, pull-ups, air squats, dips)
+- "assisted": Band or machine assisted exercises (Band pull-ups, assisted dips)
+- "machine": Pin-loaded or plate-loaded machines (Leg press, pec deck, lat pulldown)
+- "isometric": Static holds (Plank, wall sit, dead hang)
+- "cardio_distance": Distance-based cardio (Running, cycling, rowing, walking)
+- "cardio_time": Time/Calorie-based cardio (Elliptical, stair climber, assault bike, jump rope)
+- "interval": HIIT, circuits, rounds (Burpees, box jumps, battle ropes)
+- "mobility": Stretching, foam rolling, yoga poses
+- "skill": Technique practice (Handstands, double unders, olympic lifting drills)
 
 Return ONLY valid JSON, no additional text or markdown formatting.`;
 
@@ -115,47 +117,64 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
       if (!exerciseData.instructions) {
         throw new Error("LLM response missing instructions");
       }
-      if (!exerciseData.exercise_type) {
-        throw new Error("LLM response missing exercise_type");
+      if (!exerciseData.category && !exerciseData.exercise_type) {
+        throw new Error("LLM response missing category");
       }
       if (!Array.isArray(exerciseData.body_parts)) {
         exerciseData.body_parts = [];
       }
 
-      // Normalize exercise type
-      const validTypes = ["weight", "bodyweight", "treadmill"];
-      if (!validTypes.includes(exerciseData.exercise_type.toLowerCase())) {
-        // Try to infer from exercise name if type is invalid
+      // Map old fields if necessary or validate category
+      let category = exerciseData.category;
+      
+      // Fallback mapping if LLM returns old format
+      if (!category && exerciseData.exercise_type) {
+        const type = exerciseData.exercise_type.toLowerCase();
+        if (type === 'weight') category = 'barbell_dumbbell';
+        else if (type === 'bodyweight') category = 'bodyweight';
+        else if (type === 'treadmill') category = 'cardio_distance';
+      }
+
+      // Valid categories list
+      const validCategories = [
+        'barbell_dumbbell', 'bodyweight', 'assisted', 'machine', 'isometric',
+        'cardio_distance', 'cardio_time', 'interval', 'mobility', 'skill'
+      ];
+
+      if (!category || !validCategories.includes(category)) {
+        // Try to infer from name if missing or invalid
         const nameLower = exerciseName.toLowerCase();
-        if (
-          nameLower.includes("treadmill") ||
-          nameLower.includes("run") ||
-          nameLower.includes("jog")
-        ) {
-          exerciseData.exercise_type = "treadmill";
-        } else if (
-          nameLower.includes("push") ||
-          nameLower.includes("pull") ||
-          nameLower.includes("squat") ||
-          nameLower.includes("plank")
-        ) {
-          exerciseData.exercise_type = "bodyweight";
+        if (nameLower.includes("run") || nameLower.includes("cycle") || nameLower.includes("row")) {
+          category = "cardio_distance";
+        } else if (nameLower.includes("elliptical") || nameLower.includes("stair")) {
+          category = "cardio_time";
+        } else if (nameLower.includes("plank") || nameLower.includes("hold")) {
+          category = "isometric";
+        } else if (nameLower.includes("stretch") || nameLower.includes("roll")) {
+          category = "mobility";
+        } else if (nameLower.includes("machine")) {
+          category = "machine";
+        } else if (nameLower.includes("band") && nameLower.includes("assist")) {
+          category = "assisted";
+        } else if (nameLower.includes("body") || nameLower.includes("push-up") || nameLower.includes("pull-up")) {
+          category = "bodyweight";
         } else {
-          exerciseData.exercise_type = "weight";
+          category = "barbell_dumbbell"; // Default fallback
         }
-        this.logger.warn("Invalid exercise type from LLM, inferred from name", {
+        
+        this.logger.warn("Invalid/missing category from LLM, inferred from name", {
           exerciseName,
-          inferredType: exerciseData.exercise_type,
+          llmCategory: exerciseData.category,
+          inferredCategory: category
         });
-      } else {
-        exerciseData.exercise_type = exerciseData.exercise_type.toLowerCase();
       }
 
       return {
         instructions: exerciseData.instructions,
         youtubeUrl: exerciseData.youtube_url || null,
         bodyParts: exerciseData.body_parts || [],
-        exerciseType: exerciseData.exercise_type,
+        category: category, // Return the new category field
+        exerciseType: category // Keep backward compatibility internally if needed, but we should move to category
       };
     } catch (error) {
       this.logger.error("Error generating exercise details", {

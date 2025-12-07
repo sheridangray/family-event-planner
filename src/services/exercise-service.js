@@ -593,9 +593,10 @@ class ExerciseService {
    * Create a new exercise (with LLM-generated details)
    * @param {string} exerciseName - Name of the exercise
    * @param {Object} llmService - ExerciseLLMService instance
+   * @param {Object} options - Additional options (e.g. category)
    * @returns {Promise<Object>} Created exercise
    */
-  async createExercise(exerciseName, llmService) {
+  async createExercise(exerciseName, llmService, options = {}) {
     try {
       // Check if exercise already exists
       const existing = await this.database.query(
@@ -610,6 +611,9 @@ class ExerciseService {
       // Generate details using LLM
       const details = await llmService.generateExerciseDetails(exerciseName);
 
+      // Determine category: User selection > LLM guess > Default
+      const category = options.category || details.category || 'barbell_dumbbell';
+
       // Insert exercise
       const result = await this.database.query(
         `INSERT INTO exercises (exercise_name, instructions, youtube_url, body_parts, exercise_type, category)
@@ -620,8 +624,8 @@ class ExerciseService {
           details.instructions,
           details.youtubeUrl,
           details.bodyParts,
-          details.exerciseType,
-          details.category || 'barbell_dumbbell', // Default to barbell/dumbbell
+          category, // Store category as exercise_type for backward compatibility if needed, or just strictly use category
+          category,
         ]
       );
 

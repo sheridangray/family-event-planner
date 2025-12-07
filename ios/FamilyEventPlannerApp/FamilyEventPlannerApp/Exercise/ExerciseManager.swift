@@ -325,7 +325,7 @@ class ExerciseManager: ObservableObject {
     }
     
     /// Create a new exercise (triggers LLM generation)
-    func createExercise(name: String) async throws {
+    func createExercise(name: String, category: ExerciseCategory? = nil) async throws {
         guard let token = sessionToken else {
             throw ExerciseError.notAuthenticated
         }
@@ -336,7 +336,10 @@ class ExerciseManager: ObservableObject {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = ["exerciseName": name]
+        var body: [String: Any] = ["exerciseName": name]
+        if let category = category {
+            body["category"] = category.rawValue
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -421,7 +424,7 @@ class ExerciseManager: ObservableObject {
             body["bodyParts"] = bodyParts
         }
         if let exerciseType = exerciseType {
-            body["exerciseType"] = exerciseType.rawValue
+            body["category"] = exerciseType.rawValue
         }
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
