@@ -8,11 +8,20 @@ class LLMAgeEvaluator {
     this.evaluationCache = new Map(); // Add in-memory cache to prevent duplicate API calls
     
     if (!this.apiKey) {
-      throw new Error('TOGETHER_AI_API_KEY environment variable is required');
+      console.warn('TOGETHER_AI_API_KEY environment variable is not set. LLM features will be disabled.');
+      // throw new Error('TOGETHER_AI_API_KEY environment variable is required');
     }
   }
 
   async evaluateEventForChildren(event, childAges, rawContent = null) {
+    if (!this.apiKey) {
+        return {
+            suitable: true,
+            confidence: 0.0,
+            reason: 'LLM evaluation disabled (missing API key)',
+            fallback: true
+        };
+    }
     try {
       // Check cache first to avoid duplicate API calls
       const cacheKey = this.getCacheKey(event.id || event.title, childAges);
@@ -80,6 +89,17 @@ class LLMAgeEvaluator {
   }
 
   async callTogetherAI(prompt, options = {}) {
+    if (!this.apiKey) {
+        console.warn('Skipping Together AI call: API key missing');
+        // Return mock response for development without API key
+        return JSON.stringify({
+            instructions: "1. Stand with feet shoulder-width apart.\n2. Engage core.\n3. Perform movement.",
+            youtube_url: null,
+            body_parts: ["full_body"],
+            category: "bodyweight",
+            exercise_type: "bodyweight"
+        });
+    }
     try {
       const {
         model = 'Qwen/Qwen2.5-72B-Instruct-Turbo',
