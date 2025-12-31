@@ -13,10 +13,10 @@ class AuthenticationManager: ObservableObject {
     @Published var errorMessage: String?
     
     private let keychainKey = "family_planner_session"
-    private let backendURL = "https://family-event-planner-backend.onrender.com"
+    private let backendURL = "http://127.0.0.1:3000"
     
-    // For local development, change to:
-    // private let backendURL = "http://localhost:3000"
+    // For production, use:
+    // private let backendURL = "https://family-event-planner-backend.onrender.com"
     
     init() {
         print("🔐 AuthenticationManager singleton initialized")

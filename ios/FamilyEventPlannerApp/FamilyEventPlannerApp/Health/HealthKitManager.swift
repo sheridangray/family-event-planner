@@ -57,9 +57,8 @@ class HealthKitManager: ObservableObject {
     @Published var isLoadingRecommendations = false
     @Published var healthCoachRecommendations: HealthCoachRecommendations?
     
-    private let backendURL = "https://family-event-planner-backend.onrender.com"
-    // For local development, change to:
-    // private let backendURL = "http://localhost:3000"
+    private let backendURL = "http://127.0.0.1:3000"
+    // private let backendURL = "https://family-event-planner-backend.onrender.com"
     
     // MARK: - Initialization
     

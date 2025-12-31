@@ -439,12 +439,37 @@ class PostgresDatabase {
       // Initialize health profiles and goals for existing users
       await this.initializeHealthData();
 
+      // Run Foundation & Onboarding migration
+      await this.runFileMigration("016_create_foundation_onboarding.sql");
+      await this.runFileMigration("017_create_time_pillar.sql");
+      await this.runFileMigration("018_create_food_pillar.sql");
+      await this.runFileMigration("019_create_relationships_pillar.sql");
+      await this.runFileMigration("020_create_money_pillar.sql");
+      await this.runFileMigration("021_create_sleep_pillar.sql");
+      await this.runFileMigration("022_create_coach_engine.sql");
+
       console.log("Database migrations completed successfully");
     } catch (error) {
       console.warn(
         "Migration warning (may be expected if columns already exist):",
         error.message
       );
+    }
+  }
+
+  async runFileMigration(filename) {
+    try {
+      const migrationPath = path.join(__dirname, "../../migrations", filename);
+      if (fs.existsSync(migrationPath)) {
+        const sql = fs.readFileSync(migrationPath, "utf8");
+        await this.pool.query(sql);
+        console.log(`Executed migration: ${filename}`);
+      } else {
+        console.warn(`Migration file not found: ${filename}`);
+      }
+    } catch (error) {
+      console.warn(`Failed to execute migration ${filename}: ${error.message}`);
+      // Don't throw, as it might be partially applied or non-critical
     }
   }
 
@@ -1584,6 +1609,75 @@ class PostgresDatabase {
       ? `SELECT * FROM users WHERE active = true ORDER BY id`
       : `SELECT * FROM users ORDER BY id`;
     const result = await this.pool.query(sql);
+    return result.rows;
+  }
+
+  // ===== Time Pillar Methods =====
+
+  async createTask(task) {
+    const sql = `
+      INSERT INTO tasks (
+        household_id, owner_profile_id, project_id, title, notes, 
+        priority, due_at, recurrence_rule, tags
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `;
+    const params = [
+      task.householdId,
+      task.ownerProfileId,
+      task.projectId,
+      task.title,
+      task.notes,
+      task.priority,
+      task.dueAt,
+      task.recurrenceRule,
+      task.tags,
+    ];
+    const result = await this.pool.query(sql, params);
+    return result.rows[0];
+  }
+
+  async getTasksByProfile(profileId) {
+    const sql = `
+      SELECT * FROM tasks 
+      WHERE owner_profile_id = $1 
+      ORDER BY priority ASC, due_at ASC NULLS LAST
+    `;
+    const result = await this.pool.query(sql, [profileId]);
+    return result.rows;
+  }
+
+  async updateTaskStatus(taskId, status) {
+    const completedAt = status === "done" ? "NOW()" : "NULL";
+    const sql = `
+      UPDATE tasks 
+      SET status = $1, completed_at = ${completedAt}, updated_at = NOW() 
+      WHERE id = $2 
+      RETURNING *
+    `;
+    const result = await this.pool.query(sql, [status, taskId]);
+    return result.rows[0];
+  }
+
+  async createProject(project) {
+    const sql = `
+      INSERT INTO projects (household_id, owner_profile_id, name, description, color)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `;
+    const result = await this.pool.query(sql, [
+      project.householdId,
+      project.ownerProfileId,
+      project.name,
+      project.description,
+      project.color,
+    ]);
+    return result.rows[0];
+  }
+
+  async getProjectsByProfile(profileId) {
+    const sql = `SELECT * FROM projects WHERE owner_profile_id = $1 AND status = 'active'`;
+    const result = await this.pool.query(sql, [profileId]);
     return result.rows;
   }
 }

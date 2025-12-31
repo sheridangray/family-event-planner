@@ -9,6 +9,14 @@ const createHealthRouter = require("./health");
 const createExerciseRouter = require("./exercise");
 const createMobileAuthRouter = require("./auth-mobile");
 const createCalendarRouter = require("./calendar");
+const createOnboardingRouter = require("./onboarding");
+const createAppConfigRouter = require("./app-config");
+const createTimeRouter = require("./time");
+const createFoodRouter = require("./food");
+const createRelationshipsRouter = require("./relationships");
+const createMoneyRouter = require("./money");
+const createSleepRouter = require("./sleep");
+const createCoachRouter = require("./coach");
 const GmailWebhookHandler = require("./gmail-webhooks");
 const { authenticateAPI } = require("../middleware/auth");
 
@@ -34,6 +42,14 @@ function createApiRouter(
   router.use("/exercise", createExerciseRouter(database, logger));
   router.use("/calendar", createCalendarRouter(database, logger));
   router.use("/auth", createMobileAuthRouter(database, logger));
+  router.use("/onboarding", createOnboardingRouter(database, logger));
+  router.use("/app-config", createAppConfigRouter(database, logger));
+  router.use("/time", createTimeRouter(database, logger));
+  router.use("/food", createFoodRouter(database, logger));
+  router.use("/relationships", createRelationshipsRouter(database, logger));
+  router.use("/money", createMoneyRouter(database, logger));
+  router.use("/sleep", createSleepRouter(database, logger));
+  router.use("/coach", createCoachRouter(database, logger));
 
   // Gmail webhook routes - DISABLED for minimal server mode
   // if (logger) {

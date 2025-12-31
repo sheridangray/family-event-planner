@@ -20,16 +20,16 @@ struct SignInView: View {
                 )
             
             VStack(spacing: 8) {
-                Text("Family Event Planner")
+                Text("Integrated Life")
                     .font(.title)
                     .fontWeight(.bold)
                 
-                Text("Health Sync")
+                Text("Proactive Life OS")
                     .font(.title3)
                     .foregroundColor(.secondary)
             }
             
-            Text("Track your health and sync with your family event planner")
+            Text("Reduce decision fatigue and help your life compound in the right direction")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
