@@ -8,18 +8,7 @@ struct ExerciseDetailContent: View {
     @State private var isLoadingHistory = false
     
     var typeColor: Color {
-        switch exercise.exerciseType {
-        case .barbellDumbbell, .machine:
-            return .blue
-        case .bodyweight, .assisted:
-            return .green
-        case .cardioDistance, .cardioTime, .interval:
-            return .orange
-        case .isometric, .mobility:
-            return .purple
-        case .skill:
-            return .indigo
-        }
+        exercise.exerciseType.color
     }
     
     var body: some View {
@@ -93,17 +82,19 @@ struct ExerciseDetailContent: View {
                 }
                 
                 // Instructions
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Instructions")
-                        .font(.headline)
-                        .padding(.horizontal)
-                    
-                    Text(exercise.instructions)
-                        .font(.body)
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
+                if let instructions = exercise.instructions {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Instructions")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        
+                        Text(instructions)
+                            .font(.body)
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                    }
                 }
                 
                 // History
@@ -137,13 +128,8 @@ struct ExerciseDetailContent: View {
             // Load history from recent logs
             await MainActor.run {
                 history = exerciseManager.recentLogs
-                    .flatMap { $0.entries }
-                    .filter { $0.exerciseName == exercise.exerciseName || $0.exerciseId == exercise.id }
-                    .sorted { entry1, entry2 in
-                        // Sort by date (most recent first)
-                        // This is a simplified version - in production, you'd want to sort by workout date
-                        return true
-                    }
+                    .filter { $0.exerciseId == exercise.id }
+                    .sorted { $0.performedAt > $1.performedAt }
                 isLoadingHistory = false
             }
         }
@@ -164,18 +150,7 @@ struct ExerciseDetailView: View {
     }
     
     var typeColor: Color {
-        switch currentExercise.exerciseType {
-        case .barbellDumbbell, .machine:
-            return .blue
-        case .bodyweight, .assisted:
-            return .green
-        case .cardioDistance, .cardioTime, .interval:
-            return .orange
-        case .isometric, .mobility:
-            return .purple
-        case .skill:
-            return .indigo
-        }
+        currentExercise.exerciseType.color
     }
     
     var body: some View {
@@ -312,16 +287,18 @@ struct HistoryRow: View {
 
 #Preview {
     NavigationStack {
-        ExerciseDetailView(exercise: Exercise(
-            id: 1,
-            exerciseName: "Bench Press",
-            instructions: "Lie on bench, lower bar to chest, press up",
-            youtubeUrl: "https://youtube.com/watch?v=example",
-            bodyParts: ["chest", "shoulders", "triceps"],
-            exerciseType: .barbellDumbbell,
-            createdAt: nil,
-            updatedAt: nil
-        ))
+        ExerciseDetailView(exercise: try! JSONDecoder().decode(Exercise.self, from: """
+        {
+            "id": 1,
+            "uuid": "00000000-0000-0000-0000-000000000000",
+            "exercise_name": "Bench Press",
+            "instructions": "Lie on bench, lower bar to chest, press up",
+            "youtube_url": "https://youtube.com/watch?v=example",
+            "primary_muscles": ["chest", "shoulders", "triceps"],
+            "category": "barbell_dumbbell",
+            "is_archived": false
+        }
+        """.data(using: .utf8)!))
         .environmentObject(ExerciseManager.shared)
     }
 }

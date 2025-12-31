@@ -40,7 +40,7 @@ struct MetricDetailView: View {
     
     private var metricInfo: MetricInfo? {
         guard let identifier = metricIdentifier else { return nil }
-        return MetricInfo.info(for: identifier)
+        return MetricInfo.get(for: identifier)
     }
     
     /// Filter out zero values so the chart doesn't drop to zero on days with no data

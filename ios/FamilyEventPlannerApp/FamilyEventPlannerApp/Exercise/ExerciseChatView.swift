@@ -97,19 +97,15 @@ struct ExerciseChatView: View {
         // Add user message to UI immediately
         let userMessage = ChatMessage(
             id: messages.count + 1,
-            conversationId: conversationId ?? 0,
             role: "user",
             content: userMessageText,
-            messageOrder: messages.count + 1,
-            metadata: nil as [String: Any]?,
-            tokensUsed: nil as Int?,
             createdAt: ISO8601DateFormatter().string(from: Date())
         )
         messages.append(userMessage)
         
         isLoading = true
         
-        Task {
+        Task<Void, Never> {
             do {
                 guard let token = AuthenticationManager.shared.sessionToken else {
                     throw ExerciseError.notAuthenticated
@@ -148,12 +144,8 @@ struct ExerciseChatView: View {
                     
                     let assistantMessage = ChatMessage(
                         id: messages.count + 1,
-                        conversationId: result.data.conversationId,
                         role: "assistant",
                         content: result.data.response,
-                        messageOrder: messages.count + 1,
-                        metadata: nil as [String: Any]?,
-                        tokensUsed: nil as Int?,
                         createdAt: ISO8601DateFormatter().string(from: Date())
                     )
                     messages.append(assistantMessage)

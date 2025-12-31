@@ -24,7 +24,7 @@ struct ExercisesListView: View {
             // Search bar
             SearchBar(text: $searchText, placeholder: "Search exercises...")
                 .padding()
-                .onChange(of: searchText) { newValue in
+                .onChange(of: searchText) { _, newValue in
                     if !newValue.isEmpty {
                         searchExercises(query: newValue)
                     } else {
@@ -98,7 +98,7 @@ struct ExercisesListView: View {
         isLoading = true
         Task {
             do {
-                try await exerciseManager.fetchExercises(query: nil)
+                try await exerciseManager.fetchDefinitions(query: nil)
                 await MainActor.run {
                     exercises = exerciseManager.exercises
                     isLoading = false
@@ -115,7 +115,7 @@ struct ExercisesListView: View {
     private func searchExercises(query: String) {
         Task {
             do {
-                try await exerciseManager.fetchExercises(query: query)
+                try await exerciseManager.fetchDefinitions(query: query)
                 await MainActor.run {
                     exercises = exerciseManager.exercises
                 }
@@ -134,29 +134,20 @@ struct ExerciseRow: View {
     let onStart: () -> Void
     
     var typeColor: Color {
-        switch exercise.exerciseType {
-        case .barbellDumbbell, .machine:
-            return .blue
-        case .bodyweight, .assisted:
-            return .green
-        case .cardioDistance, .cardioTime, .interval:
-            return .orange
-        case .isometric, .mobility:
-            return .purple
-        case .skill:
-            return .indigo
-        }
+        exercise.exerciseType.color
     }
     
     var typeIcon: String {
         switch exercise.exerciseType {
-        case .barbellDumbbell: return "dumbbell.fill"
+        case .weighted, .barbellDumbbell: return "dumbbell.fill"
         case .bodyweight: return "figure.walk"
-        case .assisted: return "figure.mixed.cardio"
+        case .assisted, .bandAssisted: return "figure.mixed.cardio"
         case .machine: return "gearshape.fill"
-        case .isometric: return "timer"
+        case .time, .isometric: return "timer"
         case .cardioDistance: return "figure.run"
         case .cardioTime: return "heart.fill"
+        case .distanceTime: return "location.fill"
+        case .machineCardio: return "figure.outdoor.cycle"
         case .interval: return "stopwatch.fill"
         case .mobility: return "figure.mind.and.body"
         case .skill: return "star.fill"

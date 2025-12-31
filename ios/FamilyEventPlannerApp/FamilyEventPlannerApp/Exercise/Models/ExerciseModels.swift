@@ -1,177 +1,347 @@
 import Foundation
+import SwiftUI
 
-// MARK: - Exercise Category
+// MARK: - Exercise Category (PRD 1.4)
 
 enum ExerciseCategory: String, Codable, CaseIterable {
+    case weighted = "WEIGHTED"
+    case bodyweight = "BODYWEIGHT"
+    case time = "TIME"
+    case distanceTime = "DISTANCE_TIME"
+    case machineCardio = "MACHINE_CARDIO"
+    case bandAssisted = "BAND_ASSISTED"
+    case mobility = "MOBILITY"
+    
+    // Backward compatibility for old categories
     case barbellDumbbell = "barbell_dumbbell"
-    case bodyweight = "bodyweight"
     case assisted = "assisted"
     case machine = "machine"
     case isometric = "isometric"
     case cardioDistance = "cardio_distance"
     case cardioTime = "cardio_time"
     case interval = "interval"
-    case mobility = "mobility"
     case skill = "skill"
+    
+    /// Primary categories to show in UI (excludes backward compatibility cases)
+    static let primaryCases: [ExerciseCategory] = [
+        .weighted,
+        .bodyweight,
+        .time,
+        .distanceTime,
+        .machineCardio,
+        .bandAssisted,
+        .mobility
+    ]
     
     var displayName: String {
         switch self {
-        case .barbellDumbbell: return "Barbell & Dumbbell"
+        case .weighted, .barbellDumbbell, .machine: return "Weighted"
         case .bodyweight: return "Bodyweight"
-        case .assisted: return "Assisted"
-        case .machine: return "Machine"
-        case .isometric: return "Isometric"
-        case .cardioDistance: return "Cardio (Distance)"
-        case .cardioTime: return "Cardio (Time)"
-        case .interval: return "Interval / HIIT"
+        case .time, .isometric, .cardioTime, .interval: return "Time"
+        case .distanceTime, .cardioDistance: return "Distance & Time"
+        case .machineCardio: return "Machine Cardio"
+        case .bandAssisted, .assisted: return "Band Assisted"
         case .mobility: return "Mobility"
         case .skill: return "Skill"
         }
     }
+    
+    var requiredFields: [String] {
+        switch self {
+        case .weighted, .barbellDumbbell, .machine: return ["weight", "reps"]
+        case .bodyweight: return ["reps"]
+        case .time, .isometric, .cardioTime, .interval: return ["duration"]
+        case .distanceTime, .cardioDistance: return ["distance", "duration"]
+        case .machineCardio: return ["duration"]
+        case .bandAssisted, .assisted: return ["reps", "bandLevel"]
+        case .mobility: return ["duration"]
+        case .skill: return ["reps"]
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .weighted, .barbellDumbbell, .machine:
+            return .blue
+        case .bodyweight, .assisted, .bandAssisted:
+            return .green
+        case .time, .cardioDistance, .cardioTime, .interval:
+            return .orange
+        case .distanceTime:
+            return .red
+        case .machineCardio:
+            return .cyan
+        case .isometric, .mobility:
+            return .purple
+        case .skill:
+            return .indigo
+        }
+    }
 }
 
-// MARK: - Exercise
+// MARK: - Exercise Definition (PRD 1.3)
+typealias Exercise = ExerciseDefinition
 
-struct Exercise: Codable, Identifiable, Hashable {
-    let id: Int
-    let exerciseName: String
-    let instructions: String
+struct ExerciseDefinition: Codable, Identifiable, Hashable {
+    let id: Int // Backend ID
+    let uuid: UUID // Client sync ID (PRD requirement)
+    let name: String
+    let category: ExerciseCategory
+    let primaryMuscles: [String]
+    let secondaryMuscles: [String]
+    let equipment: [String]
+    let inputSchema: [String: InputFieldDefinition]?
+    let instructions: String?
     let youtubeUrl: String?
-    let bodyParts: [String]
-    let exerciseType: ExerciseCategory // Mapped from 'category' column
-    let createdAt: String?
-    let updatedAt: String?
+    let isArchived: Bool
+    
+    var exerciseName: String { name }
+    var exerciseType: ExerciseCategory { category }
+    var bodyParts: [String] { primaryMuscles }
+    
+    struct InputFieldDefinition: Codable, Hashable {
+        let key: String
+        let type: String
+        let unit: String?
+        let required: Bool
+        let validation: String?
+        let displayMetadata: [String: String]?
+    }
     
     enum CodingKeys: String, CodingKey {
-        case id
-        case exerciseName = "exercise_name"
-        case instructions
-        case youtubeUrl = "youtube_url"
-        case bodyParts = "body_parts"
-        case exerciseType = "category" // Map 'category' from DB to 'exerciseType' property
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
+        case id, uuid, category, name = "exercise_name"
+        case primaryMuscles = "primary_muscles", secondaryMuscles = "secondary_muscles", equipment
+        case inputSchema = "input_schema", instructions, youtubeUrl = "youtube_url", isArchived = "is_archived"
     }
     
-    // Hashable conformance - use id for hashing
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        uuid = (try? container.decode(UUID.self, forKey: .uuid)) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        instructions = try? container.decodeIfPresent(String.self, forKey: .instructions)
+        youtubeUrl = try? container.decodeIfPresent(String.self, forKey: .youtubeUrl)
+        
+        if let catString = try? container.decode(String.self, forKey: .category) {
+            category = ExerciseCategory(rawValue: catString) ?? .weighted
+        } else {
+            category = .weighted
+        }
+        
+        primaryMuscles = (try? container.decode([String].self, forKey: .primaryMuscles)) ?? []
+        secondaryMuscles = (try? container.decode([String].self, forKey: .secondaryMuscles)) ?? []
+        equipment = (try? container.decode([String].self, forKey: .equipment)) ?? []
+        inputSchema = try? container.decodeIfPresent([String: InputFieldDefinition].self, forKey: .inputSchema)
+        isArchived = (try? container.decode(Bool.self, forKey: .isArchived)) ?? false
+    }
+    
+    // Manual Hashable conformance (required due to custom init(from:))
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+        hasher.combine(uuid)
     }
     
-    static func == (lhs: Exercise, rhs: Exercise) -> Bool {
-        lhs.id == rhs.id
+    // Manual Equatable conformance (required due to custom init(from:))
+    static func == (lhs: ExerciseDefinition, rhs: ExerciseDefinition) -> Bool {
+        lhs.id == rhs.id && lhs.uuid == rhs.uuid
+    }
+}
+
+// MARK: - Exercise Log (PRD 1.3)
+typealias ExerciseLogEntry = ExerciseLog
+
+struct ExerciseLog: Codable, Identifiable, Hashable {
+    var id: UUID // Use UUID as primary ID for Identifiable
+    var backendId: Int? // Optional backend-assigned ID
+    let exerciseId: Int
+    let performedAt: Date
+    var sets: [ExerciseSet]
+    var notes: String?
+    let source: String
+    var syncState: String
+    let logId: Int?
+    
+    // Compatibility
+    var exerciseName: String { "" }
+    var setsPerformed: Int { sets.count }
+    var repsPerformed: [Int] { sets.compactMap { $0.reps } }
+    var weightUsed: [Double?] { sets.map { $0.weight } }
+    var durationSeconds: [Int] { sets.compactMap { $0.duration } }
+    var distanceMeters: [Double] { sets.compactMap { $0.distance } }
+    
+    enum CodingKeys: String, CodingKey {
+        case id = "uuid", backendId = "id", exerciseId = "exercise_id", performedAt = "performed_at", sets, notes, source, syncState = "sync_state", logId = "log_id"
+    }
+    
+    init(id: UUID = UUID(), backendId: Int? = nil, exerciseId: Int, performedAt: Date = Date(), sets: [ExerciseSet] = [], notes: String? = nil, source: String = "manual", syncState: String = "local", logId: Int? = nil) {
+        self.id = id
+        self.backendId = backendId
+        self.exerciseId = exerciseId
+        self.performedAt = performedAt
+        self.sets = sets
+        self.notes = notes
+        self.source = source
+        self.syncState = syncState
+        self.logId = logId
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(UUID.self, forKey: .id)) ?? UUID()
+        backendId = try? container.decodeIfPresent(Int.self, forKey: .backendId)
+        exerciseId = try container.decode(Int.self, forKey: .exerciseId)
+        
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let dateString = (try? container.decode(String.self, forKey: .performedAt)) ?? ""
+        performedAt = formatter.date(from: dateString) ?? Date()
+        
+        sets = (try? container.decode([ExerciseSet].self, forKey: .sets)) ?? []
+        notes = try? container.decodeIfPresent(String.self, forKey: .notes)
+        source = (try? container.decode(String.self, forKey: .source)) ?? "manual"
+        syncState = (try? container.decode(String.self, forKey: .syncState)) ?? "synced"
+        logId = try? container.decodeIfPresent(Int.self, forKey: .logId)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(backendId, forKey: .backendId)
+        try container.encode(exerciseId, forKey: .exerciseId)
+        
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        try container.encode(formatter.string(from: performedAt), forKey: .performedAt)
+        
+        try container.encode(sets, forKey: .sets)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encode(source, forKey: .source)
+        try container.encode(syncState, forKey: .syncState)
+        try container.encodeIfPresent(logId, forKey: .logId)
+    }
+}
+
+// MARK: - Workout Session (PRD 1.3)
+typealias Workout = WorkoutSession
+
+struct WorkoutSession: Codable, Identifiable, Hashable {
+    let id: Int
+    let uuid: UUID
+    let userId: Int
+    let exerciseDate: String
+    let dayOfWeek: Int
+    let totalDurationMinutes: Int?
+    let location: String?
+    let notes: String?
+    let status: SessionStatus
+    let startedAt: Date?
+    let endedAt: Date?
+    let entries: [ExerciseLog]
+    
+    enum SessionStatus: String, Codable {
+        case inProgress = "IN_PROGRESS"
+        case completed = "COMPLETED"
+        case discarded = "DISCARDED"
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, uuid, userId = "user_id", exerciseDate = "exercise_date", dayOfWeek = "day_of_week"
+        case totalDurationMinutes = "total_duration_minutes", location, notes, status, startedAt = "started_at", endedAt = "ended_at", entries
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        uuid = (try? container.decode(UUID.self, forKey: .uuid)) ?? UUID()
+        userId = (try? container.decode(Int.self, forKey: .userId)) ?? 0
+        exerciseDate = (try? container.decode(String.self, forKey: .exerciseDate)) ?? ""
+        dayOfWeek = (try? container.decode(Int.self, forKey: .dayOfWeek)) ?? 0
+        totalDurationMinutes = try? container.decodeIfPresent(Int.self, forKey: .totalDurationMinutes)
+        location = try? container.decodeIfPresent(String.self, forKey: .location)
+        notes = try? container.decodeIfPresent(String.self, forKey: .notes)
+        status = (try? container.decode(SessionStatus.self, forKey: .status)) ?? .completed
+        
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        if let startString = try? container.decode(String.self, forKey: .startedAt) {
+            startedAt = formatter.date(from: startString)
+        } else {
+            startedAt = nil
+        }
+        
+        if let endString = try? container.decode(String.self, forKey: .endedAt) {
+            endedAt = formatter.date(from: endString)
+        } else {
+            endedAt = nil
+        }
+        
+        entries = (try? container.decode([ExerciseLog].self, forKey: .entries)) ?? []
+    }
+    
+    init(id: Int, uuid: UUID = UUID(), userId: Int, exerciseDate: String, dayOfWeek: Int, totalDurationMinutes: Int? = nil, location: String? = nil, notes: String? = nil, status: SessionStatus = .completed, startedAt: Date? = nil, endedAt: Date? = nil, entries: [ExerciseLog] = []) {
+        self.id = id
+        self.uuid = uuid
+        self.userId = userId
+        self.exerciseDate = exerciseDate
+        self.dayOfWeek = dayOfWeek
+        self.totalDurationMinutes = totalDurationMinutes
+        self.location = location
+        self.notes = notes
+        self.status = status
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.entries = entries
     }
 }
 
 // MARK: - Exercise Set
-
-struct ExerciseSet: Codable, Identifiable {
+struct ExerciseSet: Codable, Identifiable, Hashable {
     var id: UUID
-    var reps: Int?
     var weight: Double?
-    var restSeconds: Int?
-    var incline: Double?
-    var speed: Double?
+    var reps: Int?
     var duration: Int?
     var distance: Double?
+    var restSeconds: Int?
+    var rpe: Int?
     var bandLevel: String?
     var resistanceLevel: String?
-    var calories: Int?
+    var tempo: String?
     var heartRate: Int?
-    var rpe: Int?
+    var calories: Int?
+    var incline: Double?
+    var speed: Double?
     
-    init(
-        id: UUID = UUID(),
-        reps: Int? = nil,
-        weight: Double? = nil,
-        restSeconds: Int? = nil,
-        incline: Double? = nil,
-        speed: Double? = nil,
-        duration: Int? = nil,
-        distance: Double? = nil,
-        bandLevel: String? = nil,
-        resistanceLevel: String? = nil,
-        calories: Int? = nil,
-        heartRate: Int? = nil,
-        rpe: Int? = nil
-    ) {
+    init(id: UUID = UUID()) {
         self.id = id
-        self.reps = reps
-        self.weight = weight
-        self.restSeconds = restSeconds
-        self.incline = incline
-        self.speed = speed
-        self.duration = duration
-        self.distance = distance
-        self.bandLevel = bandLevel
-        self.resistanceLevel = resistanceLevel
-        self.calories = calories
-        self.heartRate = heartRate
-        self.rpe = rpe
     }
     
-    // Custom Codable implementation to exclude id from encoding/decoding
     enum CodingKeys: String, CodingKey {
-        case reps, weight, restSeconds, incline, speed, duration
-        case distance, bandLevel, resistanceLevel, calories, heartRate, rpe
+        case weight, reps, duration, distance, restSeconds = "rest_seconds"
+        case rpe, bandLevel = "band_level", resistanceLevel = "resistance_level"
+        case tempo, heartRate = "heart_rate", calories, incline, speed
     }
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = UUID()
-        reps = try container.decodeIfPresent(Int.self, forKey: .reps)
-        weight = try container.decodeIfPresent(Double.self, forKey: .weight)
-        restSeconds = try container.decodeIfPresent(Int.self, forKey: .restSeconds)
-        incline = try container.decodeIfPresent(Double.self, forKey: .incline)
-        speed = try container.decodeIfPresent(Double.self, forKey: .speed)
-        duration = try container.decodeIfPresent(Int.self, forKey: .duration)
-        distance = try container.decodeIfPresent(Double.self, forKey: .distance)
-        bandLevel = try container.decodeIfPresent(String.self, forKey: .bandLevel)
-        resistanceLevel = try container.decodeIfPresent(String.self, forKey: .resistanceLevel)
-        calories = try container.decodeIfPresent(Int.self, forKey: .calories)
-        heartRate = try container.decodeIfPresent(Int.self, forKey: .heartRate)
-        rpe = try container.decodeIfPresent(Int.self, forKey: .rpe)
-    }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(reps, forKey: .reps)
-        try container.encodeIfPresent(weight, forKey: .weight)
-        try container.encodeIfPresent(restSeconds, forKey: .restSeconds)
-        try container.encodeIfPresent(incline, forKey: .incline)
-        try container.encodeIfPresent(speed, forKey: .speed)
-        try container.encodeIfPresent(duration, forKey: .duration)
-        try container.encodeIfPresent(distance, forKey: .distance)
-        try container.encodeIfPresent(bandLevel, forKey: .bandLevel)
-        try container.encodeIfPresent(resistanceLevel, forKey: .resistanceLevel)
-        try container.encodeIfPresent(calories, forKey: .calories)
-        try container.encodeIfPresent(heartRate, forKey: .heartRate)
-        try container.encodeIfPresent(rpe, forKey: .rpe)
+        weight = try? container.decodeIfPresent(Double.self, forKey: .weight)
+        reps = try? container.decodeIfPresent(Int.self, forKey: .reps)
+        duration = try? container.decodeIfPresent(Int.self, forKey: .duration)
+        distance = try? container.decodeIfPresent(Double.self, forKey: .distance)
+        restSeconds = try? container.decodeIfPresent(Int.self, forKey: .restSeconds)
+        rpe = try? container.decodeIfPresent(Int.self, forKey: .rpe)
+        bandLevel = try? container.decodeIfPresent(String.self, forKey: .bandLevel)
+        resistanceLevel = try? container.decodeIfPresent(String.self, forKey: .resistanceLevel)
+        tempo = try? container.decodeIfPresent(String.self, forKey: .tempo)
+        heartRate = try? container.decodeIfPresent(Int.self, forKey: .heartRate)
+        calories = try? container.decodeIfPresent(Int.self, forKey: .calories)
+        incline = try? container.decodeIfPresent(Double.self, forKey: .incline)
+        speed = try? container.decodeIfPresent(Double.self, forKey: .speed)
     }
 }
 
-// MARK: - Exercise Session
-
-struct ExerciseSession: Codable {
-    let exerciseId: Int
-    let exerciseName: String
-    let exerciseType: ExerciseCategory
-    var sets: [ExerciseSet]
-    let notes: String?
-    let equipmentUsed: String?
-    
-    enum CodingKeys: String, CodingKey {
-        case exerciseId = "exercise_id"
-        case exerciseName = "exercise_name"
-        case exerciseType = "category" // Map 'category'
-        case sets
-        case notes
-        case equipmentUsed = "equipment_used"
-    }
-}
-
-// MARK: - Exercise Routine
-
+// MARK: - Routine Models
 struct ExerciseRoutine: Codable, Identifiable {
     let id: Int
     let userId: Int
@@ -180,23 +350,11 @@ struct ExerciseRoutine: Codable, Identifiable {
     let description: String?
     let isActive: Bool
     let exercises: [RoutineExercise]
-    let createdAt: String?
-    let updatedAt: String?
     
     enum CodingKeys: String, CodingKey {
-        case id
-        case userId = "user_id"
-        case routineName = "routine_name"
-        case dayOfWeek = "day_of_week"
-        case description
-        case isActive = "is_active"
-        case exercises
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
+        case id, userId = "user_id", routineName = "routine_name", dayOfWeek = "day_of_week", description, isActive = "is_active", exercises
     }
 }
-
-// MARK: - Routine Exercise
 
 struct RoutineExercise: Codable, Identifiable {
     let id: Int
@@ -213,355 +371,9 @@ struct RoutineExercise: Codable, Identifiable {
     let equipmentNotes: String?
     
     enum CodingKeys: String, CodingKey {
-        case id
-        case routineId = "routine_id"
-        case exerciseName = "exercise_name"
-        case exerciseOrder = "exercise_order"
-        case targetSets = "target_sets"
-        case targetRepsMin = "target_reps_min"
-        case targetRepsMax = "target_reps_max"
-        case targetDurationSeconds = "target_duration_seconds"
-        case notes
-        case cues
-        case preferredEquipment = "preferred_equipment"
-        case equipmentNotes = "equipment_notes"
+        case id, routineId = "routine_id", exerciseName = "exercise_name", exerciseOrder = "exercise_order", targetSets = "target_sets", targetRepsMin = "target_reps_min", targetRepsMax = "target_reps_max", targetDurationSeconds = "target_duration_seconds", notes, cues, preferredEquipment = "preferred_equipment", equipmentNotes = "equipment_notes"
     }
 }
-
-// MARK: - Exercise Log
-
-struct ExerciseLog: Codable, Identifiable, Hashable {
-    let id: Int
-    let userId: Int
-    let routineId: Int?
-    let exerciseDate: String
-    let dayOfWeek: Int
-    let totalDurationMinutes: Int?
-    let location: String?
-    let notes: String?
-    let entries: [ExerciseLogEntry]
-    let createdAt: String?
-    let updatedAt: String?
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case userId = "user_id"
-        case routineId = "routine_id"
-        case exerciseDate = "exercise_date"
-        case dayOfWeek = "day_of_week"
-        case totalDurationMinutes = "total_duration_minutes"
-        case location
-        case notes
-        case entries
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
-    
-    // Hashable conformance - use id for hashing
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-    
-    static func == (lhs: ExerciseLog, rhs: ExerciseLog) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-// MARK: - Exercise Log Entry
-
-struct ExerciseLogEntry: Codable, Identifiable {
-    let id: Int
-    let logId: Int
-    let exerciseId: Int? // Reference to master exercise
-    let exerciseName: String
-    let exerciseOrder: Int
-    let equipmentUsed: String?
-    let setsPerformed: Int
-    let repsPerformed: [Int]
-    let weightUsed: [Double?]
-    let durationSeconds: [Int]
-    let restSeconds: Int?
-    let notes: String?
-    let difficultyRating: Int?
-    
-    // New fields (arrays matching sets)
-    let distanceMeters: [Double]
-    let bandLevel: [String]
-    let resistanceLevel: [String]
-    let inclinePercentage: [Double]
-    let calories: [Int]
-    let heartRate: [Int]
-    let speedMph: [Double]
-    let rpe: [Int]
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case logId = "log_id"
-        case exerciseId = "exercise_id"
-        case exerciseName = "exercise_name"
-        case exerciseOrder = "exercise_order"
-        case equipmentUsed = "equipment_used"
-        case setsPerformed = "sets_performed"
-        case repsPerformed = "reps_performed"
-        case weightUsed = "weight_used"
-        case durationSeconds = "duration_seconds"
-        case restSeconds = "rest_seconds"
-        case notes
-        case difficultyRating = "difficulty_rating"
-        
-        case distanceMeters = "distance_meters"
-        case bandLevel = "band_level"
-        case resistanceLevel = "resistance_level"
-        case inclinePercentage = "incline_percentage"
-        case calories
-        case heartRate = "heart_rate"
-        case speedMph = "speed_mph"
-        case rpe
-    }
-    
-    // Regular initializer for creating instances programmatically
-    init(
-        id: Int,
-        logId: Int,
-        exerciseId: Int? = nil,
-        exerciseName: String,
-        exerciseOrder: Int,
-        equipmentUsed: String?,
-        setsPerformed: Int,
-        repsPerformed: [Int],
-        weightUsed: [Double?],
-        durationSeconds: [Int],
-        restSeconds: Int?,
-        notes: String?,
-        difficultyRating: Int?,
-        distanceMeters: [Double] = [],
-        bandLevel: [String] = [],
-        resistanceLevel: [String] = [],
-        inclinePercentage: [Double] = [],
-        calories: [Int] = [],
-        heartRate: [Int] = [],
-        speedMph: [Double] = [],
-        rpe: [Int] = []
-    ) {
-        self.id = id
-        self.logId = logId
-        self.exerciseId = exerciseId
-        self.exerciseName = exerciseName
-        self.exerciseOrder = exerciseOrder
-        self.equipmentUsed = equipmentUsed
-        self.setsPerformed = setsPerformed
-        self.repsPerformed = repsPerformed
-        self.weightUsed = weightUsed
-        self.durationSeconds = durationSeconds
-        self.restSeconds = restSeconds
-        self.notes = notes
-        self.difficultyRating = difficultyRating
-        self.distanceMeters = distanceMeters
-        self.bandLevel = bandLevel
-        self.resistanceLevel = resistanceLevel
-        self.inclinePercentage = inclinePercentage
-        self.calories = calories
-        self.heartRate = heartRate
-        self.speedMph = speedMph
-        self.rpe = rpe
-    }
-    
-    // Custom decoder to handle JSONB arrays
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(Int.self, forKey: .id)
-        logId = try container.decode(Int.self, forKey: .logId)
-        exerciseId = try container.decodeIfPresent(Int.self, forKey: .exerciseId)
-        exerciseName = try container.decode(String.self, forKey: .exerciseName)
-        exerciseOrder = try container.decode(Int.self, forKey: .exerciseOrder)
-        equipmentUsed = try container.decodeIfPresent(String.self, forKey: .equipmentUsed)
-        setsPerformed = try container.decode(Int.self, forKey: .setsPerformed)
-        restSeconds = try container.decodeIfPresent(Int.self, forKey: .restSeconds)
-        notes = try container.decodeIfPresent(String.self, forKey: .notes)
-        difficultyRating = try container.decodeIfPresent(Int.self, forKey: .difficultyRating)
-        
-        // Helper to decode array or JSON string
-        func decodeArray<T: Decodable>(_ key: CodingKeys) -> [T] {
-            if let array = try? container.decode([T].self, forKey: key) {
-                return array
-            } else if let string = try? container.decode(String.self, forKey: key),
-                      let data = string.data(using: .utf8),
-                      let array = try? JSONDecoder().decode([T].self, from: data) {
-                return array
-            }
-            return []
-        }
-        
-        repsPerformed = decodeArray(.repsPerformed)
-        // weightUsed needs special handling for nulls
-        if let weightArray = try? container.decode([Double?].self, forKey: .weightUsed) {
-            weightUsed = weightArray
-        } else if let weightString = try? container.decode(String.self, forKey: .weightUsed),
-                  let data = weightString.data(using: .utf8) {
-             if let weightArray = try? JSONDecoder().decode([Double?].self, from: data) {
-                weightUsed = weightArray
-             } else {
-                weightUsed = []
-             }
-        } else {
-            weightUsed = []
-        }
-        
-        durationSeconds = decodeArray(.durationSeconds)
-        distanceMeters = decodeArray(.distanceMeters)
-        bandLevel = decodeArray(.bandLevel)
-        resistanceLevel = decodeArray(.resistanceLevel)
-        inclinePercentage = decodeArray(.inclinePercentage)
-        calories = decodeArray(.calories)
-        heartRate = decodeArray(.heartRate)
-        speedMph = decodeArray(.speedMph)
-        rpe = decodeArray(.rpe)
-    }
-}
-
-// MARK: - Exercise Suggestion
-
-struct ExerciseSuggestion: Codable, Identifiable {
-    let id: Int
-    let userId: Int
-    let logEntryId: Int?
-    let logId: Int?
-    let exerciseName: String
-    let suggestionType: String
-    let suggestionText: String
-    let reasoning: String?
-    let priority: String
-    let applied: Bool
-    let appliedAt: String?
-    let generatedAt: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case userId = "user_id"
-        case logEntryId = "log_entry_id"
-        case logId = "log_id"
-        case exerciseName = "exercise_name"
-        case suggestionType = "suggestion_type"
-        case suggestionText = "suggestion_text"
-        case reasoning
-        case priority
-        case applied
-        case appliedAt = "applied_at"
-        case generatedAt = "generated_at"
-    }
-}
-
-// MARK: - Exercise Conversation
-
-struct ExerciseConversation: Decodable, Identifiable {
-    let id: Int
-    let userId: Int
-    let conversationTitle: String?
-    let startedAt: String
-    let lastMessageAt: String
-    let messageCount: Int
-    let contextSnapshot: [String: Any]?
-    let createdAt: String?
-    let updatedAt: String?
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case userId = "user_id"
-        case conversationTitle = "conversation_title"
-        case startedAt = "started_at"
-        case lastMessageAt = "last_message_at"
-        case messageCount = "message_count"
-        case contextSnapshot = "context_snapshot"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(Int.self, forKey: .id)
-        userId = try container.decode(Int.self, forKey: .userId)
-        conversationTitle = try container.decodeIfPresent(String.self, forKey: .conversationTitle)
-        startedAt = try container.decode(String.self, forKey: .startedAt)
-        lastMessageAt = try container.decode(String.self, forKey: .lastMessageAt)
-        messageCount = try container.decode(Int.self, forKey: .messageCount)
-        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
-        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
-        
-        // Handle contextSnapshot as JSON
-        if let snapshotData = try? container.decodeIfPresent(Data.self, forKey: .contextSnapshot),
-           let json = try? JSONSerialization.jsonObject(with: snapshotData) as? [String: Any] {
-            contextSnapshot = json
-        } else {
-            contextSnapshot = nil
-        }
-    }
-}
-
-// MARK: - Chat Message
-
-struct ChatMessage: Decodable, Identifiable {
-    let id: Int
-    let conversationId: Int
-    let role: String // "user" or "assistant"
-    let content: String
-    let messageOrder: Int
-    let metadata: [String: Any]?
-    let tokensUsed: Int?
-    let createdAt: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case conversationId = "conversation_id"
-        case role
-        case content
-        case messageOrder = "message_order"
-        case metadata
-        case tokensUsed = "tokens_used"
-        case createdAt = "created_at"
-    }
-    
-    // Regular initializer for creating instances programmatically
-    init(
-        id: Int,
-        conversationId: Int,
-        role: String,
-        content: String,
-        messageOrder: Int,
-        metadata: [String: Any]?,
-        tokensUsed: Int?,
-        createdAt: String
-    ) {
-        self.id = id
-        self.conversationId = conversationId
-        self.role = role
-        self.content = content
-        self.messageOrder = messageOrder
-        self.metadata = metadata
-        self.tokensUsed = tokensUsed
-        self.createdAt = createdAt
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(Int.self, forKey: .id)
-        conversationId = try container.decode(Int.self, forKey: .conversationId)
-        role = try container.decode(String.self, forKey: .role)
-        content = try container.decode(String.self, forKey: .content)
-        messageOrder = try container.decode(Int.self, forKey: .messageOrder)
-        tokensUsed = try container.decodeIfPresent(Int.self, forKey: .tokensUsed)
-        createdAt = try container.decode(String.self, forKey: .createdAt)
-        
-        // Handle metadata as JSON
-        if let metadataData = try? container.decodeIfPresent(Data.self, forKey: .metadata),
-           let json = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any] {
-            metadata = json
-        } else {
-            metadata = nil
-        }
-    }
-}
-
-// MARK: - API Response Wrappers
 
 struct ExerciseRoutinesResponse: Codable {
     let success: Bool
@@ -571,86 +383,4 @@ struct ExerciseRoutinesResponse: Codable {
 struct ExerciseRoutineResponse: Codable {
     let success: Bool
     let data: ExerciseRoutine
-}
-
-struct ExerciseLogsResponse: Codable {
-    let success: Bool
-    let data: [ExerciseLog]
-}
-
-struct ExerciseLogResponse: Codable {
-    let success: Bool
-    let data: ExerciseLog
-}
-
-struct ExerciseSuggestionsResponse: Codable {
-    let success: Bool
-    let data: [ExerciseSuggestion]
-}
-
-struct ExerciseConversationsResponse: Decodable {
-    let success: Bool
-    let data: [ExerciseConversation]
-}
-
-struct ExerciseConversationHistoryResponse: Decodable {
-    let success: Bool
-    let data: [ChatMessage]
-}
-
-struct ExerciseChatResponse: Codable {
-    let success: Bool
-    let data: ExerciseChatData
-}
-
-struct ExerciseChatData: Codable {
-    let conversationId: Int
-    let response: String
-    let context: ExerciseChatContext
-}
-
-struct ExerciseChatContext: Codable {
-    let workoutsReferenced: Int
-    let conversationsReferenced: Int
-}
-
-struct HasLoggedResponse: Codable {
-    let success: Bool
-    let data: HasLoggedData
-}
-
-struct HasLoggedData: Codable {
-    let hasLogged: Bool
-}
-
-// MARK: - Exercise API Responses
-
-struct ExercisesResponse: Codable {
-    let success: Bool
-    let data: [Exercise]
-}
-
-struct ExerciseResponse: Codable {
-    let success: Bool
-    let data: Exercise
-}
-
-struct WorkoutsResponse: Codable {
-    let success: Bool
-    let data: [ExerciseLog] // Using ExerciseLog as Workout
-}
-
-struct WorkoutResponse: Codable {
-    let success: Bool
-    let data: ExerciseLog
-}
-
-struct StartExerciseResponse: Codable {
-    let success: Bool
-    let data: StartExerciseData
-}
-
-struct StartExerciseData: Codable {
-    let exercise: Exercise
-    let workoutId: Int?
 }

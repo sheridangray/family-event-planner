@@ -19,89 +19,137 @@ struct AddExerciseView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Exercise Name", text: $exerciseName)
-                        .textInputAutocapitalization(.words)
-                        .disabled(isGenerating)
-                } header: {
-                    Text("Exercise Name")
-                } footer: {
-                    Text("Enter the name of the exercise (e.g., 'Bench Press', 'Push-ups', 'Treadmill Run')")
-                }
-                
-                if isGenerating {
+            ZStack(alignment: .bottom) {
+                Form {
                     Section {
-                        HStack {
-                            ProgressView()
-                            Text("Generating exercise details...")
-                                .foregroundColor(.secondary)
+                        TextField("Exercise Name", text: $exerciseName)
+                            .textInputAutocapitalization(.words)
+                            .disabled(isGenerating)
+                    } header: {
+                        Text("Exercise Name")
+                    } footer: {
+                        Text("Enter the name of the exercise (e.g., 'Bench Press', 'Push-ups', 'Treadmill Run')")
+                    }
+                    
+                    if isGenerating {
+                        Section {
+                            HStack {
+                                ProgressView()
+                                Text("Generating exercise details...")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    if let exercise = generatedExercise {
+                        Section {
+                            // Editable Category Picker
+                            Picker("Type", selection: $editedCategory) {
+                                ForEach(ExerciseCategory.primaryCases, id: \.self) { category in
+                                    Text(category.displayName).tag(category)
+                                }
+                            }
+                            
+                            // Body Parts (Keep read-only or make editable if desired)
+                            if !exercise.bodyParts.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Body Parts")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    FlowLayout(spacing: 8) {
+                                        ForEach(exercise.bodyParts, id: \.self) { part in
+                                            Text(part)
+                                                .font(.caption)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.blue.opacity(0.2))
+                                                .foregroundColor(.blue)
+                                                .cornerRadius(8)
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            
+                            // Formatted Instructions (Read-only with better formatting)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Instructions")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                
+                                Text(formatInstructions(editedInstructions))
+                                    .font(.body)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(8)
+                            }
+                            
+                            // Editable YouTube URL
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("YouTube URL")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                TextField("https://youtube.com/...", text: $editedYoutubeUrl)
+                                    .keyboardType(.URL)
+                                    .autocapitalization(.none)
+                            }
+                            
+                            // Link preview
+                            if let url = URL(string: editedYoutubeUrl), !editedYoutubeUrl.isEmpty {
+                                Link(destination: url) {
+                                    HStack {
+                                        Image(systemName: "play.circle.fill")
+                                        Text("Test Video Link")
+                                    }
+                                }
+                            }
+                        } header: {
+                            Text("Review & Edit Details")
+                        } footer: {
+                            Text("The AI has filled these in. Review and adjust if necessary before saving.")
+                        }
+                        
+                        // Add spacing for the bottom button
+                        Section {
+                            Color.clear
+                                .frame(height: 80)
+                                .listRowBackground(Color.clear)
                         }
                     }
                 }
                 
-                if let exercise = generatedExercise {
-                    Section {
-                        // Editable Category Picker
-                        Picker("Type", selection: $editedCategory) {
-                            ForEach(ExerciseCategory.allCases, id: \.self) { category in
-                                Text(category.displayName).tag(category)
-                            }
-                        }
-                        
-                        // Body Parts (Keep read-only or make editable if desired)
-                        if !exercise.bodyParts.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Body Parts")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                FlowLayout(spacing: 8) {
-                                    ForEach(exercise.bodyParts, id: \.self) { part in
-                                        Text(part)
-                                            .font(.caption)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.blue.opacity(0.2))
-                                            .foregroundColor(.blue)
-                                            .cornerRadius(8)
-                                    }
+                // Fixed Save Button at Bottom
+                if generatedExercise != nil {
+                    VStack(spacing: 0) {
+                        Button {
+                            saveExercise()
+                        } label: {
+                            HStack {
+                                if isSaving {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    Text("Saving...")
+                                } else {
+                                    Text("Save Exercise")
                                 }
                             }
-                            .padding(.vertical, 4)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(isSaving ? Color.gray : Color.blue)
+                            )
                         }
-                        
-                        // Editable Instructions
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Instructions")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            TextEditor(text: $editedInstructions)
-                                .frame(minHeight: 100)
-                        }
-                        
-                        // Editable YouTube URL
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("YouTube URL")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            TextField("https://youtube.com/...", text: $editedYoutubeUrl)
-                                .keyboardType(.URL)
-                                .autocapitalization(.none)
-                        }
-                        
-                        // Link preview
-                        if let url = URL(string: editedYoutubeUrl), !editedYoutubeUrl.isEmpty {
-                            Link(destination: url) {
-                                HStack {
-                                    Image(systemName: "play.circle.fill")
-                                    Text("Test Video Link")
-                                }
-                            }
-                        }
-                    } header: {
-                        Text("Review & Edit Details")
-                    } footer: {
-                        Text("The AI has filled these in. Review and adjust if necessary before saving.")
+                        .disabled(isSaving)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                        .background(
+                            Color(.systemBackground)
+                                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
+                        )
                     }
                 }
             }
@@ -119,14 +167,6 @@ struct AddExerciseView: View {
                     }
                     .disabled(exerciseName.isEmpty || isGenerating)
                 }
-                if generatedExercise != nil {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Save") {
-                            saveExercise()
-                        }
-                        .disabled(isSaving)
-                    }
-                }
             }
             .alert("Error", isPresented: $showingError) {
                 Button("OK", role: .cancel) { }
@@ -134,6 +174,20 @@ struct AddExerciseView: View {
                 Text(errorMessage ?? "Unknown error")
             }
         }
+    }
+    
+    /// Format instructions with proper line breaks and spacing
+    private func formatInstructions(_ text: String) -> String {
+        // Replace common patterns to improve readability
+        var formatted = text
+        
+        // Add line breaks after numbered steps
+        formatted = formatted.replacingOccurrences(of: ". ", with: ".\n\n")
+        
+        // Clean up any triple newlines
+        formatted = formatted.replacingOccurrences(of: "\n\n\n", with: "\n\n")
+        
+        return formatted.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     private func generateExercise() {
@@ -150,7 +204,7 @@ struct AddExerciseView: View {
                         generatedExercise = exercise
                         // Pre-fill editable fields with generated data
                         editedCategory = exercise.exerciseType
-                        editedInstructions = exercise.instructions
+                        editedInstructions = exercise.instructions ?? ""
                         editedYoutubeUrl = exercise.youtubeUrl ?? ""
                     }
                     isGenerating = false
