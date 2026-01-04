@@ -12,9 +12,10 @@ struct AddExerciseView: View {
     @State private var showingError = false
     
     // New state for editing generated details
-    @State private var editedCategory: ExerciseCategory = .barbellDumbbell
+    @State private var editedCategory: ExerciseCategory = .weighted
     @State private var editedInstructions: String = ""
     @State private var editedYoutubeUrl: String = ""
+    @State private var editedBodyParts: Set<BodyPart> = []
     @State private var isSaving = false
     
     var body: some View {
@@ -45,31 +46,56 @@ struct AddExerciseView: View {
                         Section {
                             // Editable Category Picker
                             Picker("Type", selection: $editedCategory) {
-                                ForEach(ExerciseCategory.primaryCases, id: \.self) { category in
+                                ForEach(ExerciseCategory.allCases, id: \.self) { category in
                                     Text(category.displayName).tag(category)
                                 }
                             }
                             
-                            // Body Parts (Keep read-only or make editable if desired)
-                            if !exercise.bodyParts.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Body Parts")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                    FlowLayout(spacing: 8) {
-                                        ForEach(exercise.bodyParts, id: \.self) { part in
-                                            Text(part)
-                                                .font(.caption)
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 4)
-                                                .background(Color.blue.opacity(0.2))
-                                                .foregroundColor(.blue)
-                                                .cornerRadius(8)
+                            // Multiselect Dropdown for Body Parts
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Body Parts Targeted")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                
+                                Menu {
+                                    ForEach(BodyPart.allCases) { part in
+                                        Button {
+                                            if editedBodyParts.contains(part) {
+                                                editedBodyParts.remove(part)
+                                            } else {
+                                                editedBodyParts.insert(part)
+                                            }
+                                        } label: {
+                                            HStack {
+                                                Text(part.displayName)
+                                                if editedBodyParts.contains(part) {
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
                                         }
                                     }
+                                } label: {
+                                    HStack {
+                                        if editedBodyParts.isEmpty {
+                                            Text("Select Body Parts")
+                                                .foregroundColor(.secondary)
+                                        } else {
+                                            Text(editedBodyParts.map { $0.displayName }.sorted().joined(separator: ", "))
+                                                .foregroundColor(.primary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 12)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(8)
                                 }
-                                .padding(.vertical, 4)
                             }
+                            .padding(.vertical, 4)
                             
                             // Formatted Instructions (Read-only with better formatting)
                             VStack(alignment: .leading, spacing: 8) {
@@ -113,7 +139,7 @@ struct AddExerciseView: View {
                         // Add spacing for the bottom button
                         Section {
                             Color.clear
-                                .frame(height: 80)
+                                .frame(height: 100)
                                 .listRowBackground(Color.clear)
                         }
                     }
@@ -122,6 +148,8 @@ struct AddExerciseView: View {
                 // Fixed Save Button at Bottom
                 if generatedExercise != nil {
                     VStack(spacing: 0) {
+                        Divider()
+                        
                         Button {
                             saveExercise()
                         } label: {
@@ -145,12 +173,10 @@ struct AddExerciseView: View {
                         }
                         .disabled(isSaving)
                         .padding(.horizontal)
-                        .padding(.bottom, 8)
-                        .background(
-                            Color(.systemBackground)
-                                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
-                        )
+                        .padding(.vertical, 16)
                     }
+                    .background(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
                 }
             }
             .navigationTitle("Add Exercise")
@@ -178,14 +204,12 @@ struct AddExerciseView: View {
     
     /// Format instructions with proper line breaks and spacing
     private func formatInstructions(_ text: String) -> String {
-        // Replace common patterns to improve readability
         var formatted = text
         
-        // Add line breaks after numbered steps
-        formatted = formatted.replacingOccurrences(of: ". ", with: ".\n\n")
-        
-        // Clean up any triple newlines
-        formatted = formatted.replacingOccurrences(of: "\n\n\n", with: "\n\n")
+        // Add spacing between numbered steps (but keep number and text together)
+        for i in 2...9 {
+            formatted = formatted.replacingOccurrences(of: " \(i). ", with: "\n\n\(i). ")
+        }
         
         return formatted.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -206,6 +230,7 @@ struct AddExerciseView: View {
                         editedCategory = exercise.exerciseType
                         editedInstructions = exercise.instructions ?? ""
                         editedYoutubeUrl = exercise.youtubeUrl ?? ""
+                        editedBodyParts = Set(exercise.primaryMuscles)
                     }
                     isGenerating = false
                 }
@@ -231,6 +256,7 @@ struct AddExerciseView: View {
                     exerciseId: exercise.id,
                     instructions: editedInstructions,
                     youtubeUrl: editedYoutubeUrl.isEmpty ? nil : editedYoutubeUrl,
+                    bodyParts: Array(editedBodyParts).map { $0.rawValue },
                     exerciseType: editedCategory
                 )
                 

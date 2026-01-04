@@ -17,12 +17,7 @@ class ExerciseService {
    */
   async createRoutine(userId, routineData) {
     try {
-      const {
-        routineName,
-        dayOfWeek,
-        description,
-        exercises,
-      } = routineData;
+      const { routineName, dayOfWeek, description, exercises } = routineData;
 
       // Insert routine
       const routineResult = await this.database.query(
@@ -176,7 +171,10 @@ class ExerciseService {
       routine.exercises = exercisesResult.rows;
       return routine;
     } catch (error) {
-      this.logger.error(`Error fetching today's routine for user ${userId}:`, error);
+      this.logger.error(
+        `Error fetching today's routine for user ${userId}:`,
+        error
+      );
       throw error;
     }
   }
@@ -215,7 +213,9 @@ class ExerciseService {
       }
 
       values.push(routineId);
-      const sql = `UPDATE exercise_routines SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
+      const sql = `UPDATE exercise_routines SET ${fields.join(
+        ", "
+      )}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
 
       await this.database.query(sql, values);
 
@@ -288,78 +288,56 @@ class ExerciseService {
   async logWorkout(userId, logData) {
     try {
       const {
+        uuid,
         routineId,
         exerciseDate,
         totalDurationMinutes,
         location,
         notes,
         entries,
+        status = "COMPLETED",
+        startedAt,
+        started_at,
+        endedAt,
+        ended_at,
       } = logData;
 
       const today = new Date(exerciseDate || new Date());
       const dayOfWeek = today.getDay();
 
-      // Insert log
+      // Insert log (WorkoutSession)
       const logResult = await this.database.query(
         `INSERT INTO exercise_logs (
-          user_id, routine_id, exercise_date, day_of_week,
-          total_duration_minutes, location, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          user_id, uuid, routine_id, exercise_date, day_of_week,
+          total_duration_minutes, location, notes, status, started_at, ended_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *`,
         [
           userId,
+          uuid || null,
           routineId || null,
-          today.toISOString().split('T')[0],
+          today.toISOString().split("T")[0],
           dayOfWeek,
           totalDurationMinutes || null,
           location || null,
           notes || null,
+          status,
+          startedAt || started_at || null,
+          endedAt || ended_at || null,
         ]
       );
 
       const log = logResult.rows[0];
 
-      // Insert log entries
+      // Insert log entries (ExerciseLogs)
       if (entries && entries.length > 0) {
         for (let i = 0; i < entries.length; i++) {
           const entry = entries[i];
-          
-          // Prepare data arrays for new fields
-          // Use entry fields directly if they are pre-formatted arrays, or extract from nested sets if necessary
-          // The addExerciseToWorkout method handles the array construction from sets
-          // Here we assume 'entries' might come from a direct API call matching the new schema or old
-          // For robust support, we'll rely on the values passed being correct or defaulted to []
-          
-          await this.database.query(
-            `INSERT INTO exercise_log_entries (
-              log_id, exercise_name, exercise_order, equipment_used,
-              sets_performed, reps_performed, weight_used, duration_seconds,
-              rest_seconds, notes, difficulty_rating,
-              distance_meters, band_level, resistance_level, incline_percentage,
-              calories, heart_rate, speed_mph, rpe
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
-            [
-              log.id,
-              entry.exerciseName,
-              i + 1,
-              entry.equipmentUsed || null,
-              entry.setsPerformed,
-              JSON.stringify(entry.repsPerformed || []),
-              JSON.stringify(entry.weightUsed || []),
-              JSON.stringify(entry.durationSeconds || []),
-              entry.restSeconds || null,
-              entry.notes || null,
-              entry.difficultyRating || null,
-              JSON.stringify(entry.distanceMeters || []),
-              JSON.stringify(entry.bandLevel || []),
-              JSON.stringify(entry.resistanceLevel || []),
-              JSON.stringify(entry.inclinePercentage || []),
-              JSON.stringify(entry.calories || []),
-              JSON.stringify(entry.heartRate || []),
-              JSON.stringify(entry.speedMph || []),
-              JSON.stringify(entry.rpe || [])
-            ]
-          );
+          await this.createExerciseLog(userId, {
+            ...entry,
+            logId: log.id,
+            exerciseOrder: i + 1,
+          });
         }
       }
 
@@ -375,6 +353,91 @@ class ExerciseService {
   }
 
   /**
+   * Create an atomic exercise log (can exist without a workout session)
+   * @param {number} userId - User ID
+   * @param {Object} entryData - Exercise log data
+   * @returns {Promise<Object>} Created log entry
+   */
+  async createExerciseLog(userId, entryData) {
+    try {
+      const {
+        uuid,
+        logId,
+        exerciseId,
+        exerciseName,
+        exerciseOrder,
+        equipmentUsed,
+        sets, // Array of set objects: [{ reps, weight, duration, ... }]
+        notes,
+        difficultyRating,
+        performedAt,
+        source = "manual",
+        syncState = "synced",
+      } = entryData;
+
+      // Ensure exercise exists or name is provided
+      let finalExerciseName = exerciseName;
+      let finalExerciseId = exerciseId;
+
+      if (exerciseId && !exerciseName) {
+        const ex = await this.getExercise(exerciseId);
+        if (ex) finalExerciseName = ex.exercise_name;
+      }
+
+      // Legacy field extraction for backward compatibility if needed,
+      // but primarily using the 'sets' JSONB column now.
+      const repsPerformed = [];
+      const weightUsed = [];
+      const durationSeconds = [];
+
+      if (sets && Array.isArray(sets)) {
+        for (const set of sets) {
+          repsPerformed.push(set.reps || null);
+          weightUsed.push(set.weight || null);
+          durationSeconds.push(set.duration || null);
+        }
+      }
+
+      const result = await this.database.query(
+        `INSERT INTO exercise_log_entries (
+          uuid, log_id, exercise_id, exercise_name, exercise_order, 
+          equipment_used, sets_performed, sets, reps_performed, weight_used, 
+          duration_seconds, notes, difficulty_rating, performed_at,
+          source, sync_state, user_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        RETURNING *`,
+        [
+          uuid || null,
+          logId || null,
+          finalExerciseId || null,
+          finalExerciseName,
+          exerciseOrder || 1,
+          equipmentUsed || null,
+          sets ? sets.length : 0,
+          JSON.stringify(sets || []),
+          JSON.stringify(repsPerformed),
+          JSON.stringify(weightUsed),
+          JSON.stringify(durationSeconds),
+          notes || null,
+          difficultyRating || null,
+          performedAt || new Date(),
+          source,
+          syncState,
+          userId || null,
+        ]
+      );
+
+      return result.rows[0];
+    } catch (error) {
+      this.logger.error(
+        `Error creating exercise log for user ${userId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Get a workout log by ID
    * @param {number} logId - Log ID
    * @returns {Promise<Object>} Log with entries
@@ -382,7 +445,7 @@ class ExerciseService {
   async getWorkoutLog(logId) {
     try {
       const logResult = await this.database.query(
-        `SELECT * FROM exercise_logs WHERE id = $1`,
+        `SELECT * FROM exercise_logs WHERE id = $1 AND deleted_at IS NULL`,
         [logId]
       );
 
@@ -395,17 +458,26 @@ class ExerciseService {
       // Get entries
       const entriesResult = await this.database.query(
         `SELECT * FROM exercise_log_entries
-         WHERE log_id = $1
+         WHERE log_id = $1 AND deleted_at IS NULL
          ORDER BY exercise_order ASC`,
         [logId]
       );
 
+      this.logger.debug(
+        `🔍 [WorkoutLog] Found ${entriesResult.rows.length} entries for workout ${logId}`
+      );
+
       // Parse JSONB fields
-      log.entries = entriesResult.rows.map(entry => ({
+      log.entries = entriesResult.rows.map((entry) => ({
         ...entry,
+        sets: entry.sets || [],
         repsPerformed: entry.reps_performed || [],
         weightUsed: entry.weight_used || [],
         durationSeconds: entry.duration_seconds || [],
+        performedAt: entry.performed_at,
+        source: entry.source,
+        syncState: entry.sync_state,
+        // legacy fields
         distanceMeters: entry.distance_meters || [],
         bandLevel: entry.band_level || [],
         resistanceLevel: entry.resistance_level || [],
@@ -431,31 +503,114 @@ class ExerciseService {
    * @param {number} limit - Max results (default 50)
    * @returns {Promise<Array>} List of workout logs
    */
-  async getWorkoutHistory(userId, startDate = null, endDate = null, limit = 50) {
+  async getWorkoutHistory(
+    userId,
+    startDate = null,
+    endDate = null,
+    limit = 50
+  ) {
     try {
+      this.logger.info(`🕒 [History] Fetching history for user ${userId}`, {
+        startDate,
+        endDate,
+        limit,
+      });
       let sql = `
         SELECT * FROM exercise_logs
-        WHERE user_id = $1
+        WHERE user_id = $1 AND deleted_at IS NULL
       `;
       const values = [userId];
 
       if (startDate) {
-        sql += ` AND exercise_date >= $${values.length + 1}`;
-        values.push(startDate);
+        // Handle both Date objects and strings
+        const dateVal =
+          startDate instanceof Date
+            ? startDate.toISOString().split("T")[0]
+            : startDate;
+        sql += ` AND exercise_date >= $${values.length + 1}::DATE`;
+        values.push(dateVal);
       }
 
       if (endDate) {
-        sql += ` AND exercise_date <= $${values.length + 1}`;
-        values.push(endDate);
+        // Handle both Date objects and strings
+        const dateVal =
+          endDate instanceof Date
+            ? endDate.toISOString().split("T")[0]
+            : endDate;
+        sql += ` AND exercise_date <= $${values.length + 1}::DATE`;
+        values.push(dateVal);
       }
 
-      sql += ` ORDER BY exercise_date DESC, created_at DESC LIMIT $${values.length + 1}`;
+      sql += ` ORDER BY exercise_date DESC, created_at DESC LIMIT $${
+        values.length + 1
+      }`;
       values.push(limit);
 
+      this.logger.debug(
+        `🔍 [History] Executing SQL: ${sql} with values: ${JSON.stringify(
+          values
+        )}`
+      );
       const result = await this.database.query(sql, values);
+      this.logger.info(
+        `✅ [History] Found ${result.rows.length} workouts for user ${userId}`
+      );
+
+      if (result.rows.length === 0) {
+        // Debug: check total count for this user
+        const countResult = await this.database.query(
+          "SELECT COUNT(*) FROM exercise_logs WHERE user_id = $1",
+          [userId]
+        );
+        const deletedResult = await this.database.query(
+          "SELECT COUNT(*) FROM exercise_logs WHERE user_id = $1 AND deleted_at IS NOT NULL",
+          [userId]
+        );
+        this.logger.info(
+          `🔍 [History] Total workouts for user ${userId}: ${countResult.rows[0].count}, Deleted: ${deletedResult.rows[0].count}`
+        );
+      }
+
       return result.rows;
     } catch (error) {
-      this.logger.error(`Error fetching workout history for user ${userId}:`, error);
+      this.logger.error(
+        `Error fetching workout history for user ${userId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get independent exercise logs (not grouped into a session)
+   * @param {number} userId - User ID
+   * @param {number} limit - Limit
+   * @returns {Promise<Array>} List of exercise logs
+   */
+  async getIndependentExerciseLogs(userId, limit = 50) {
+    try {
+      const sql = `
+        SELECT e.*, ex.category as ex_category, ex.input_schema
+        FROM exercise_log_entries e
+        LEFT JOIN exercise_logs l ON e.log_id = l.id
+        LEFT JOIN exercises ex ON e.exercise_id = ex.id
+        WHERE e.user_id = $1
+        AND (e.log_id IS NULL OR l.status != 'COMPLETED')
+        AND e.deleted_at IS NULL
+        ORDER BY e.performed_at DESC
+        LIMIT $2
+      `;
+
+      const result = await this.database.query(sql, [userId, limit]);
+      return result.rows.map((entry) => ({
+        ...entry,
+        sets: entry.sets || [],
+        repsPerformed: entry.reps_performed || [],
+        weightUsed: entry.weight_used || [],
+        durationSeconds: entry.duration_seconds || [],
+      }));
+    } catch (error) {
+      this.logger.error(`Error fetching independent logs:`, error);
       throw error;
     }
   }
@@ -468,7 +623,7 @@ class ExerciseService {
    */
   async hasLoggedToday(userId, routineId = null) {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split("T")[0];
       let sql = `
         SELECT COUNT(*) as count FROM exercise_logs
         WHERE user_id = $1 AND exercise_date = $2
@@ -483,7 +638,10 @@ class ExerciseService {
       const result = await this.database.query(sql, values);
       return parseInt(result.rows[0].count) > 0;
     } catch (error) {
-      this.logger.error(`Error checking if logged today for user ${userId}:`, error);
+      this.logger.error(
+        `Error checking if logged today for user ${userId}:`,
+        error
+      );
       throw error;
     }
   }
@@ -512,7 +670,10 @@ class ExerciseService {
       const result = await this.database.query(sql, values);
       return result.rows;
     } catch (error) {
-      this.logger.error(`Error fetching exercise history for user ${userId}:`, error);
+      this.logger.error(
+        `Error fetching exercise history for user ${userId}:`,
+        error
+      );
       throw error;
     }
   }
@@ -526,7 +687,7 @@ class ExerciseService {
       for (const entry of entries) {
         // Normalize exercise name (remove equipment suffix for grouping)
         const normalizedName = entry.exerciseName
-          .replace(/\s*\(.*?\)\s*$/, '') // Remove (Machine), (Bands), etc.
+          .replace(/\s*\(.*?\)\s*$/, "") // Remove (Machine), (Bands), etc.
           .trim();
 
         // Calculate averages
@@ -534,15 +695,19 @@ class ExerciseService {
         const weightArray = entry.weightUsed || [];
         const durationArray = entry.durationSeconds || [];
 
-        const avgReps = repsArray.length > 0
-          ? repsArray.reduce((a, b) => a + b, 0) / repsArray.length
-          : null;
-        const avgWeight = weightArray.length > 0 && weightArray.some(w => w !== null)
-          ? weightArray.filter(w => w !== null).reduce((a, b) => a + b, 0) / weightArray.filter(w => w !== null).length
-          : null;
-        const avgDuration = durationArray.length > 0
-          ? durationArray.reduce((a, b) => a + b, 0) / durationArray.length
-          : null;
+        const avgReps =
+          repsArray.length > 0
+            ? repsArray.reduce((a, b) => a + b, 0) / repsArray.length
+            : null;
+        const avgWeight =
+          weightArray.length > 0 && weightArray.some((w) => w !== null)
+            ? weightArray.filter((w) => w !== null).reduce((a, b) => a + b, 0) /
+              weightArray.filter((w) => w !== null).length
+            : null;
+        const avgDuration =
+          durationArray.length > 0
+            ? durationArray.reduce((a, b) => a + b, 0) / durationArray.length
+            : null;
 
         // Upsert exercise history
         await this.database.query(
@@ -573,7 +738,7 @@ class ExerciseService {
           [
             userId,
             normalizedName,
-            entry.equipmentUsed || 'bodyweight',
+            entry.equipmentUsed || "bodyweight",
             entry.setsPerformed,
             avgReps,
             avgWeight,
@@ -598,9 +763,11 @@ class ExerciseService {
    */
   async createExercise(exerciseName, llmService, options = {}) {
     try {
-      // Check if exercise already exists
+      // Check if a NON-ARCHIVED exercise already exists
       const existing = await this.database.query(
-        `SELECT * FROM exercises WHERE LOWER(exercise_name) = LOWER($1)`,
+        `SELECT * FROM exercises 
+         WHERE LOWER(exercise_name) = LOWER($1) 
+         AND (is_archived = false OR is_archived IS NULL)`,
         [exerciseName]
       );
 
@@ -612,7 +779,8 @@ class ExerciseService {
       const details = await llmService.generateExerciseDetails(exerciseName);
 
       // Determine category: User selection > LLM guess > Default
-      const category = options.category || details.category || 'barbell_dumbbell';
+      const category =
+        options.category || details.category || "barbell_dumbbell";
 
       // Insert exercise
       const result = await this.database.query(
@@ -656,6 +824,7 @@ class ExerciseService {
 
   /**
    * Search exercises by name (autocomplete)
+   * Excludes archived exercises
    * @param {string} query - Search query
    * @param {number} limit - Max results (default 20)
    * @returns {Promise<Array>} List of matching exercises
@@ -665,6 +834,7 @@ class ExerciseService {
       const result = await this.database.query(
         `SELECT * FROM exercises
          WHERE exercise_name ILIKE $1
+         AND (is_archived = false OR is_archived IS NULL)
          ORDER BY exercise_name ASC
          LIMIT $2`,
         [`%${query}%`, limit]
@@ -678,6 +848,7 @@ class ExerciseService {
 
   /**
    * Get all exercises with pagination
+   * Excludes archived exercises
    * @param {number} limit - Max results (default 50)
    * @param {number} offset - Offset for pagination (default 0)
    * @returns {Promise<Array>} List of exercises
@@ -686,6 +857,7 @@ class ExerciseService {
     try {
       const result = await this.database.query(
         `SELECT * FROM exercises
+         WHERE is_archived = false OR is_archived IS NULL
          ORDER BY exercise_name ASC
          LIMIT $1 OFFSET $2`,
         [limit, offset]
@@ -735,7 +907,9 @@ class ExerciseService {
       }
 
       values.push(exerciseId);
-      const sql = `UPDATE exercises SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
+      const sql = `UPDATE exercises SET ${fields.join(
+        ", "
+      )}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
 
       const result = await this.database.query(sql, values);
       return result.rows[0];
@@ -746,28 +920,18 @@ class ExerciseService {
   }
 
   /**
-   * Delete exercise (only if not referenced)
+   * Delete exercise (soft delete - archives the exercise)
    * @param {number} exerciseId - Exercise ID
    * @returns {Promise<boolean>} Success
    */
   async deleteExercise(exerciseId) {
     try {
-      // Check if exercise is referenced
-      const routineRefs = await this.database.query(
-        `SELECT COUNT(*) as count FROM routine_exercises WHERE exercise_id = $1`,
-        [exerciseId]
-      );
-      const logRefs = await this.database.query(
-        `SELECT COUNT(*) as count FROM exercise_log_entries WHERE exercise_id = $1`,
-        [exerciseId]
-      );
-
-      if (parseInt(routineRefs.rows[0].count) > 0 || parseInt(logRefs.rows[0].count) > 0) {
-        throw new Error('Cannot delete exercise that is referenced in routines or workout logs');
-      }
-
+      // Soft delete by archiving the exercise
+      // This preserves database integrity for historical logs and routines
       const result = await this.database.query(
-        `DELETE FROM exercises WHERE id = $1`,
+        `UPDATE exercises 
+         SET is_archived = true, updated_at = NOW()
+         WHERE id = $1 AND is_archived = false`,
         [exerciseId]
       );
       return result.rowCount > 0;
@@ -780,6 +944,80 @@ class ExerciseService {
   // ==================== NEW WORKOUT METHODS ====================
 
   /**
+   * Delete a workout session (soft delete)
+   * @param {number} workoutId - Workout ID
+   * @returns {Promise<boolean>} Success
+   */
+  async deleteWorkout(workoutId) {
+    try {
+      this.logger.info(`🗑️ [Workout] Deleting workout ${workoutId}...`);
+      const result = await this.database.query(
+        `UPDATE exercise_logs 
+         SET deleted_at = NOW() 
+         WHERE id = $1`,
+        [workoutId]
+      );
+
+      if (result.rowCount === 0) {
+        throw new Error(`Workout ${workoutId} not found`);
+      }
+
+      // Also soft-delete all entries within this workout
+      await this.database.query(
+        `UPDATE exercise_log_entries 
+         SET deleted_at = NOW() 
+         WHERE log_id = $1`,
+        [workoutId]
+      );
+
+      this.logger.info(
+        `✅ [Workout] Deleted workout ${workoutId} and its entries`
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `❌ [Workout] Error deleting workout ${workoutId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Update workout status
+   * @param {number} workoutId - Workout ID
+   * @param {string} status - New status
+   * @returns {Promise<Object>} Updated workout
+   */
+  async updateWorkoutStatus(workoutId, status) {
+    try {
+      const validStatuses = ["IN_PROGRESS", "COMPLETED", "DISCARDED"];
+      if (!validStatuses.includes(status)) {
+        throw new Error(`Invalid status: ${status}`);
+      }
+
+      const endedAt = status === "COMPLETED" ? "NOW()" : "NULL";
+
+      const result = await this.database.query(
+        `UPDATE exercise_logs 
+         SET status = $1, ended_at = ${endedAt}, updated_at = NOW()
+         WHERE id = $2
+         RETURNING *`,
+        [status, workoutId]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return await this.getWorkoutLog(workoutId);
+    } catch (error) {
+      this.logger.error(`Error updating workout status ${workoutId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Create a new workout
    * @param {number} userId - User ID
    * @param {Object} workoutData - Workout data
@@ -787,27 +1025,60 @@ class ExerciseService {
    */
   async createWorkout(userId, workoutData = {}) {
     try {
-      const {
-        routineId,
-        exerciseDate,
-        totalDurationMinutes,
-        location,
-        notes,
-      } = workoutData;
+      this.logger.info(
+        `🚀 [Workout] Creating workout for user ${userId}...`,
+        workoutData
+      );
 
-      const today = new Date(exerciseDate || new Date());
-      const dayOfWeek = today.getDay();
+      const { routineId, exerciseDate, totalDurationMinutes, location, notes } =
+        workoutData;
+
+      let dateStr;
+      let dayOfWeek;
+
+      if (exerciseDate) {
+        // If date provided (YYYY-MM-DD), split it to avoid UTC conversion issues
+        const [year, month, day] = exerciseDate.split("-").map(Number);
+        const d = new Date(year, month - 1, day);
+        dateStr = exerciseDate;
+        dayOfWeek = d.getDay();
+      } else {
+        // If no date provided, use server local time instead of UTC to avoid date shifting
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const day = String(now.getDate()).padStart(2, "0");
+        dateStr = `${year}-${month}-${day}`;
+        dayOfWeek = now.getDay();
+      }
+
+      // Check if user already has an IN_PROGRESS workout TODAY
+      const existingResult = await this.database.query(
+        `SELECT id FROM exercise_logs 
+         WHERE user_id = $1 AND status = 'IN_PROGRESS' 
+         AND exercise_date = $2 AND deleted_at IS NULL
+         ORDER BY started_at DESC LIMIT 1`,
+        [userId, dateStr]
+      );
+
+      if (existingResult.rows.length > 0) {
+        const existingId = existingResult.rows[0].id;
+        this.logger.info(
+          `📎 [Workout] Found existing IN_PROGRESS workout ${existingId} for user ${userId}, returning that instead.`
+        );
+        return await this.getWorkoutLog(existingId);
+      }
 
       const result = await this.database.query(
         `INSERT INTO exercise_logs (
           user_id, routine_id, exercise_date, day_of_week,
-          total_duration_minutes, location, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          total_duration_minutes, location, notes, status, started_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'IN_PROGRESS', NOW())
         RETURNING *`,
         [
           userId,
           routineId || null,
-          today.toISOString().split('T')[0],
+          dateStr,
           dayOfWeek,
           totalDurationMinutes || null,
           location || null,
@@ -815,9 +1086,80 @@ class ExerciseService {
         ]
       );
 
-      return await this.getWorkoutLog(result.rows[0].id);
+      const workoutId = result.rows[0].id;
+      this.logger.info(`✅ [Workout] Created workout with ID: ${workoutId}`);
+      return await this.getWorkoutLog(workoutId);
     } catch (error) {
-      this.logger.error(`Error creating workout for user ${userId}:`, error);
+      this.logger.error(
+        `❌ [Workout] Error creating workout for user ${userId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Start a workout session from a routine
+   * @param {number} userId - User ID
+   * @param {number} routineId - Routine ID
+   * @returns {Promise<Object>} Created workout
+   */
+  async startWorkoutFromRoutine(userId, routineId) {
+    try {
+      this.logger.info(
+        `🚀 [Workout] Starting workout from routine ${routineId} for user ${userId}...`
+      );
+
+      const routine = await this.getRoutine(routineId);
+      if (!routine) {
+        throw new Error(`Routine ${routineId} not found`);
+      }
+
+      // Create the workout log entry
+      const workout = await this.createWorkout(userId, {
+        routineId,
+        notes: `Started from routine: ${routine.routine_name}`,
+      });
+
+      // Create exercise log entries for each exercise in the routine
+      if (routine.exercises && routine.exercises.length > 0) {
+        for (const routineEx of routine.exercises) {
+          // Find the exercise definition ID if possible
+          const exResult = await this.database.query(
+            "SELECT id FROM exercises WHERE exercise_name = $1 LIMIT 1",
+            [routineEx.exercise_name]
+          );
+          const exerciseId =
+            exResult.rows.length > 0 ? exResult.rows[0].id : null;
+
+          // Create shell sets based on targets
+          const sets = [];
+          for (let i = 0; i < routineEx.target_sets; i++) {
+            sets.push({
+              reps: routineEx.target_reps_min || 0,
+              weight: null,
+              duration: routineEx.target_duration_seconds || null,
+            });
+          }
+
+          await this.createExerciseLog(userId, {
+            logId: workout.id,
+            exerciseId,
+            exerciseName: routineEx.exercise_name,
+            exerciseOrder: routineEx.exercise_order,
+            equipmentUsed: routineEx.preferred_equipment,
+            sets,
+            notes: routineEx.notes,
+          });
+        }
+      }
+
+      return await this.getWorkoutLog(workout.id);
+    } catch (error) {
+      this.logger.error(
+        `❌ [Workout] Error starting workout from routine ${routineId}:`,
+        error
+      );
       throw error;
     }
   }
@@ -831,6 +1173,10 @@ class ExerciseService {
    */
   async addExerciseToWorkout(workoutId, exerciseId, setsData) {
     try {
+      this.logger.info(
+        `📝 [Workout] Adding exercise ${exerciseId} to workout ${workoutId}...`,
+        setsData
+      );
       const exercise = await this.getExercise(exerciseId);
       if (!exercise) {
         throw new Error(`Exercise ${exerciseId} not found`);
@@ -843,84 +1189,55 @@ class ExerciseService {
       );
       const nextOrder = (maxOrderResult.rows[0].max_order || 0) + 1;
 
-      // Prepare sets data based on exercise type/category
-      const sets = setsData.sets || [];
+      // Get the user_id for history update and ownership
+      const workoutResult = await this.database.query(
+        `SELECT user_id FROM exercise_logs WHERE id = $1`,
+        [workoutId]
+      );
+      const userId = workoutResult.rows[0].user_id;
+
+      // Use the new unified createExerciseLog method
+      const logEntry = await this.createExerciseLog(userId, {
+        ...setsData,
+        logId: workoutId,
+        exerciseId,
+        exerciseName: exercise.exercise_name,
+        exerciseOrder: nextOrder,
+      });
+
+      this.logger.info(
+        `✅ [Workout] Exercise added successfully to workout ${workoutId}`
+      );
+
+      // Update exercise history (legacy support for now)
       const repsPerformed = [];
       const weightUsed = [];
       const durationSeconds = [];
-      const distanceMeters = [];
-      const bandLevel = [];
-      const resistanceLevel = [];
-      const inclinePercentage = [];
-      const calories = [];
-      const heartRate = [];
-      const speedMph = [];
-      const rpe = [];
-      const restSeconds = setsData.restSeconds || null;
-
-      for (const set of sets) {
-        repsPerformed.push(set.reps || null);
-        weightUsed.push(set.weight || null);
-        durationSeconds.push(set.duration || null);
-        distanceMeters.push(set.distance || null);
-        bandLevel.push(set.bandLevel || null);
-        resistanceLevel.push(set.resistanceLevel || null);
-        inclinePercentage.push(set.incline || null);
-        calories.push(set.calories || null);
-        heartRate.push(set.heartRate || null);
-        speedMph.push(set.speed || null);
-        rpe.push(set.rpe || null);
+      if (setsData.sets) {
+        for (const s of setsData.sets) {
+          repsPerformed.push(s.reps || null);
+          weightUsed.push(s.weight || null);
+          durationSeconds.push(s.duration || null);
+        }
       }
 
-      // Insert exercise entry
-      await this.database.query(
-        `INSERT INTO exercise_log_entries (
-          log_id, exercise_id, exercise_name, exercise_order,
-          equipment_used, sets_performed, reps_performed, weight_used,
-          duration_seconds, rest_seconds, notes, difficulty_rating,
-          distance_meters, band_level, resistance_level, incline_percentage,
-          calories, heart_rate, speed_mph, rpe
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
-        [
-          workoutId,
-          exerciseId,
-          exercise.exercise_name,
-          nextOrder,
-          setsData.equipmentUsed || null,
-          sets.length,
-          JSON.stringify(repsPerformed),
-          JSON.stringify(weightUsed),
-          JSON.stringify(durationSeconds),
-          restSeconds,
-          setsData.notes || null,
-          setsData.difficultyRating || null,
-          JSON.stringify(distanceMeters),
-          JSON.stringify(bandLevel),
-          JSON.stringify(resistanceLevel),
-          JSON.stringify(inclinePercentage),
-          JSON.stringify(calories),
-          JSON.stringify(heartRate),
-          JSON.stringify(speedMph),
-          JSON.stringify(rpe)
-        ]
-      );
-
-      // Update exercise history
-      await this._updateExerciseHistory(
-        (await this.getWorkoutLog(workoutId)).user_id,
-        [{
+      await this._updateExerciseHistory(userId, [
+        {
           exerciseName: exercise.exercise_name,
           equipmentUsed: setsData.equipmentUsed || null,
-          setsPerformed: sets.length,
+          setsPerformed: setsData.sets ? setsData.sets.length : 0,
           repsPerformed,
           weightUsed,
           durationSeconds,
-        }]
-      );
+        },
+      ]);
 
       return await this.getWorkoutLog(workoutId);
     } catch (error) {
-      this.logger.error(`Error adding exercise to workout ${workoutId}:`, error);
+      this.logger.error(
+        `❌ [Workout] Error adding exercise to workout ${workoutId}:`,
+        error
+      );
       throw error;
     }
   }
@@ -939,13 +1256,13 @@ class ExerciseService {
       }
 
       if (originalWorkout.user_id !== userId) {
-        throw new Error('Cannot repeat workout from another user');
+        throw new Error("Cannot repeat workout from another user");
       }
 
       // Create new workout
       const newWorkout = await this.createWorkout(userId, {
         routineId: originalWorkout.routine_id,
-        exerciseDate: new Date().toISOString().split('T')[0],
+        exerciseDate: new Date().toISOString().split("T")[0],
         location: originalWorkout.location,
         notes: `Repeated from ${originalWorkout.exercise_date}`,
       });
@@ -953,7 +1270,7 @@ class ExerciseService {
       // Copy all exercises with their sets
       for (const entry of originalWorkout.entries) {
         const sets = [];
-        
+
         // Reconstruct sets from entry data
         const reps = entry.repsPerformed || [];
         const weights = entry.weightUsed || [];
@@ -967,7 +1284,12 @@ class ExerciseService {
         const speeds = entry.speedMph || [];
         const rpes = entry.rpe || [];
 
-        const maxLength = Math.max(reps.length, weights.length, durations.length, distances.length);
+        const maxLength = Math.max(
+          reps.length,
+          weights.length,
+          durations.length,
+          distances.length
+        );
         for (let i = 0; i < maxLength; i++) {
           sets.push({
             reps: reps[i] || null,
@@ -998,12 +1320,16 @@ class ExerciseService {
             [entry.exercise_name]
           );
           if (exercise.rows.length > 0) {
-            await this.addExerciseToWorkout(newWorkout.id, exercise.rows[0].id, {
-              sets,
-              restSeconds: entry.rest_seconds,
-              equipmentUsed: entry.equipment_used,
-              notes: entry.notes,
-            });
+            await this.addExerciseToWorkout(
+              newWorkout.id,
+              exercise.rows[0].id,
+              {
+                sets,
+                restSeconds: entry.rest_seconds,
+                equipmentUsed: entry.equipment_used,
+                notes: entry.notes,
+              }
+            );
           }
         }
       }
@@ -1013,6 +1339,140 @@ class ExerciseService {
       this.logger.error(`Error repeating workout ${workoutId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Update a specific exercise entry in a workout
+   * @param {number} entryId - Entry ID
+   * @param {number} userId - User ID for verification
+   * @param {Object} updates - Fields to update
+   * @returns {Promise<Object>} Updated entry
+   */
+  async updateWorkoutEntry(entryId, userId, updates) {
+    try {
+      this.logger.info(
+        `📝 [Workout] Updating entry ${entryId} for user ${userId}...`,
+        updates
+      );
+
+      // Verify ownership and check if deleted
+      const entryResult = await this.database.query(
+        `SELECT user_id, deleted_at FROM exercise_log_entries WHERE id = $1`,
+        [entryId]
+      );
+
+      if (entryResult.rows.length === 0) {
+        throw new Error(`Entry ${entryId} does not exist`);
+      }
+
+      if (entryResult.rows[0].deleted_at !== null) {
+        throw new Error(
+          `Entry ${entryId} has been deleted and cannot be updated`
+        );
+      }
+
+      if (
+        entryResult.rows[0].user_id !== null &&
+        parseInt(entryResult.rows[0].user_id) !== parseInt(userId)
+      ) {
+        throw new Error("Unauthorized to update this entry");
+      }
+
+      const fields = [];
+      const values = [];
+      let paramIndex = 1;
+
+      if (updates.sets !== undefined) {
+        fields.push(`sets = $${paramIndex++}`);
+        values.push(JSON.stringify(updates.sets));
+      }
+      if (updates.notes !== undefined) {
+        fields.push(`notes = $${paramIndex++}`);
+        values.push(updates.notes);
+      }
+      if (updates.restSeconds !== undefined) {
+        fields.push(`rest_seconds = $${paramIndex++}`);
+        values.push(updates.restSeconds);
+      }
+      if (updates.exerciseOrder !== undefined) {
+        fields.push(`exercise_order = $${paramIndex++}`);
+        values.push(updates.exerciseOrder);
+      }
+
+      if (fields.length === 0) {
+        return await this._getEntryById(entryId);
+      }
+
+      values.push(entryId);
+      const sql = `UPDATE exercise_log_entries SET ${fields.join(
+        ", "
+      )}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
+      const result = await this.database.query(sql, values);
+
+      return result.rows[0];
+    } catch (error) {
+      this.logger.error(
+        `❌ [WorkoutService] Error updating entry ${entryId}:`,
+        error
+      );
+      console.error(
+        `❌ [WorkoutService] Error updating entry ${entryId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a specific exercise entry from a workout
+   * @param {number} entryId - Entry ID
+   * @param {number} userId - User ID for verification
+   * @returns {Promise<boolean>} Success
+   */
+  async deleteWorkoutEntry(entryId, userId) {
+    try {
+      this.logger.info(
+        `🗑️ [Workout] Deleting entry ${entryId} for user ${userId}...`
+      );
+
+      // Verify ownership
+      const entryResult = await this.database.query(
+        `SELECT user_id FROM exercise_log_entries WHERE id = $1 AND deleted_at IS NULL`,
+        [entryId]
+      );
+
+      if (entryResult.rows.length === 0) {
+        throw new Error(`Entry ${entryId} not found`);
+      }
+
+      if (
+        entryResult.rows[0].user_id !== null &&
+        parseInt(entryResult.rows[0].user_id) !== parseInt(userId)
+      ) {
+        throw new Error("Unauthorized to delete this entry");
+      }
+
+      const result = await this.database.query(
+        `UPDATE exercise_log_entries SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [entryId]
+      );
+
+      return result.rowCount > 0;
+    } catch (error) {
+      this.logger.error(`❌ [Workout] Error deleting entry ${entryId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get entry by ID (internal helper)
+   */
+  async _getEntryById(entryId) {
+    const result = await this.database.query(
+      `SELECT * FROM exercise_log_entries WHERE id = $1`,
+      [entryId]
+    );
+    return result.rows[0] || null;
   }
 }
 

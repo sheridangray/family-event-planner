@@ -88,26 +88,30 @@ struct HealthSyncView: View {
                     }
                     .padding(.horizontal)
                     
-                    // Category cards for passive health metrics
-                    VStack(spacing: 16) {
-                        Text("Health Metrics")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 4)
-                        
-                        ForEach(HealthCategory.allCases) { category in
-                            NavigationLink(destination: CategoryDetailView(category: category)
-                                .environmentObject(healthManager)) {
-                                CategoryCardView(
-                                    category: category,
-                                    summary: healthManager.getCategorySummary(for: category)
-                                )
+                    // Category sections based on PRD 2.2
+                    ForEach(HealthCategory.allCases) { category in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(category.rawValue)
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 4)
+                            
+                            VStack(spacing: 12) {
+                                ForEach(MetricIdentifier.allCases.filter { MetricInfo.get(for: $0).category == category }, id: \.self) { identifier in
+                                    NavigationLink(destination: StandardizedMetricDetailView(identifier: identifier)
+                                        .environmentObject(healthManager)) {
+                                        MetricSummaryRow(
+                                            identifier: identifier,
+                                            value: healthManager.getMetricValue(for: identifier)
+                                        )
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
                     }
-                    .padding(.horizontal)
                     .onAppear {
                         // Fetch data for selected date when view appears
                         Task {
@@ -282,12 +286,6 @@ struct HealthSyncView: View {
         }
         .navigationTitle("Health")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                ProfileMenuButton()
-                    .environmentObject(authManager)
-            }
-        }
         .navigationDestination(isPresented: $navigationCoordinator.navigateToIntegrations) {
             IntegrationsView()
                 .environmentObject(authManager)
@@ -342,6 +340,46 @@ struct HealthSyncView: View {
                 showingError = true
             }
         }
+    }
+}
+
+// MARK: - Metric Summary Row
+
+struct MetricSummaryRow: View {
+    let identifier: MetricIdentifier
+    let value: String
+    
+    var info: MetricInfo {
+        MetricInfo.get(for: identifier)
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: info.identifier.iconName) // I need to add iconName to MetricIdentifier
+                .font(.title3)
+                .foregroundColor(info.color)
+                .frame(width: 40, height: 40)
+                .background(info.color.opacity(0.1))
+                .clipShape(Circle())
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(info.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text(value)
+                    .font(.title3)
+                    .fontWeight(.bold)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(12)
     }
 }
 

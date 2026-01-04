@@ -3,14 +3,15 @@ import SwiftUI
 /// List view for all exercises with search/autocomplete
 struct ExercisesListView: View {
     @EnvironmentObject var exerciseManager: ExerciseManager
+    @Binding var selectedTab: Int
     @State private var searchText = ""
-    @State private var exercises: [Exercise] = []
     @State private var isLoading = false
     @State private var showingAddExercise = false
     @State private var selectedExercise: Exercise?
     @State private var exerciseToStart: Exercise?
     
     var filteredExercises: [Exercise] {
+        let exercises = exerciseManager.exercises
         if searchText.isEmpty {
             return exercises
         }
@@ -67,6 +68,7 @@ struct ExercisesListView: View {
         }
         .navigationTitle("Exercises")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -77,6 +79,9 @@ struct ExercisesListView: View {
             }
         }
         .sheet(isPresented: $showingAddExercise) {
+            // Reload exercises when sheet is dismissed
+            loadExercises()
+        } content: {
             NavigationStack {
                 AddExerciseView()
                     .environmentObject(exerciseManager)
@@ -86,11 +91,15 @@ struct ExercisesListView: View {
             loadExercises()
         }
         .navigationDestination(item: $selectedExercise) { exercise in
-            ExerciseDetailView(exercise: exercise)
+            ExerciseDetailView(exercise: exercise, selectedTab: $selectedTab)
                 .environmentObject(exerciseManager)
         }
         .navigationDestination(item: $exerciseToStart) { exercise in
-            StartExerciseView(exercise: exercise, workoutId: nil)
+            StartExerciseView(exercise: exercise, workoutId: nil, onSave: {
+                // After saving an exercise started from the list, switch to the Workout Log tab
+                selectedTab = 2
+            })
+            .environmentObject(exerciseManager)
         }
     }
     
@@ -100,7 +109,6 @@ struct ExercisesListView: View {
             do {
                 try await exerciseManager.fetchDefinitions(query: nil)
                 await MainActor.run {
-                    exercises = exerciseManager.exercises
                     isLoading = false
                 }
             } catch {
@@ -116,9 +124,6 @@ struct ExercisesListView: View {
         Task {
             do {
                 try await exerciseManager.fetchDefinitions(query: query)
-                await MainActor.run {
-                    exercises = exerciseManager.exercises
-                }
             } catch {
                 print("Error searching exercises: \(error)")
             }
@@ -138,20 +143,7 @@ struct ExerciseRow: View {
     }
     
     var typeIcon: String {
-        switch exercise.exerciseType {
-        case .weighted, .barbellDumbbell: return "dumbbell.fill"
-        case .bodyweight: return "figure.walk"
-        case .assisted, .bandAssisted: return "figure.mixed.cardio"
-        case .machine: return "gearshape.fill"
-        case .time, .isometric: return "timer"
-        case .cardioDistance: return "figure.run"
-        case .cardioTime: return "heart.fill"
-        case .distanceTime: return "location.fill"
-        case .machineCardio: return "figure.outdoor.cycle"
-        case .interval: return "stopwatch.fill"
-        case .mobility: return "figure.mind.and.body"
-        case .skill: return "star.fill"
-        }
+        exercise.exerciseType.iconName
     }
     
     var body: some View {
@@ -238,6 +230,6 @@ struct SearchBar: View {
 }
 
 #Preview {
-    ExercisesListView()
+    ExercisesListView(selectedTab: .constant(0))
         .environmentObject(ExerciseManager.shared)
 }

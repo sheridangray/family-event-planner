@@ -142,17 +142,50 @@ class ExerciseLLMService {
   "category": "category_enum_value"
 }
 
+Body parts rules (select ONLY from this list):
+- "Chest"
+- "Back"
+- "Shoulders"
+- "Triceps"
+- "Biceps"
+- "Glutes"
+- "Quads"
+- "Hamstrings"
+- "Calves"
+- "Core"
+
 Category rules (select ONE based on exercise mechanics):
-- "barbell_dumbbell": Weighted movements (Bench press, squats, curls, deadlifts)
-- "bodyweight": Bodyweight strength (Push-ups, pull-ups, air squats, dips)
-- "assisted": Band or machine assisted exercises (Band pull-ups, assisted dips)
-- "machine": Pin-loaded or plate-loaded machines (Leg press, pec deck, lat pulldown)
-- "isometric": Static holds (Plank, wall sit, dead hang)
-- "cardio_distance": Distance-based cardio (Running, cycling, rowing, walking)
-- "cardio_time": Time/Calorie-based cardio (Elliptical, stair climber, assault bike, jump rope)
-- "interval": HIIT, circuits, rounds (Burpees, box jumps, battle ropes)
-- "mobility": Stretching, foam rolling, yoga poses
-- "skill": Technique practice (Handstands, double unders, olympic lifting drills)
+- "WEIGHTED": Weighted movements with barbells/dumbbells (Bench press, squats, curls, deadlifts)
+- "CABLE_MACHINE": Exercises performed using cable stacks and pulleys (Cable flyes, cable rows, lat pulldowns)
+- "BODYWEIGHT": Bodyweight strength exercises (Push-ups, pull-ups, air squats, dips)
+- "BAND_ASSISTED": Band or machine assisted exercises (Band pull-ups, assisted dips)
+- "TIME": Exercises performed for a set duration (Plank, wall sit, dead hang)
+- "DISTANCE_TIME": Distance-based cardio (Running, cycling, rowing, walking)
+- "MACHINE_CARDIO": Time/Calorie-based cardio on machines (Elliptical, stair climber, assault bike)
+- "MOBILITY": Stretching, foam rolling, yoga poses
+
+INSTRUCTION FORMATTING RULES - VERY IMPORTANT:
+Each numbered step MUST be separated by TWO newline characters (\\n\\n) for proper spacing.
+Each step should be clear, detailed, and on its own paragraph.
+
+BAD FORMATTING (DO NOT DO THIS):
+1. Set the pulleys on a cable machine to shoulder height and select the desired weight. 2. Stand in the middle of the cable machine with your feet shoulder-width apart. 3. Grasp the handles with your palms facing down.
+
+BAD FORMATTING (DO NOT DO THIS):
+1. Lie flat on a bench with your feet firmly planted on the ground.
+2. Grip the bar with hands slightly wider than shoulder-width apart.
+3. Lift the bar off the rack and lower it to your mid-chest, keeping your elbows at a 45-degree angle.
+
+GOOD FORMATTING (DO THIS):
+1. Stand with your feet shoulder-width apart, facing a cable machine with the pulley set at the lowest position.
+
+2. Grasp the handle with one hand using an overhand grip, keeping your arm straight but not locked.
+
+3. With a slight bend in your elbow, lift the handle out to the side until your arm is parallel to the floor.
+
+4. Pause briefly at the top, then slowly lower the handle back to the starting position.
+
+5. Repeat for the desired number of repetitions, then switch arms.
 
 Return ONLY valid JSON, no additional text or markdown formatting.`;
 
@@ -252,16 +285,14 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
 
       // Valid categories list
       const validCategories = [
-        "barbell_dumbbell",
-        "bodyweight",
-        "assisted",
-        "machine",
-        "isometric",
-        "cardio_distance",
-        "cardio_time",
-        "interval",
-        "mobility",
-        "skill",
+        "WEIGHTED",
+        "CABLE_MACHINE",
+        "BODYWEIGHT",
+        "BAND_ASSISTED",
+        "TIME",
+        "DISTANCE_TIME",
+        "MACHINE_CARDIO",
+        "MOBILITY",
       ];
 
       if (!category || !validCategories.includes(category)) {
@@ -270,33 +301,35 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
         if (
           nameLower.includes("run") ||
           nameLower.includes("cycle") ||
-          nameLower.includes("row")
+          nameLower.includes("row") && !nameLower.includes("cable")
         ) {
-          category = "cardio_distance";
+          category = "DISTANCE_TIME";
         } else if (
           nameLower.includes("elliptical") ||
           nameLower.includes("stair")
         ) {
-          category = "cardio_time";
+          category = "MACHINE_CARDIO";
         } else if (nameLower.includes("plank") || nameLower.includes("hold")) {
-          category = "isometric";
+          category = "TIME";
         } else if (
           nameLower.includes("stretch") ||
           nameLower.includes("roll")
         ) {
-          category = "mobility";
+          category = "MOBILITY";
+        } else if (nameLower.includes("cable")) {
+          category = "CABLE_MACHINE";
         } else if (nameLower.includes("machine")) {
-          category = "machine";
+          category = "CABLE_MACHINE"; // Assume machine weighted is cable for now
         } else if (nameLower.includes("band") && nameLower.includes("assist")) {
-          category = "assisted";
+          category = "BAND_ASSISTED";
         } else if (
           nameLower.includes("body") ||
           nameLower.includes("push-up") ||
           nameLower.includes("pull-up")
         ) {
-          category = "bodyweight";
+          category = "BODYWEIGHT";
         } else {
-          category = "barbell_dumbbell"; // Default fallback
+          category = "WEIGHTED"; // Default fallback
         }
 
         this.logger.warn(
@@ -307,6 +340,24 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
             inferredCategory: category,
           }
         );
+      }
+
+      // Valid body parts list
+      const validBodyParts = [
+        "Chest", "Back", "Shoulders", "Triceps", "Biceps", 
+        "Glutes", "Quads", "Hamstrings", "Calves", "Core"
+      ];
+
+      // Filter and normalize body parts
+      let bodyParts = [];
+      if (Array.isArray(exerciseData.body_parts)) {
+        bodyParts = exerciseData.body_parts
+          .map(part => {
+            // Trim and normalize case to match our list
+            const trimmed = part.trim();
+            return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+          })
+          .filter(part => validBodyParts.includes(part));
       }
 
       // Search YouTube for real video (using YouTube API instead of LLM)
@@ -327,7 +378,7 @@ Return ONLY valid JSON, no additional text or markdown formatting.`;
       return {
         instructions: exerciseData.instructions,
         youtubeUrl: youtubeUrl, // Now from YouTube API, not LLM
-        bodyParts: exerciseData.body_parts || [],
+        bodyParts: bodyParts,
         category: category,
         exerciseType: category,
       };

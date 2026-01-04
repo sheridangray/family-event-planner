@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS health_coach_recommendations (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_health_coach_user_date ON health_coach_recommendations(user_id, generated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_health_coach_notification_sent ON health_coach_recommendations(notification_sent);
-CREATE INDEX IF NOT EXISTS idx_health_coach_user_recent ON health_coach_recommendations(user_id, generated_at DESC) WHERE generated_at >= CURRENT_DATE - INTERVAL '30 days';
+-- Partial index for recent recommendations
+CREATE INDEX IF NOT EXISTS idx_health_coach_user_recent ON health_coach_recommendations(user_id, generated_at DESC)
+    WHERE generated_at >= NOW() - INTERVAL '30 days';
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_health_coach_updated_at()

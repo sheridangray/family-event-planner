@@ -86,7 +86,7 @@ struct ExerciseRoutineCard: View {
         )
         .task {
             do {
-                hasLogged = try await exerciseManager.hasLoggedToday(routineId: routine.id)
+                hasLogged = try await exerciseManager.hasLoggedToday()
             } catch {
                 // Ignore errors
             }

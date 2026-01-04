@@ -33,15 +33,13 @@ function createCalendarRouter(database, logger) {
       logger.info(`Storing calendar tokens for user ${userId}`);
 
       // Store tokens in database
-      await database.postgres.saveOAuthToken(
-        userId,
-        "google_calendar",
+      await database.postgres.saveOAuthTokens(userId, "google", {
         access_token,
-        refresh_token || null,
-        "Bearer",
-        scope || "",
-        expires_at ? new Date(expires_at * 1000) : null
-      );
+        refresh_token: refresh_token || null,
+        token_type: "Bearer",
+        scope: scope || "",
+        expiry_date: expires_at ? expires_at * 1000 : null,
+      });
 
       logger.info(`✅ Calendar connected for user ${userId}`);
 
@@ -69,7 +67,7 @@ function createCalendarRouter(database, logger) {
 
       logger.info(`Disconnecting calendar for user ${userId}`);
 
-      await database.postgres.deleteOAuthToken(userId, "google_calendar");
+      await database.postgres.deleteOAuthTokens(userId, "google");
 
       logger.info(`✅ Calendar disconnected for user ${userId}`);
 
@@ -100,9 +98,9 @@ function createCalendarRouter(database, logger) {
       );
 
       // Get user's OAuth token
-      const tokenData = await database.postgres.getOAuthToken(
+      const tokenData = await database.postgres.getOAuthTokens(
         userId,
-        "google_calendar"
+        "google"
       );
 
       if (!tokenData) {
@@ -111,19 +109,6 @@ function createCalendarRouter(database, logger) {
           success: false,
           error: "Calendar not connected",
           needsAuth: true,
-        });
-      }
-
-      // Check if token is expired
-      if (
-        tokenData.expiry_date &&
-        new Date(tokenData.expiry_date) < new Date()
-      ) {
-        logger.warn(`Calendar token expired for user ${userId}`);
-        return res.status(401).json({
-          success: false,
-          error: "Calendar authorization expired",
-          needsReauth: true,
         });
       }
 
@@ -137,6 +122,55 @@ function createCalendarRouter(database, logger) {
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
       });
+
+      // Check if token is expired and we have a refresh token
+      if (
+        tokenData.expiry_date &&
+        new Date(tokenData.expiry_date) < new Date()
+      ) {
+        if (tokenData.refresh_token) {
+          logger.info(
+            `🔄 Calendar token expired for user ${userId}, attempting refresh...`
+          );
+          try {
+            const { credentials } = await oauth2Client.refreshAccessToken();
+
+            // Store new tokens in database
+            await database.postgres.saveOAuthTokens(userId, "google", {
+              access_token: credentials.access_token,
+              refresh_token:
+                credentials.refresh_token || tokenData.refresh_token,
+              token_type: credentials.token_type || "Bearer",
+              scope: credentials.scope || tokenData.scope,
+              expiry_date: credentials.expiry_date || null,
+            });
+
+            logger.info(`✅ Calendar token refreshed for user ${userId}`);
+
+            // Update client with new credentials
+            oauth2Client.setCredentials(credentials);
+          } catch (refreshError) {
+            logger.error(
+              `❌ Failed to refresh calendar token for user ${userId}:`,
+              refreshError
+            );
+            return res.status(401).json({
+              success: false,
+              error: "Calendar authorization expired and refresh failed",
+              needsReauth: true,
+            });
+          }
+        } else {
+          logger.warn(
+            `Calendar token expired for user ${userId} and no refresh token available`
+          );
+          return res.status(401).json({
+            success: false,
+            error: "Calendar authorization expired",
+            needsReauth: true,
+          });
+        }
+      }
 
       // Initialize Calendar API
       const calendar = google.calendar({ version: "v3", auth: oauth2Client });
@@ -224,9 +258,9 @@ function createCalendarRouter(database, logger) {
       logger.info(`Creating calendar event for user ${userId}: ${summary}`);
 
       // Get user's OAuth token
-      const tokenData = await database.postgres.getOAuthToken(
+      const tokenData = await database.postgres.getOAuthTokens(
         userId,
-        "google_calendar"
+        "google"
       );
 
       if (!tokenData) {
@@ -309,9 +343,9 @@ function createCalendarRouter(database, logger) {
   router.get("/status", async (req, res) => {
     try {
       const userId = req.user.id;
-      const tokenData = await database.postgres.getOAuthToken(
+      const tokenData = await database.postgres.getOAuthTokens(
         userId,
-        "google_calendar"
+        "google"
       );
 
       const connected = !!tokenData;

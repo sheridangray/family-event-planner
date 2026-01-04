@@ -119,13 +119,6 @@ struct HealthSyncView: View {
             }
             .navigationTitle("Health Sync")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { authManager.signOut() }) {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                    }
-                }
-            }
         }
         .alert("Error", isPresented: $showingError) {
             Button("OK", role: .cancel) { }

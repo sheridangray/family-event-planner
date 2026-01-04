@@ -14,6 +14,13 @@ function createCoachRouter(database, logger) {
     try {
       const userId = req.user.id;
 
+      // 0. Fetch profile for enabled pillars
+      const profileRes = await database.query(
+        "SELECT enabled_pillars FROM profiles WHERE user_id = $1",
+        [userId]
+      );
+      const enabledPillars = profileRes.rows[0]?.enabled_pillars || [];
+
       // 1. Fetch active suggestions
       const suggestionsRes = await database.query(
         "SELECT * FROM coach_suggestions WHERE user_id = $1 AND status = 'presented' ORDER BY created_at DESC LIMIT 3",
@@ -29,6 +36,7 @@ function createCoachRouter(database, logger) {
       res.json({
         success: true,
         briefing: {
+          enabledPillars,
           suggestions: suggestionsRes.rows,
           currentPlan: planRes.rows[0] || null,
           greeting: "You're on track for your sleep goal today.", // Placeholder logic
@@ -76,6 +84,35 @@ function createCoachRouter(database, logger) {
       res
         .status(500)
         .json({ success: false, error: "Failed to update calibration" });
+    }
+  });
+
+  /**
+   * PATCH /api/coach/pillars
+   * Update enabled pillars for the user
+   */
+  router.patch("/pillars", async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { enabledPillars } = req.body;
+
+      if (!Array.isArray(enabledPillars)) {
+        return res
+          .status(400)
+          .json({ success: false, error: "enabledPillars must be an array" });
+      }
+
+      await database.query(
+        "UPDATE profiles SET enabled_pillars = $1 WHERE user_id = $2",
+        [enabledPillars, userId]
+      );
+
+      res.json({ success: true, message: "Enabled pillars updated" });
+    } catch (error) {
+      logger.error("Error updating enabled pillars:", error);
+      res
+        .status(500)
+        .json({ success: false, error: "Failed to update enabled pillars" });
     }
   });
 

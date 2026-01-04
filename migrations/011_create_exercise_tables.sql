@@ -2,7 +2,8 @@
 -- Supports workout routines, logging, AI suggestions, and conversational coaching with RAG
 
 -- Enable pgvector extension for vector similarity search (RAG)
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Note: Optional - tables work without it
+-- CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Exercise routines (templates for each day)
 CREATE TABLE IF NOT EXISTS exercise_routines (
@@ -142,7 +143,7 @@ CREATE TABLE IF NOT EXISTS exercise_conversation_embeddings (
     id SERIAL PRIMARY KEY,
     conversation_id INTEGER NOT NULL,
     message_id INTEGER, -- NULL if embedding is for entire conversation
-    embedding vector(768), -- BERT-based model dimension (768) - adjust if using different model
+    embedding TEXT, -- Store as JSON array string until vector type available
     text_chunk TEXT, -- The text that was embedded
     chunk_type VARCHAR(50), -- 'user_message', 'assistant_message', 'conversation_summary'
     created_at TIMESTAMP DEFAULT NOW(),
@@ -167,12 +168,11 @@ CREATE INDEX IF NOT EXISTS idx_exercise_conversation_messages_conv ON exercise_c
 CREATE INDEX IF NOT EXISTS idx_exercise_conversation_embeddings_conv ON exercise_conversation_embeddings(conversation_id);
 
 -- Vector similarity search index (using pgvector extension)
--- Note: ivfflat index requires data to exist first, so this may need to be created after initial data
--- For now, we'll create it but it may need to be rebuilt after data is inserted
-CREATE INDEX IF NOT EXISTS idx_exercise_conversation_embeddings_vector 
-    ON exercise_conversation_embeddings 
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100); -- Adjust lists based on expected data volume
+-- Note: Commented out until pgvector extension is available
+-- CREATE INDEX IF NOT EXISTS idx_exercise_conversation_embeddings_vector 
+--     ON exercise_conversation_embeddings 
+--     USING ivfflat (embedding vector_cosine_ops)
+--     WITH (lists = 100);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_exercise_updated_at()

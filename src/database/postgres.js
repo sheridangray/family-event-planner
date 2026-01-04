@@ -440,6 +440,12 @@ class PostgresDatabase {
       await this.initializeHealthData();
 
       // Run Foundation & Onboarding migration
+      await this.runFileMigration("010_create_health_coach_tables.sql");
+      await this.runFileMigration("011_create_exercise_tables.sql");
+      await this.runFileMigration("012_create_exercises_table.sql");
+      await this.runFileMigration("013_update_routine_exercises.sql");
+      await this.runFileMigration("014_update_exercise_log_entries.sql");
+      await this.runFileMigration("015_update_exercise_categories.sql");
       await this.runFileMigration("016_create_foundation_onboarding.sql");
       await this.runFileMigration("017_create_time_pillar.sql");
       await this.runFileMigration("018_create_food_pillar.sql");
@@ -447,6 +453,7 @@ class PostgresDatabase {
       await this.runFileMigration("020_create_money_pillar.sql");
       await this.runFileMigration("021_create_sleep_pillar.sql");
       await this.runFileMigration("022_create_coach_engine.sql");
+      await this.runFileMigration("023_align_exercise_logs_with_prd.sql");
 
       console.log("Database migrations completed successfully");
     } catch (error) {

@@ -57,7 +57,7 @@ class HealthKitManager: ObservableObject {
     @Published var isLoadingRecommendations = false
     @Published var healthCoachRecommendations: HealthCoachRecommendations?
     
-    private let backendURL = "http://127.0.0.1:3000"
+    private var backendURL: String { AppConfig.baseURL }
     // private let backendURL = "https://family-event-planner-backend.onrender.com"
     
     // MARK: - Initialization
@@ -1552,6 +1552,39 @@ class HealthKitManager: ObservableObject {
         }
     }
     
+    /// Get value for a specific metric identifier
+    func getMetricValue(for identifier: MetricIdentifier) -> String {
+        switch identifier {
+        case .steps: return "\(todaySteps.formatted())"
+        case .exercise: return "\(todayExercise) min"
+        case .distance: return String(format: "%.1f mi", distance)
+        case .activeCalories: return "\(activeCalories) cal"
+        case .flightsClimbed: return "\(flightsClimbed)"
+        case .standHours: return "\(standHours)h"
+        case .walkingSpeed: return String(format: "%.1f mph", walkingSpeed)
+        case .weight: return weight > 0 ? String(format: "%.1f lbs", weight) : "No data"
+        case .bmi: return bmi > 0 ? String(format: "%.1f", bmi) : "No data"
+        case .bodyFat: return bodyFatPercentage > 0 ? String(format: "%.1f%%", bodyFatPercentage) : "No data"
+        case .height: return height > 0 ? String(format: "%.1f in", height) : "No data"
+        case .leanBodyMass: return leanBodyMass > 0 ? String(format: "%.1f lbs", leanBodyMass) : "No data"
+        case .restingHeartRate: return restingHeartRate > 0 ? "\(restingHeartRate) bpm" : "No data"
+        case .bloodOxygen: return bloodOxygen > 0 ? String(format: "%.0f%%", bloodOxygen) : "No data"
+        case .vo2Max: return vo2Max > 0 ? String(format: "%.1f", vo2Max) : "No data"
+        case .hrv: return heartRateVariability > 0 ? String(format: "%.0f ms", heartRateVariability) : "No data"
+        case .respiratoryRate: return respiratoryRate > 0 ? String(format: "%.0f/min", respiratoryRate) : "No data"
+        case .calories: return caloriesConsumed > 0 ? String(format: "%.0f cal", caloriesConsumed) : "No data"
+        case .water: return water > 0 ? String(format: "%.0f oz", water) : "No data"
+        case .protein: return protein > 0 ? String(format: "%.0fg", protein) : "No data"
+        case .carbs: return carbs > 0 ? String(format: "%.0fg", carbs) : "No data"
+        case .fat: return fat > 0 ? String(format: "%.0fg", fat) : "No data"
+        case .sugar: return sugar > 0 ? String(format: "%.0fg", sugar) : "No data"
+        case .fiber: return fiber > 0 ? String(format: "%.0fg", fiber) : "No data"
+        case .caffeine: return caffeine > 0 ? String(format: "%.0fmg", caffeine) : "No data"
+        case .sleep: return todaySleep > 0 ? String(format: "%.1fh", todaySleep) : "No data"
+        case .mindfulMinutes: return mindfulMinutes > 0 ? "\(mindfulMinutes) min" : "No data"
+        }
+    }
+    
     // MARK: - Health Coach
     
     /// Get health coach recommendations
@@ -1633,7 +1666,7 @@ class HealthKitManager: ObservableObject {
             },
             hasLoggedToday: { routineId in
                 do {
-                    return try await ExerciseManager.shared.hasLoggedToday(routineId: routineId)
+                    return try await ExerciseManager.shared.hasLoggedToday()
                 } catch {
                     return false
                 }

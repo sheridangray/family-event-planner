@@ -69,15 +69,15 @@ struct ExerciseTodayView: View {
                 }
                 
                 // Recent workouts
-                if !exerciseManager.recentLogs.isEmpty {
+                if !exerciseManager.activeSessions.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Recent Workouts")
                             .font(.title2)
                             .fontWeight(.bold)
                             .padding(.horizontal)
                         
-                        ForEach(exerciseManager.recentLogs.prefix(5)) { log in
-                            WorkoutLogCard(log: log)
+                        ForEach(exerciseManager.activeSessions.prefix(5)) { session in
+                            WorkoutLogCard(workout: session)
                                 .padding(.horizontal)
                         }
                     }
@@ -146,23 +146,23 @@ struct RoutineCard: View {
 // MARK: - Workout Log Card
 
 struct WorkoutLogCard: View {
-    let log: ExerciseLog
+    let workout: WorkoutSession
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(log.exerciseDate)
+                Text(workout.exerciseDate)
                     .font(.headline)
                 Spacer()
-                if let duration = log.totalDurationMinutes {
+                if let duration = workout.totalDurationMinutes {
                     Text("\(duration) min")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
             }
             
-            if !log.entries.isEmpty {
-                Text(log.entries.map { $0.exerciseName }.joined(separator: ", "))
+            if !workout.entries.isEmpty {
+                Text(workout.entries.map { $0.exerciseName }.joined(separator: ", "))
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(2)

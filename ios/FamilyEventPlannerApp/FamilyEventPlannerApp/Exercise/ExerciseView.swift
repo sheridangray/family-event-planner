@@ -10,33 +10,27 @@ struct ExerciseView: View {
             // Tab selector
             Picker("View", selection: $selectedTab) {
                 Text("Exercises").tag(0)
-                Text("Workouts").tag(1)
-                Text("Routines").tag(2)
+                Text("Routines").tag(1)
+                Text("Workout Log").tag(2)
             }
             .pickerStyle(.segmented)
             .padding()
             
             // Content based on tab
             TabView(selection: $selectedTab) {
-                ExercisesListView()
+                ExercisesListView(selectedTab: $selectedTab)
                     .tag(0)
                 
-                WorkoutHistoryView()
+                ExerciseRoutinesView()
                     .tag(1)
                 
-                ExerciseRoutinesView()
+                WorkoutHistoryView()
                     .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .navigationTitle("Exercise")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                ProfileMenuButton()
-                    .environmentObject(AuthenticationManager.shared)
-            }
-        }
         .task {
             // Fetch data on appear
             do {

@@ -36,9 +36,8 @@ class RemoteConfigService {
     private init() {}
     
     func fetchConfig() async throws -> RemoteConfig {
-        // Use the actual API URL. For local dev, this might be localhost.
-        // In a real app, this would be in a build config or xcconfig.
-        let urlString = "http://127.0.0.1:3000/api/app-config"
+        // Use the centralized base URL from AppConfig
+        let urlString = "\(AppConfig.baseURL)/api/app-config"
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }

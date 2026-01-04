@@ -9,9 +9,7 @@ class CalendarManager: ObservableObject {
     @Published var isSyncing = false
     @Published var lastSyncDate: Date?
     
-    private let backendURL = "https://family-event-planner-backend.onrender.com"
-    // For local development, change to:
-    // private let backendURL = "http://localhost:3000"
+    private var backendURL: String { AppConfig.baseURL }
     
     // MARK: - Initialization
     

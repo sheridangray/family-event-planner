@@ -13,7 +13,7 @@ class AuthenticationManager: ObservableObject {
     @Published var errorMessage: String?
     
     private let keychainKey = "family_planner_session"
-    private let backendURL = "http://127.0.0.1:3000"
+    private var backendURL: String { AppConfig.baseURL }
     
     // For production, use:
     // private let backendURL = "https://family-event-planner-backend.onrender.com"
@@ -32,6 +32,32 @@ class AuthenticationManager: ObservableObject {
     
     /// Sign in with Google and validate with backend
     func signInWithGoogle() async throws {
+        try await performSignIn(scopes: [])
+    }
+    
+    /// Request calendar access
+    func requestCalendarAccess() async throws {
+        // Define the calendar scope
+        let calendarScope = "https://www.googleapis.com/auth/calendar"
+        
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            throw AuthError.noViewController
+        }
+        
+        // In GIDSignIn 6.0+, addScopes is called on the currentUser
+        guard let currentUser = GIDSignIn.sharedInstance.currentUser else {
+            throw AuthError.notAuthenticated
+        }
+        
+        // Request additional scope
+        let result = try await currentUser.addScopes([calendarScope], presenting: rootViewController)
+        
+        // After getting permission, we need to sync these tokens to the backend
+        try await syncCalendarTokensToBackend(user: result.user)
+    }
+    
+    private func performSignIn(scopes: [String]) async throws {
         isLoading = true
         errorMessage = nil
         
@@ -48,15 +74,15 @@ class AuthenticationManager: ObservableObject {
         }
         
         // Configure Google Sign-In
-        // TODO: Replace with your iOS client ID from Google Cloud Console
         let clientID = "584799141962-cbnd0u748aup2m0da500o7d2hig4cqth.apps.googleusercontent.com"
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
         
-        // Perform sign-in with optional calendar scopes
-        // Note: Calendar scopes can also be requested later via addScopes()
+        // Perform sign-in
         let result = try await GIDSignIn.sharedInstance.signIn(
-            withPresenting: rootViewController
+            withPresenting: rootViewController,
+            hint: nil,
+            additionalScopes: scopes
         )
         
         let user = result.user
@@ -71,6 +97,38 @@ class AuthenticationManager: ObservableObject {
             name: user.profile?.name ?? "",
             imageURL: user.profile?.imageURL(withDimension: 200)?.absoluteString
         )
+        
+        // If we requested calendar scopes, sync them
+        if scopes.contains("https://www.googleapis.com/auth/calendar") {
+            try await syncCalendarTokensToBackend(user: user)
+        }
+    }
+    
+    private func syncCalendarTokensToBackend(user: GIDGoogleUser) async throws {
+        guard let token = sessionToken else { return }
+        
+        let url = URL(string: "\(backendURL)/api/calendar/connect")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "access_token": user.accessToken.tokenString,
+            "refresh_token": user.refreshToken.tokenString,
+            "expires_at": Int(user.accessToken.expirationDate?.timeIntervalSince1970 ?? 0),
+            "scope": user.grantedScopes?.joined(separator: " ") ?? ""
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            print("❌ Failed to sync calendar tokens to backend")
+            return
+        }
+        
+        print("✅ Calendar tokens synced to backend")
     }
     
     // MARK: - Backend Validation
@@ -228,6 +286,7 @@ class AuthenticationManager: ObservableObject {
 enum AuthError: Error, LocalizedError {
     case noViewController
     case noToken
+    case notAuthenticated
     case notAllowed
     case serverError(String)
     
@@ -237,6 +296,8 @@ enum AuthError: Error, LocalizedError {
             return "Could not find view controller"
         case .noToken:
             return "Failed to get authentication token"
+        case .notAuthenticated:
+            return "User is not signed in"
         case .notAllowed:
             return "Your email is not authorized for this app"
         case .serverError(let message):

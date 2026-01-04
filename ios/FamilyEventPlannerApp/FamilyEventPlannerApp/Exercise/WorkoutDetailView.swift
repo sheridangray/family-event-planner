@@ -2,93 +2,251 @@ import SwiftUI
 
 /// Detail view for a workout showing all exercises and ability to add more
 struct WorkoutDetailView: View {
-    let workout: ExerciseLog
+    let workout: WorkoutSession
     @EnvironmentObject var exerciseManager: ExerciseManager
+    @Environment(\.dismiss) var dismiss
     @State private var showingAddExercise = false
-    @State private var workoutDetails: ExerciseLog?
+    @State private var workoutDetails: WorkoutSession?
     @State private var isLoading = false
+    @State private var showingDeleteConfirmation = false
+    @State private var editingEntry: ExerciseLogEntry?
+    @State private var entryToDelete: Int?
+    @State private var showingDeleteEntryConfirmation = false
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Workout")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
-                    Text(formatDate(workout.exerciseDate))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    if let duration = workout.totalDurationMinutes {
-                        Text("\(duration) minutes")
+        ZStack(alignment: .bottom) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Workout")
+                                .font(.largeTitle)
+                                .fontWeight(.bold)
+                            
+                            Spacer()
+                            
+                            if let details = workoutDetails, details.status == .inProgress {
+                                Text("IN PROGRESS")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.orange.opacity(0.2))
+                                    .foregroundColor(.orange)
+                                    .cornerRadius(6)
+                            }
+                        }
+                        
+                        Text(formatDate(workout.exerciseDate))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                    }
-                }
-                .padding(.horizontal)
-                
-                // Exercises
-                if let details = workoutDetails {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Exercises")
-                            .font(.headline)
-                            .padding(.horizontal)
                         
-                        ForEach(details.entries) { entry in
-                            ExerciseEntryCard(entry: entry)
-                                .padding(.horizontal)
+                        if let duration = workout.totalDurationMinutes {
+                            Text("\(duration) minutes")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
                         }
                     }
-                } else {
-                    ProgressView()
+                    .padding(.horizontal)
+                    
+                    // Exercises
+                    if let details = workoutDetails {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Exercises")
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            ForEach(details.entries) { entry in
+                                ExerciseEntryCard(
+                                    entry: entry,
+                                    onEdit: {
+                                        editingEntry = entry
+                                    },
+                                    onDelete: {
+                                        if let entryId = entry.backendId {
+                                            entryToDelete = entryId
+                                            showingDeleteEntryConfirmation = true
+                                        }
+                                    }
+                                )
+                                .padding(.horizontal)
+                            }
+                        }
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    }
+                    
+                    // Spacer for fixed footer
+                    Spacer(minLength: 160)
+                }
+                .padding(.vertical)
+            }
+            
+            // Fixed Bottom Footer
+            VStack(spacing: 12) {
+                Divider()
+                
+                VStack(spacing: 12) {
+                    // Add Exercise Button
+                    Button {
+                        showingAddExercise = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Exercise")
+                        }
+                        .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                }
-                
-                // Add Exercise Button
-                Button {
-                    showingAddExercise = true
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Exercise")
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(12)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue.opacity(0.1))
-                    .foregroundColor(.blue)
-                    .cornerRadius(12)
+                    
+                    // Finish Workout Button
+                    if let details = workoutDetails, details.status == .inProgress {
+                        Button {
+                            finishWorkout()
+                        } label: {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Finish Workout")
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                    }
                 }
                 .padding(.horizontal)
+                .padding(.bottom, 24)
             }
-            .padding(.vertical)
+            .background(Color(.systemBackground))
+            .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: -5)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                ProfileMenuButton()
-                    .environmentObject(AuthenticationManager.shared)
+                Menu {
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("Delete Workout", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
             }
         }
+        .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showingAddExercise) {
-            ExercisesSelectionView(workoutId: workout.id)
-                .environmentObject(exerciseManager)
+            ExercisesSelectionView(workoutId: workout.id, onSave: {
+                loadWorkoutDetails()
+            })
+            .environmentObject(exerciseManager)
+        }
+        .alert("Delete Workout?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteWorkout()
+            }
+        } message: {
+            Text("This will permanently remove this workout session and all its exercises.")
+        }
+        .alert("Delete Exercise?", isPresented: $showingDeleteEntryConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let entryId = entryToDelete {
+                    deleteEntry(id: entryId)
+                }
+            }
+        } message: {
+            Text("Are you sure you want to remove this exercise from the workout?")
+        }
+        .sheet(item: $editingEntry) { entry in
+            if let exercise = exerciseManager.exercises.first(where: { $0.id == entry.exerciseId }) {
+                NavigationStack {
+                    StartExerciseView(exercise: exercise, workoutId: workout.id, entry: entry, onSave: {
+                        loadWorkoutDetails()
+                    })
+                    .environmentObject(exerciseManager)
+                }
+            } else {
+                Text("Exercise definition not found")
+                    .task {
+                        // Attempt to fetch definitions if missing
+                        try? await exerciseManager.fetchDefinitions(query: nil)
+                    }
+            }
         }
         .task {
             loadWorkoutDetails()
         }
     }
     
-    private func formatDate(_ dateString: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        if let date = formatter.date(from: dateString) {
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .none
-            return formatter.string(from: date)
+    private func finishWorkout() {
+        guard let details = workoutDetails else { return }
+        Task {
+            do {
+                let updated = try await exerciseManager.updateWorkoutStatus(workoutId: details.id, status: .completed)
+                await MainActor.run {
+                    workoutDetails = updated
+                }
+            } catch {
+                print("Error finishing workout: \(error)")
+            }
         }
+    }
+    
+    private func deleteWorkout() {
+        Task {
+            do {
+                try await exerciseManager.deleteWorkout(id: workout.id)
+                await MainActor.run {
+                    dismiss()
+                }
+            } catch {
+                print("Error deleting workout: \(error)")
+            }
+        }
+    }
+
+    private func deleteEntry(id: Int) {
+        Task {
+            do {
+                try await exerciseManager.deleteWorkoutEntry(entryId: id)
+                loadWorkoutDetails()
+            } catch {
+                print("Error deleting entry: \(error)")
+            }
+        }
+    }
+    
+    private func formatDate(_ dateString: String) -> String {
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        let date: Date?
+        if let d = isoFormatter.date(from: dateString) ?? ISO8601DateFormatter().date(from: dateString) {
+            date = d
+        } else {
+            let simpleFormatter = DateFormatter()
+            simpleFormatter.dateFormat = "yyyy-MM-dd"
+            date = simpleFormatter.date(from: dateString)
+        }
+        
+        if let date = date {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "EEEE, MMMM d, yyyy" // e.g. "Friday, January 2, 2026"
+            return displayFormatter.string(from: date)
+        }
+        
         return dateString
     }
     
@@ -96,6 +254,10 @@ struct WorkoutDetailView: View {
         isLoading = true
         Task {
             do {
+                if exerciseManager.definitions.isEmpty {
+                    try? await exerciseManager.fetchDefinitions()
+                }
+                
                 let details = try await exerciseManager.getWorkout(id: workout.id)
                 await MainActor.run {
                     workoutDetails = details
@@ -111,58 +273,11 @@ struct WorkoutDetailView: View {
     }
 }
 
-// MARK: - Exercise Entry Card
-
-struct ExerciseEntryCard: View {
-    let entry: ExerciseLogEntry
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(entry.exerciseName)
-                .font(.headline)
-            
-            Text("\(entry.setsPerformed) sets")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            if !entry.repsPerformed.isEmpty {
-                Text("Reps: \(entry.repsPerformed.map { String($0) }.joined(separator: ", "))")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            let weights = entry.weightUsed.compactMap { $0 }
-            if !weights.isEmpty {
-                Text("Weight: \(weights.map { String(format: "%.0f", $0) }.joined(separator: ", ")) lbs")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            if !entry.durationSeconds.isEmpty {
-                let durations = entry.durationSeconds.map { "\($0 / 60) min" }
-                Text("Duration: \(durations.joined(separator: ", "))")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            if let notes = entry.notes, !notes.isEmpty {
-                Text(notes)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .italic()
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-    }
-}
-
 // MARK: - Exercises Selection View
 
 struct ExercisesSelectionView: View {
     let workoutId: Int
+    var onSave: (() -> Void)? = nil
     @EnvironmentObject var exerciseManager: ExerciseManager
     @Environment(\.dismiss) var dismiss
     @State private var exercises: [Exercise] = []
@@ -201,12 +316,16 @@ struct ExercisesSelectionView: View {
                 }
             }
             .navigationDestination(item: $selectedExercise) { exercise in
-                StartExerciseView(exercise: exercise, workoutId: workoutId)
-                    .environmentObject(exerciseManager)
+                StartExerciseView(exercise: exercise, workoutId: workoutId, onSave: {
+                    // When an exercise is saved, call the callback and dismiss the selection sheet
+                    onSave?()
+                    dismiss()
+                })
+                .environmentObject(exerciseManager)
             }
             .task {
                 do {
-                    try await exerciseManager.fetchExercises(query: nil)
+                    try await exerciseManager.fetchDefinitions(query: nil)
                     exercises = exerciseManager.exercises
                 } catch {
                     print("Error loading exercises: \(error)")
@@ -218,19 +337,19 @@ struct ExercisesSelectionView: View {
 
 #Preview {
     NavigationStack {
-        WorkoutDetailView(workout: ExerciseLog(
-            id: 1,
-            userId: 1,
-            routineId: nil,
-            exerciseDate: "2024-01-15",
-            dayOfWeek: 1,
-            totalDurationMinutes: 45,
-            location: "Gym",
-            notes: nil,
-            entries: [],
-            createdAt: nil,
-            updatedAt: nil
-        ))
+        WorkoutDetailView(workout: try! JSONDecoder().decode(WorkoutSession.self, from: """
+        {
+            "id": 1,
+            "uuid": "00000000-0000-0000-0000-000000000000",
+            "user_id": 1,
+            "exercise_date": "2024-01-15",
+            "day_of_week": 1,
+            "total_duration_minutes": 45,
+            "location": "Gym",
+            "status": "COMPLETED",
+            "entries": []
+        }
+        """.data(using: .utf8)!))
         .environmentObject(ExerciseManager.shared)
     }
 }

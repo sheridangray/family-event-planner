@@ -9,20 +9,19 @@ struct EditExerciseView: View {
     @State private var exerciseName: String
     @State private var instructions: String
     @State private var youtubeUrl: String
-    @State private var bodyParts: [String]
+    @State private var bodyParts: Set<BodyPart>
     @State private var exerciseType: ExerciseCategory
-    @State private var newBodyPart: String = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showingError = false
     
     init(exercise: Exercise) {
         self.exercise = exercise
-        _exerciseName = State(initialValue: exercise.exerciseName)
-        _instructions = State(initialValue: exercise.instructions)
+        _exerciseName = State(initialValue: exercise.name)
+        _instructions = State(initialValue: exercise.instructions ?? "")
         _youtubeUrl = State(initialValue: exercise.youtubeUrl ?? "")
-        _bodyParts = State(initialValue: exercise.bodyParts)
-        _exerciseType = State(initialValue: exercise.exerciseType)
+        _bodyParts = State(initialValue: Set(exercise.primaryMuscles))
+        _exerciseType = State(initialValue: exercise.category)
     }
     
     var body: some View {
@@ -68,39 +67,47 @@ struct EditExerciseView: View {
                 }
                 
                 Section {
-                    // Body parts list
-                    ForEach(bodyParts, id: \.self) { part in
-                        HStack {
-                            Text(part)
-                            Spacer()
-                            Button {
-                                bodyParts.removeAll { $0 == part }
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red)
+                    // Multiselect Dropdown for Body Parts
+                    VStack(alignment: .leading, spacing: 8) {
+                        Menu {
+                            ForEach(BodyPart.allCases) { part in
+                                Button {
+                                    if bodyParts.contains(part) {
+                                        bodyParts.remove(part)
+                                    } else {
+                                        bodyParts.insert(part)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(part.displayName)
+                                        if bodyParts.contains(part) {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
                             }
-                        }
-                    }
-                    
-                    // Add body part
-                    HStack {
-                        TextField("Add body part", text: $newBodyPart)
-                            .textInputAutocapitalization(.words)
-                            .onSubmit {
-                                addBodyPart()
-                            }
-                        Button {
-                            addBodyPart()
                         } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundColor(.blue)
+                            HStack {
+                                if bodyParts.isEmpty {
+                                    Text("Select Body Parts")
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text(bodyParts.map { $0.displayName }.sorted().joined(separator: ", "))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 8)
                         }
-                        .disabled(newBodyPart.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 } header: {
                     Text("Body Parts Targeted")
                 } footer: {
-                    Text("List the muscle groups or body parts targeted by this exercise.")
+                    Text("Select the muscle groups or body parts targeted by this exercise.")
                 }
             }
             .navigationTitle("Edit Exercise")
@@ -126,25 +133,17 @@ struct EditExerciseView: View {
         }
     }
     
-    private func addBodyPart() {
-        let trimmed = newBodyPart.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty && !bodyParts.contains(trimmed) {
-            bodyParts.append(trimmed)
-            newBodyPart = ""
-        }
-    }
-    
     private func saveExercise() {
         isSaving = true
         errorMessage = nil
         
         Task {
             do {
-                let updatedExercise = try await exerciseManager.updateExercise(
+                _ = try await exerciseManager.updateExercise(
                     exerciseId: exercise.id,
                     instructions: instructions.trimmingCharacters(in: .whitespaces),
                     youtubeUrl: youtubeUrl.trimmingCharacters(in: .whitespaces).isEmpty ? nil : youtubeUrl.trimmingCharacters(in: .whitespaces),
-                    bodyParts: bodyParts,
+                    bodyParts: Array(bodyParts).map { $0.rawValue },
                     exerciseType: exerciseType
                 )
                 
@@ -164,16 +163,18 @@ struct EditExerciseView: View {
 }
 
 #Preview {
-    EditExerciseView(exercise: Exercise(
-        id: 1,
-        exerciseName: "Bench Press",
-        instructions: "Lie on bench, lower bar to chest, press up",
-        youtubeUrl: "https://youtube.com/watch?v=example",
-        bodyParts: ["chest", "shoulders", "triceps"],
-        exerciseType: .barbellDumbbell,
-        createdAt: nil,
-        updatedAt: nil
-    ))
+    EditExerciseView(exercise: try! JSONDecoder().decode(Exercise.self, from: """
+    {
+        "id": 1,
+        "uuid": "00000000-0000-0000-0000-000000000000",
+        "exercise_name": "Bench Press",
+        "instructions": "Lie on bench, lower bar to chest, press up",
+        "youtube_url": "https://youtube.com/watch?v=example",
+        "primary_muscles": ["Chest", "Shoulders", "Triceps"],
+        "category": "WEIGHTED",
+        "is_archived": false
+    }
+    """.data(using: .utf8)!))
     .environmentObject(ExerciseManager.shared)
 }
 

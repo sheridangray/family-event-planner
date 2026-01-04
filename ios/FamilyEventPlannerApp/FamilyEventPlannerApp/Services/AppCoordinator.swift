@@ -142,7 +142,7 @@ class AppCoordinator: ObservableObject {
         
         print("🔍 Checking onboarding status...")
         
-        let url = URL(string: "http://127.0.0.1:3000/api/onboarding/state")!
+        let url = URL(string: "\(AppConfig.baseURL)/api/onboarding/state")!
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         

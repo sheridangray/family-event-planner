@@ -5,18 +5,39 @@ import AVKit
 struct StartExerciseView: View {
     let exercise: Exercise
     let workoutId: Int?
+    let entry: ExerciseLogEntry?
+    var onSave: (() -> Void)? = nil
+    
     @EnvironmentObject var exerciseManager: ExerciseManager
     @Environment(\.dismiss) var dismiss
     
-    @State private var sets: [ExerciseSet] = [ExerciseSet()]
-    @State private var restSeconds: Int = 60
-    @State private var equipmentUsed: String = ""
-    @State private var notes: String = ""
+    @State private var sets: [ExerciseSet]
+    @State private var equipmentUsed: String
+    @State private var notes: String
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showingError = false
     @State private var currentWorkoutId: Int?
     @State private var showingExerciseInfo = false
+    
+    init(exercise: Exercise, workoutId: Int?, entry: ExerciseLogEntry? = nil, onSave: (() -> Void)? = nil) {
+        self.exercise = exercise
+        self.workoutId = workoutId
+        self.entry = entry
+        self.onSave = onSave
+        
+        if let entry = entry {
+            _sets = State(initialValue: entry.sets)
+            _notes = State(initialValue: entry.notes ?? "")
+            _equipmentUsed = State(initialValue: "")
+        } else {
+            var initialSet = ExerciseSet()
+            initialSet.restSeconds = 60
+            _sets = State(initialValue: [initialSet])
+            _notes = State(initialValue: "")
+            _equipmentUsed = State(initialValue: "")
+        }
+    }
     
     // Focus state for navigating between fields
     @FocusState private var focusedField: Field?
@@ -36,22 +57,7 @@ struct StartExerciseView: View {
     
     // Helper for dynamic labels
     var labels: (String, String, String) {
-        switch exercise.exerciseType {
-        case .barbellDumbbell, .machine:
-            return ("Repetitions", "Lbs", "Rest")
-        case .bodyweight:
-            return ("Repetitions", "Lbs (+/-)", "Rest")
-        case .assisted:
-            return ("Repetitions", "Band", "Rest")
-        case .isometric, .mobility, .skill:
-            return ("Duration", "Lbs", "Rest")
-        case .cardioDistance:
-            return ("Distance (m)", "Duration", "HR")
-        case .cardioTime:
-            return ("Duration", "Calories", "HR")
-        case .interval:
-            return ("Work", "Rest", "Rounds")
-        }
+        exercise.exerciseType.metricLabels
     }
     
     var body: some View {
@@ -139,10 +145,9 @@ struct StartExerciseView: View {
                         
                         // Sets list
                         ForEach(Array(sets.enumerated()), id: \.element.id) { index, _ in
-                            SetRowView(
+                            StartExerciseSetRowView(
                                 set: $sets[index],
                                 exerciseType: exercise.exerciseType,
-                                restSeconds: $restSeconds,
                                 index: index,
                                 focusedField: $focusedField,
                                 onDelete: sets.count > 1 ? {
@@ -155,7 +160,22 @@ struct StartExerciseView: View {
                         
                         // Add Set button
                         Button {
-                            sets.append(ExerciseSet())
+                            var newSet = ExerciseSet()
+                            if let lastSet = sets.last {
+                                // Copy forward values from previous set
+                                newSet.reps = lastSet.reps
+                                newSet.weight = lastSet.weight
+                                newSet.restSeconds = lastSet.restSeconds
+                                newSet.duration = lastSet.duration
+                                newSet.distance = lastSet.distance
+                                newSet.bandLevel = lastSet.bandLevel
+                                newSet.resistanceLevel = lastSet.resistanceLevel
+                                newSet.incline = lastSet.incline
+                                newSet.speed = lastSet.speed
+                            } else {
+                                newSet.restSeconds = 60
+                            }
+                            sets.append(newSet)
                         } label: {
                             HStack {
                                 Image(systemName: "plus")
@@ -173,11 +193,31 @@ struct StartExerciseView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                         .padding(.bottom, 24)
+
+                        // Notes section
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("NOTES")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fontWeight(.semibold)
+                            
+                            TextEditor(text: $notes)
+                                .frame(height: 100)
+                                .padding(8)
+                                .background(Color.white)
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color(.systemGray4), lineWidth: 1)
+                                )
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 24)
                     }
                     .background(Color(.systemGray6))
                     .padding(.top, 8)
                     
-                    Spacer(minLength: 100) // Space for bottom button
+                    Spacer(minLength: 120) // Increased space for bottom button
                 }
             }
             
@@ -187,7 +227,7 @@ struct StartExerciseView: View {
                 Button {
                     saveExercise()
                 } label: {
-                    Text("ADD EXERCISE")
+                    Text(entry == nil ? "ADD EXERCISE" : "UPDATE ENTRY")
                         .font(.headline)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
@@ -199,7 +239,7 @@ struct StartExerciseView: View {
                 .disabled(isSaving || sets.isEmpty)
                 .opacity(isSaving || sets.isEmpty ? 0.6 : 1.0)
                 .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+                .padding(.bottom, 24)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -217,14 +257,6 @@ struct StartExerciseView: View {
                         .clipShape(Circle())
                 }
             }
-            ToolbarItem(placement: .keyboard) {
-                HStack {
-                    Spacer()
-                    Button("Done") {
-                        focusedField = nil
-                    }
-                }
-            }
         }
         .sheet(isPresented: $showingExerciseInfo) {
             ExerciseInfoSheet(exercise: exercise)
@@ -237,9 +269,9 @@ struct StartExerciseView: View {
         .onAppear {
              // Set initial focus based on type
              switch exercise.exerciseType {
-             case .cardioDistance:
+             case .distanceTime:
                  focusedField = .distance(0)
-             case .isometric, .cardioTime, .mobility, .skill:
+             case .time, .machineCardio, .mobility:
                  focusedField = .duration(0)
              default:
                  focusedField = .reps(0)
@@ -249,42 +281,74 @@ struct StartExerciseView: View {
             if let workoutId = workoutId {
                 currentWorkoutId = workoutId
             } else {
-                // Create new workout if none provided
-                do {
-                    let workout = try await exerciseManager.createWorkout()
-                    currentWorkoutId = workout.id
-                } catch {
-                    errorMessage = error.localizedDescription
-                    showingError = true
+                // Ensure activeSessions is populated
+                if exerciseManager.activeSessions.isEmpty {
+                    try? await exerciseManager.fetchWorkoutHistory()
+                }
+                
+                // Check if there is already an in-progress session in the manager
+                if let existingInProgress = exerciseManager.activeSessions.first(where: { $0.status == .inProgress }) {
+                    print("📎 Using existing in-progress workout: \(existingInProgress.id)")
+                    currentWorkoutId = existingInProgress.id
+                } else {
+                    // Create new workout if none provided and none in progress
+                    do {
+                        let workout = try await exerciseManager.createWorkout()
+                        currentWorkoutId = workout.id
+                    } catch {
+                        errorMessage = error.localizedDescription
+                        showingError = true
+                    }
                 }
             }
         }
     }
     
     private func saveExercise() {
-        guard let workoutId = currentWorkoutId else {
-            errorMessage = "Workout not initialized"
-            showingError = true
-            return
-        }
+        print("💾 saveExercise() called")
         
         isSaving = true
         
         Task {
             do {
-                try await exerciseManager.addExerciseToWorkout(
-                    workoutId: workoutId,
-                    exerciseId: exercise.id,
-                    sets: sets,
-                    restSeconds: restSeconds,
-                    equipmentUsed: equipmentUsed.isEmpty ? nil : equipmentUsed,
-                    notes: notes.isEmpty ? nil : notes
-                )
+                if let entry = entry, let entryId = entry.backendId {
+                    // Update existing entry
+                    try await exerciseManager.updateWorkoutEntry(
+                        entryId: entryId,
+                        sets: sets,
+                        notes: notes.isEmpty ? nil : notes
+                    )
+                } else {
+                    // Add new entry
+                    guard let workoutId = currentWorkoutId else {
+                        print("❌ saveExercise() failed: currentWorkoutId is nil")
+                        await MainActor.run {
+                            errorMessage = "Workout not initialized"
+                            showingError = true
+                            isSaving = false
+                        }
+                        return
+                    }
+                    
+                    try await exerciseManager.addExerciseToWorkout(
+                        workoutId: workoutId,
+                        exerciseId: exercise.id,
+                        sets: sets,
+                        restSeconds: nil,
+                        equipmentUsed: equipmentUsed.isEmpty ? nil : equipmentUsed,
+                        notes: notes.isEmpty ? nil : notes
+                    )
+                }
                 
+                print("✅ saveExercise() success, dismissing view")
                 await MainActor.run {
+                    if let onSave = onSave {
+                        onSave()
+                    }
                     dismiss()
                 }
             } catch {
+                print("❌ saveExercise() failed with error: \(error)")
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showingError = true
@@ -295,54 +359,11 @@ struct StartExerciseView: View {
     }
 }
 
-// MARK: - Video Thumbnail View
-
-struct VideoThumbnailView: View {
-    let url: URL
-    let exerciseName: String
-    @State private var showingVideo = false
-    
-    var body: some View {
-        ZStack {
-            // Placeholder background
-            Color.black.opacity(0.8)
-            
-            // Play button overlay
-            Button {
-                showingVideo = true
-            } label: {
-                Image(systemName: "play.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.white.opacity(0.9))
-            }
-        }
-        .sheet(isPresented: $showingVideo) {
-            SafariView(url: url)
-        }
-    }
-}
-
-// MARK: - Safari View
-
-import SafariServices
-
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-    
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        return SFSafariViewController(url: url)
-    }
-    
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {
-    }
-}
-
 // MARK: - Set Row View
 
-struct SetRowView: View {
+struct StartExerciseSetRowView: View {
     @Binding var set: ExerciseSet
     let exerciseType: ExerciseCategory
-    @Binding var restSeconds: Int
     let index: Int
     var focusedField: FocusState<StartExerciseView.Field?>.Binding
     @State private var durationMinutes: Int?
@@ -353,7 +374,7 @@ struct SetRowView: View {
             // COLUMN 1 (Primary Metric)
             VStack(spacing: 4) {
                 switch exerciseType {
-                case .cardioDistance:
+                case .distanceTime:
                     // Distance
                     TextField("0", value: $set.distance, format: .number)
                         .keyboardType(.decimalPad)
@@ -367,7 +388,7 @@ struct SetRowView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         
-                case .isometric, .cardioTime, .mobility, .skill:
+                case .time, .machineCardio, .mobility:
                     // Duration (minutes for now, but stored as seconds or int)
                     // For simplicity, treating duration as minutes input -> seconds
                     TextField("0", value: Binding(
@@ -412,7 +433,7 @@ struct SetRowView: View {
             // COLUMN 2 (Secondary Metric)
             VStack(spacing: 4) {
                 switch exerciseType {
-                case .barbellDumbbell, .machine, .isometric, .bodyweight, .mobility, .skill:
+                case .weighted, .time, .bodyweight, .mobility, .cableMachine:
                     // Weight (Optional for some)
                     TextField("0", value: $set.weight, format: .number)
                         .keyboardType(.decimalPad)
@@ -426,7 +447,7 @@ struct SetRowView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         
-                case .assisted:
+                case .bandAssisted:
                     // Band Level (could be Picker, using Text for now or just string input)
                     TextField("-", text: Binding(
                         get: { set.bandLevel ?? "" },
@@ -442,14 +463,14 @@ struct SetRowView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         
-                case .cardioDistance, .cardioTime:
+                case .distanceTime, .machineCardio:
                     // Duration (for distance) or Calories/Intensity?
-                    // Labels said: CardioDistance -> Duration (col 2)
-                    // Labels said: CardioTime -> Calories (col 2)
+                    // Labels said: DistanceTime -> Duration (col 2)
+                    // Labels said: MachineCardio -> Calories (col 2)
                     
-                    if exerciseType == .cardioDistance {
+                    if exerciseType == .distanceTime {
                         // Duration input
-                         TextField("0", value: Binding(
+                        TextField("0", value: Binding(
                             get: { durationMinutes },
                             set: { 
                                 durationMinutes = $0
@@ -494,7 +515,7 @@ struct SetRowView: View {
             // COLUMN 3 (Tertiary/Rest)
             VStack(spacing: 4) {
                 switch exerciseType {
-                case .cardioDistance, .cardioTime:
+                case .distanceTime, .machineCardio:
                     // Heart Rate
                     TextField("0", value: $set.heartRate, format: .number)
                         .keyboardType(.numberPad)
@@ -510,7 +531,7 @@ struct SetRowView: View {
                         
                 default:
                     // Rest
-                    TextField("0", value: $restSeconds, format: .number)
+                    TextField("0", value: $set.restSeconds, format: .number)
                         .keyboardType(.numberPad)
                         .focused(focusedField, equals: .rest(index))
                         .font(.system(size: 20, weight: .semibold))
@@ -551,29 +572,24 @@ struct ExerciseInfoSheet: View {
             ExerciseDetailContent(exercise: exercise)
                 .environmentObject(exerciseManager)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Done") {
-                            dismiss()
-                        }
-                    }
-                }
         }
     }
 }
 
 #Preview {
     StartExerciseView(
-        exercise: Exercise(
-            id: 1,
-            exerciseName: "Push-up - standing",
-            instructions: "Stand facing the sling trainer, hold handles, lean forward, perform push-up motion",
-            youtubeUrl: "https://youtube.com/watch?v=example",
-            bodyParts: ["chest", "shoulders", "triceps"],
-            exerciseType: .bodyweight,
-            createdAt: nil,
-            updatedAt: nil
-        ),
+        exercise: try! JSONDecoder().decode(Exercise.self, from: """
+        {
+            "id": 1,
+            "uuid": "00000000-0000-0000-0000-000000000000",
+            "exercise_name": "Push-up - standing",
+            "instructions": "Stand facing the sling trainer, hold handles, lean forward, perform push-up motion",
+            "youtube_url": "https://youtube.com/watch?v=example",
+            "primary_muscles": ["chest", "shoulders", "triceps"],
+            "category": "bodyweight",
+            "is_archived": false
+        }
+        """.data(using: .utf8)!),
         workoutId: nil
     )
     .environmentObject(ExerciseManager.shared)

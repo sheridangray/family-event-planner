@@ -11,72 +11,99 @@ enum ExerciseCategory: String, Codable, CaseIterable {
     case machineCardio = "MACHINE_CARDIO"
     case bandAssisted = "BAND_ASSISTED"
     case mobility = "MOBILITY"
-    
-    // Backward compatibility for old categories
-    case barbellDumbbell = "barbell_dumbbell"
-    case assisted = "assisted"
-    case machine = "machine"
-    case isometric = "isometric"
-    case cardioDistance = "cardio_distance"
-    case cardioTime = "cardio_time"
-    case interval = "interval"
-    case skill = "skill"
-    
-    /// Primary categories to show in UI (excludes backward compatibility cases)
-    static let primaryCases: [ExerciseCategory] = [
-        .weighted,
-        .bodyweight,
-        .time,
-        .distanceTime,
-        .machineCardio,
-        .bandAssisted,
-        .mobility
-    ]
+    case cableMachine = "CABLE_MACHINE"
     
     var displayName: String {
         switch self {
-        case .weighted, .barbellDumbbell, .machine: return "Weighted"
+        case .weighted: return "Weighted"
         case .bodyweight: return "Bodyweight"
-        case .time, .isometric, .cardioTime, .interval: return "Time"
-        case .distanceTime, .cardioDistance: return "Distance & Time"
+        case .time: return "Time"
+        case .distanceTime: return "Distance & Time"
         case .machineCardio: return "Machine Cardio"
-        case .bandAssisted, .assisted: return "Band Assisted"
+        case .bandAssisted: return "Band Assisted"
         case .mobility: return "Mobility"
-        case .skill: return "Skill"
+        case .cableMachine: return "Cable Machine"
         }
     }
     
     var requiredFields: [String] {
         switch self {
-        case .weighted, .barbellDumbbell, .machine: return ["weight", "reps"]
+        case .weighted, .cableMachine: return ["weight", "reps"]
         case .bodyweight: return ["reps"]
-        case .time, .isometric, .cardioTime, .interval: return ["duration"]
-        case .distanceTime, .cardioDistance: return ["distance", "duration"]
+        case .time: return ["duration"]
+        case .distanceTime: return ["distance", "duration"]
         case .machineCardio: return ["duration"]
-        case .bandAssisted, .assisted: return ["reps", "bandLevel"]
+        case .bandAssisted: return ["reps", "bandLevel"]
         case .mobility: return ["duration"]
-        case .skill: return ["reps"]
         }
     }
     
     var color: Color {
         switch self {
-        case .weighted, .barbellDumbbell, .machine:
+        case .weighted:
             return .blue
-        case .bodyweight, .assisted, .bandAssisted:
+        case .cableMachine:
+            return .orange
+        case .bodyweight, .bandAssisted:
             return .green
-        case .time, .cardioDistance, .cardioTime, .interval:
+        case .time:
             return .orange
         case .distanceTime:
             return .red
         case .machineCardio:
             return .cyan
-        case .isometric, .mobility:
+        case .mobility:
             return .purple
-        case .skill:
-            return .indigo
         }
     }
+    
+    var iconName: String {
+        switch self {
+        case .weighted: return "dumbbell.fill"
+        case .bodyweight: return "figure.walk"
+        case .time: return "timer"
+        case .distanceTime: return "figure.run"
+        case .machineCardio: return "figure.outdoor.cycle"
+        case .bandAssisted: return "figure.mixed.cardio"
+        case .mobility: return "figure.mind.and.body"
+        case .cableMachine: return "rectangle.stack.fill"
+        }
+    }
+    
+    var metricLabels: (String, String, String) {
+        switch self {
+        case .weighted, .cableMachine:
+            return ("Repetitions", "Lbs", "Rest")
+        case .bodyweight:
+            return ("Repetitions", "Lbs (+/-)", "Rest")
+        case .bandAssisted:
+            return ("Repetitions", "Band", "Rest")
+        case .time, .mobility:
+            return ("Duration", "Lbs", "Rest")
+        case .distanceTime:
+            return ("Distance (m)", "Duration", "HR")
+        case .machineCardio:
+            return ("Duration", "Calories", "HR")
+        }
+    }
+}
+
+// MARK: - Body Part (PRD 1.4)
+
+enum BodyPart: String, Codable, CaseIterable, Identifiable {
+    case chest = "Chest"
+    case back = "Back"
+    case shoulders = "Shoulders"
+    case triceps = "Triceps"
+    case biceps = "Biceps"
+    case glutes = "Glutes"
+    case quads = "Quads"
+    case hamstrings = "Hamstrings"
+    case calves = "Calves"
+    case core = "Core"
+    
+    var id: String { rawValue }
+    var displayName: String { rawValue }
 }
 
 // MARK: - Exercise Definition (PRD 1.3)
@@ -87,8 +114,8 @@ struct ExerciseDefinition: Codable, Identifiable, Hashable {
     let uuid: UUID // Client sync ID (PRD requirement)
     let name: String
     let category: ExerciseCategory
-    let primaryMuscles: [String]
-    let secondaryMuscles: [String]
+    let primaryMuscles: [BodyPart]
+    let secondaryMuscles: [BodyPart]
     let equipment: [String]
     let inputSchema: [String: InputFieldDefinition]?
     let instructions: String?
@@ -97,7 +124,7 @@ struct ExerciseDefinition: Codable, Identifiable, Hashable {
     
     var exerciseName: String { name }
     var exerciseType: ExerciseCategory { category }
-    var bodyParts: [String] { primaryMuscles }
+    var bodyParts: [String] { primaryMuscles.map { $0.rawValue } }
     
     struct InputFieldDefinition: Codable, Hashable {
         let key: String
@@ -110,7 +137,7 @@ struct ExerciseDefinition: Codable, Identifiable, Hashable {
     
     enum CodingKeys: String, CodingKey {
         case id, uuid, category, name = "exercise_name"
-        case primaryMuscles = "primary_muscles", secondaryMuscles = "secondary_muscles", equipment
+        case primaryMuscles = "body_parts", secondaryMuscles = "secondary_muscles", equipment
         case inputSchema = "input_schema", instructions, youtubeUrl = "youtube_url", isArchived = "is_archived"
     }
     
@@ -128,11 +155,37 @@ struct ExerciseDefinition: Codable, Identifiable, Hashable {
             category = .weighted
         }
         
-        primaryMuscles = (try? container.decode([String].self, forKey: .primaryMuscles)) ?? []
-        secondaryMuscles = (try? container.decode([String].self, forKey: .secondaryMuscles)) ?? []
+        // Handle flexible decoding of muscles from either String array or BodyPart array
+        if let primaryStrings = try? container.decode([String].self, forKey: .primaryMuscles) {
+            primaryMuscles = primaryStrings.compactMap { BodyPart(rawValue: $0) }
+        } else {
+            primaryMuscles = []
+        }
+        
+        if let secondaryStrings = try? container.decode([String].self, forKey: .secondaryMuscles) {
+            secondaryMuscles = secondaryStrings.compactMap { BodyPart(rawValue: $0) }
+        } else {
+            secondaryMuscles = []
+        }
+        
         equipment = (try? container.decode([String].self, forKey: .equipment)) ?? []
         inputSchema = try? container.decodeIfPresent([String: InputFieldDefinition].self, forKey: .inputSchema)
         isArchived = (try? container.decode(Bool.self, forKey: .isArchived)) ?? false
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(uuid, forKey: .uuid)
+        try container.encode(name, forKey: .name)
+        try container.encode(category.rawValue, forKey: .category)
+        try container.encode(primaryMuscles.map { $0.rawValue }, forKey: .primaryMuscles)
+        try container.encode(secondaryMuscles.map { $0.rawValue }, forKey: .secondaryMuscles)
+        try container.encode(equipment, forKey: .equipment)
+        try container.encodeIfPresent(inputSchema, forKey: .inputSchema)
+        try container.encodeIfPresent(instructions, forKey: .instructions)
+        try container.encodeIfPresent(youtubeUrl, forKey: .youtubeUrl)
+        try container.encode(isArchived, forKey: .isArchived)
     }
     
     // Manual Hashable conformance (required due to custom init(from:))
@@ -151,7 +204,18 @@ struct ExerciseDefinition: Codable, Identifiable, Hashable {
 typealias ExerciseLogEntry = ExerciseLog
 
 struct ExerciseLog: Codable, Identifiable, Hashable {
-    var id: UUID // Use UUID as primary ID for Identifiable
+    var id: String { 
+        if let uuid = uuid {
+            return uuid.uuidString
+        }
+        if let bid = backendId {
+            return "backend-\(bid)"
+        }
+        return tempId.uuidString
+    }
+    
+    let tempId = UUID()
+    let uuid: UUID?
     var backendId: Int? // Optional backend-assigned ID
     let exerciseId: Int
     let performedAt: Date
@@ -160,9 +224,9 @@ struct ExerciseLog: Codable, Identifiable, Hashable {
     let source: String
     var syncState: String
     let logId: Int?
+    let exerciseName: String
     
     // Compatibility
-    var exerciseName: String { "" }
     var setsPerformed: Int { sets.count }
     var repsPerformed: [Int] { sets.compactMap { $0.reps } }
     var weightUsed: [Double?] { sets.map { $0.weight } }
@@ -170,13 +234,14 @@ struct ExerciseLog: Codable, Identifiable, Hashable {
     var distanceMeters: [Double] { sets.compactMap { $0.distance } }
     
     enum CodingKeys: String, CodingKey {
-        case id = "uuid", backendId = "id", exerciseId = "exercise_id", performedAt = "performed_at", sets, notes, source, syncState = "sync_state", logId = "log_id"
+        case uuid, backendId = "id", exerciseId = "exercise_id", performedAt = "performed_at", sets, notes, source, syncState = "sync_state", logId = "log_id", exerciseName = "exercise_name"
     }
     
-    init(id: UUID = UUID(), backendId: Int? = nil, exerciseId: Int, performedAt: Date = Date(), sets: [ExerciseSet] = [], notes: String? = nil, source: String = "manual", syncState: String = "local", logId: Int? = nil) {
-        self.id = id
+    init(id: UUID? = nil, backendId: Int? = nil, exerciseId: Int, exerciseName: String, performedAt: Date = Date(), sets: [ExerciseSet] = [], notes: String? = nil, source: String = "manual", syncState: String = "local", logId: Int? = nil) {
+        self.uuid = id
         self.backendId = backendId
         self.exerciseId = exerciseId
+        self.exerciseName = exerciseName
         self.performedAt = performedAt
         self.sets = sets
         self.notes = notes
@@ -187,9 +252,10 @@ struct ExerciseLog: Codable, Identifiable, Hashable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = (try? container.decode(UUID.self, forKey: .id)) ?? UUID()
+        uuid = try? container.decodeIfPresent(UUID.self, forKey: .uuid)
         backendId = try? container.decodeIfPresent(Int.self, forKey: .backendId)
         exerciseId = try container.decode(Int.self, forKey: .exerciseId)
+        exerciseName = (try? container.decode(String.self, forKey: .exerciseName)) ?? "Exercise"
         
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -205,7 +271,7 @@ struct ExerciseLog: Codable, Identifiable, Hashable {
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(uuid, forKey: .uuid)
         try container.encodeIfPresent(backendId, forKey: .backendId)
         try container.encode(exerciseId, forKey: .exerciseId)
         
@@ -218,6 +284,17 @@ struct ExerciseLog: Codable, Identifiable, Hashable {
         try container.encode(source, forKey: .source)
         try container.encode(syncState, forKey: .syncState)
         try container.encodeIfPresent(logId, forKey: .logId)
+        try container.encode(exerciseName, forKey: .exerciseName)
+    }
+    
+    // Manual Hashable conformance (required due to custom init(from:))
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    // Manual Equatable conformance (required due to custom init(from:))
+    static func == (lhs: ExerciseLog, rhs: ExerciseLog) -> Bool {
+        lhs.id == rhs.id
     }
 }
 
@@ -237,6 +314,52 @@ struct WorkoutSession: Codable, Identifiable, Hashable {
     let startedAt: Date?
     let endedAt: Date?
     let entries: [ExerciseLog]
+    
+    var timeOfDay: String {
+        // Use startedAt if available, otherwise fallback to current time for inProgress 
+        // or just Morning if we only have exerciseDate (which lacks time)
+        guard let date = startedAt else {
+            // If we don't have a start time, we can't accurately say
+            // But if it's in progress right now, we can use current time
+            if status == .inProgress {
+                return getTimeOfDay(for: Date())
+            }
+            return "Workout" // Generic fallback
+        }
+        return getTimeOfDay(for: date)
+    }
+    
+    private func getTimeOfDay(for date: Date) -> String {
+        let hour = Calendar.current.component(.hour, from: date)
+        switch hour {
+        case 0..<5: return "Night"
+        case 5..<12: return "Morning"
+        case 12..<17: return "Afternoon"
+        case 17..<22: return "Evening"
+        default: return "Night"
+        }
+    }
+    
+    var formattedExerciseDate: String {
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        let date: Date?
+        if let d = isoFormatter.date(from: exerciseDate) {
+            date = d
+        } else {
+            let simpleFormatter = DateFormatter()
+            simpleFormatter.dateFormat = "yyyy-MM-dd"
+            date = simpleFormatter.date(from: exerciseDate)
+        }
+        
+        if let date = date {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "EEEE, MMM d" // e.g. "Friday, Jan 2"
+            return displayFormatter.string(from: date)
+        }
+        return exerciseDate
+    }
     
     enum SessionStatus: String, Codable {
         case inProgress = "IN_PROGRESS"
@@ -259,7 +382,11 @@ struct WorkoutSession: Codable, Identifiable, Hashable {
         totalDurationMinutes = try? container.decodeIfPresent(Int.self, forKey: .totalDurationMinutes)
         location = try? container.decodeIfPresent(String.self, forKey: .location)
         notes = try? container.decodeIfPresent(String.self, forKey: .notes)
-        status = (try? container.decode(SessionStatus.self, forKey: .status)) ?? .completed
+        if let statusString = try? container.decode(String.self, forKey: .status) {
+            status = SessionStatus(rawValue: statusString.uppercased()) ?? .completed
+        } else {
+            status = .completed
+        }
         
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -277,6 +404,32 @@ struct WorkoutSession: Codable, Identifiable, Hashable {
         }
         
         entries = (try? container.decode([ExerciseLog].self, forKey: .entries)) ?? []
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(uuid, forKey: .uuid)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(exerciseDate, forKey: .exerciseDate)
+        try container.encode(dayOfWeek, forKey: .dayOfWeek)
+        try container.encodeIfPresent(totalDurationMinutes, forKey: .totalDurationMinutes)
+        try container.encodeIfPresent(location, forKey: .location)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encode(status, forKey: .status)
+        
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        if let startedAt = startedAt {
+            try container.encode(formatter.string(from: startedAt), forKey: .startedAt)
+        }
+        
+        if let endedAt = endedAt {
+            try container.encode(formatter.string(from: endedAt), forKey: .endedAt)
+        }
+        
+        try container.encode(entries, forKey: .entries)
     }
     
     init(id: Int, uuid: UUID = UUID(), userId: Int, exerciseDate: String, dayOfWeek: Int, totalDurationMinutes: Int? = nil, location: String? = nil, notes: String? = nil, status: SessionStatus = .completed, startedAt: Date? = nil, endedAt: Date? = nil, entries: [ExerciseLog] = []) {

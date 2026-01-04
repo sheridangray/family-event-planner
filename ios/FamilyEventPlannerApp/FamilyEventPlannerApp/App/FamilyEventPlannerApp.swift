@@ -26,6 +26,7 @@ struct FamilyEventPlannerApp: App {
                 .environmentObject(AuthenticationManager.shared)
                 .environmentObject(HealthKitManager.shared)
                 .environmentObject(NavigationCoordinator.shared)
+                .environmentObject(ExerciseManager.shared)
         }
     }
 }

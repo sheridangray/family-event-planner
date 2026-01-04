@@ -104,34 +104,42 @@ struct ExerciseLogView: View {
                 dateFormatter.formatOptions = [.withFullDate]
                 
                 let entries = logEntries.enumerated().map { index, entry in
-                    ExerciseLogEntry(
-                        id: 0,
-                        logId: 0,
+                    var sets: [ExerciseSet] = []
+                    for i in 0..<entry.setsPerformed {
+                        var set = ExerciseSet()
+                        set.reps = entry.repsPerformed.indices.contains(i) ? entry.repsPerformed[i] : 0
+                        set.weight = entry.weightUsed.indices.contains(i) ? entry.weightUsed[i] : nil
+                        set.duration = entry.durationSeconds.indices.contains(i) ? entry.durationSeconds[i] : 0
+                        sets.append(set)
+                    }
+                    
+                    return ExerciseLog(
+                        id: UUID(),
+                        backendId: nil as Int?,
+                        exerciseId: 0, 
                         exerciseName: entry.exerciseName,
-                        exerciseOrder: index + 1,
-                        equipmentUsed: location,
-                        setsPerformed: entry.setsPerformed,
-                        repsPerformed: entry.repsPerformed,
-                        weightUsed: entry.weightUsed,
-                        durationSeconds: entry.durationSeconds,
-                        restSeconds: nil as Int?,
+                        performedAt: today,
+                        sets: sets,
                         notes: nil as String?,
-                        difficultyRating: nil as Int?
+                        source: "manual",
+                        syncState: "local",
+                        logId: nil as Int?
                     )
                 }
                 
-                let log = ExerciseLog(
+                let log = WorkoutSession(
                     id: 0,
+                    uuid: UUID(),
                     userId: 0,
-                    routineId: routine.id,
                     exerciseDate: dateFormatter.string(from: today),
                     dayOfWeek: Calendar.current.component(.weekday, from: today),
-                    totalDurationMinutes: totalDurationMinutes > 0 ? totalDurationMinutes : nil,
+                    totalDurationMinutes: totalDurationMinutes > 0 ? totalDurationMinutes : nil as Int?,
                     location: location,
-                    notes: notes.isEmpty ? nil : notes,
-                    entries: entries,
-                    createdAt: nil,
-                    updatedAt: nil
+                    notes: notes.isEmpty ? nil as String? : notes,
+                    status: .completed,
+                    startedAt: today,
+                    endedAt: today,
+                    entries: entries
                 )
                 
                 try await exerciseManager.logWorkout(log)
@@ -296,32 +304,29 @@ struct EquipmentBadge: View {
 
 #Preview {
     NavigationStack {
-        ExerciseLogView(routine: ExerciseRoutine(
-            id: 1,
-            userId: 1,
-            routineName: "Upper Push",
-            dayOfWeek: 1,
-            description: "Test",
-            isActive: true,
-            exercises: [
-                RoutineExercise(
-                    id: 1,
-                    routineId: 1,
-                    exerciseName: "Push-ups",
-                    exerciseOrder: 1,
-                    targetSets: 4,
-                    targetRepsMin: 10,
-                    targetRepsMax: 12,
-                    targetDurationSeconds: nil,
-                    notes: nil,
-                    cues: nil,
-                    preferredEquipment: "bodyweight",
-                    equipmentNotes: nil
-                )
-            ],
-            createdAt: nil,
-            updatedAt: nil
-        ))
+        ExerciseLogView(routine: try! JSONDecoder().decode(ExerciseRoutine.self, from: """
+        {
+            "id": 1,
+            "user_id": 1,
+            "routine_name": "Upper Push",
+            "day_of_week": 1,
+            "description": "Test",
+            "is_active": true,
+            "exercises": [
+                {
+                    "id": 1,
+                    "routine_id": 1,
+                    "exercise_name": "Push-ups",
+                    "exercise_order": 1,
+                    "target_sets": 4,
+                    "target_reps_min": 10,
+                    "target_reps_max": 12,
+                    "target_duration_seconds": null,
+                    "preferred_equipment": "bodyweight"
+                }
+            ]
+        }
+        """.data(using: .utf8)!))
         .environmentObject(ExerciseManager.shared)
     }
 }

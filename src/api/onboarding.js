@@ -178,14 +178,23 @@ function createOnboardingRouter(database, logger) {
       }
 
       // 3. Create/Update Profile for the user (Owner)
+      const enabledPillars = payload.pillars?.enabledPillarIds || [
+        "time",
+        "food",
+        "health",
+        "relationships",
+        "sleep",
+        "money",
+      ];
+
       // Check if profile exists
       const checkProfile = `SELECT id FROM profiles WHERE user_id = $1`;
       const profileResult = await database.query(checkProfile, [userId]);
 
       if (profileResult.rows.length === 0) {
         const createProfile = `
-          INSERT INTO profiles (household_id, user_id, display_name, role, relationship_type, is_active)
-          VALUES ($1, $2, $3, 'owner', 'self', true)
+          INSERT INTO profiles (household_id, user_id, display_name, role, relationship_type, is_active, enabled_pillars)
+          VALUES ($1, $2, $3, 'owner', 'self', true, $4)
         `;
         // Use name from user table or payload
         // We'll fetch current user name for display_name default
@@ -195,7 +204,18 @@ function createOnboardingRouter(database, logger) {
         );
         const userName = userRes.rows[0]?.name || "Me";
 
-        await database.query(createProfile, [householdId, userId, userName]);
+        await database.query(createProfile, [
+          householdId,
+          userId,
+          userName,
+          enabledPillars,
+        ]);
+      } else {
+        // Update existing profile with selected pillars
+        const updateProfile = `
+          UPDATE profiles SET enabled_pillars = $1 WHERE user_id = $2
+        `;
+        await database.query(updateProfile, [enabledPillars, userId]);
       }
 
       // 4. (Optional) Create profiles for other family members from payload

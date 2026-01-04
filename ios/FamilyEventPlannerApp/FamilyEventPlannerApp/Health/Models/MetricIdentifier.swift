@@ -41,6 +41,39 @@ enum MetricIdentifier: String, CaseIterable {
     // Mindfulness
     case mindfulMinutes = "Mindful Minutes"
     
+    /// Get the icon name for this metric
+    var iconName: String {
+        switch self {
+        case .steps: return "figure.walk"
+        case .exercise: return "flame.fill"
+        case .distance: return "map"
+        case .activeCalories: return "flame"
+        case .flightsClimbed: return "figure.stairs"
+        case .standHours: return "figure.stand"
+        case .walkingSpeed: return "speedometer"
+        case .weight: return "scalemass.fill"
+        case .bmi: return "chart.bar"
+        case .bodyFat: return "percent"
+        case .height: return "ruler"
+        case .leanBodyMass: return "figure.arms.open"
+        case .restingHeartRate: return "heart.fill"
+        case .bloodOxygen: return "lungs.fill"
+        case .vo2Max: return "figure.run"
+        case .hrv: return "waveform.path.ecg"
+        case .respiratoryRate: return "wind"
+        case .calories: return "flame.fill"
+        case .water: return "drop.fill"
+        case .protein: return "p.circle.fill"
+        case .carbs: return "c.circle.fill"
+        case .fat: return "f.circle.fill"
+        case .sugar: return "s.circle.fill"
+        case .fiber: return "leaf.fill"
+        case .caffeine: return "cup.and.saucer.fill"
+        case .sleep: return "bed.double.fill"
+        case .mindfulMinutes: return "brain.head.profile"
+        }
+    }
+    
     /// Get the HealthKit type for this metric
     var healthKitType: String? {
         switch self {

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     
     -- Permissions & Visibility
     is_active BOOLEAN DEFAULT true,
+    enabled_pillars TEXT[] DEFAULT '{time,food,health,relationships,sleep,money}',
     
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()

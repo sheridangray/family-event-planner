@@ -7,7 +7,7 @@ struct ExerciseHistoryView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                if exerciseManager.recentLogs.isEmpty {
+                if exerciseManager.activeSessions.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
                             .font(.system(size: 50))
@@ -31,8 +31,8 @@ struct ExerciseHistoryView: View {
                     }
                     .padding()
                 } else {
-                    ForEach(exerciseManager.recentLogs) { log in
-                        WorkoutHistoryCard(log: log)
+                    ForEach(exerciseManager.activeSessions) { workout in
+                        WorkoutHistoryCard(workout: workout)
                             .padding(.horizontal)
                     }
                 }
@@ -52,15 +52,15 @@ struct ExerciseHistoryView: View {
 // MARK: - Workout History Card
 
 struct WorkoutHistoryCard: View {
-    let log: ExerciseLog
+    let workout: WorkoutSession
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(log.exerciseDate)
+                Text(workout.exerciseDate)
                     .font(.headline)
                 Spacer()
-                if let location = log.location {
+                if let location = workout.location {
                     Text(location.capitalized)
                         .font(.caption)
                         .padding(.horizontal, 8)
@@ -71,7 +71,7 @@ struct WorkoutHistoryCard: View {
                 }
             }
             
-            if let duration = log.totalDurationMinutes {
+            if let duration = workout.totalDurationMinutes {
                 HStack {
                     Image(systemName: "clock.fill")
                         .foregroundColor(.secondary)
@@ -81,9 +81,9 @@ struct WorkoutHistoryCard: View {
                 }
             }
             
-            if !log.entries.isEmpty {
+            if !workout.entries.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(log.entries.prefix(3)) { entry in
+                    ForEach(workout.entries.prefix(3)) { entry in
                         HStack {
                             Text("• \(entry.exerciseName)")
                                 .font(.caption)
@@ -95,15 +95,15 @@ struct WorkoutHistoryCard: View {
                             }
                         }
                     }
-                    if log.entries.count > 3 {
-                        Text("+ \(log.entries.count - 3) more exercises")
+                    if workout.entries.count > 3 {
+                        Text("+ \(workout.entries.count - 3) more exercises")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
             }
             
-            if let notes = log.notes, !notes.isEmpty {
+            if let notes = workout.notes, !notes.isEmpty {
                 Text(notes)
                     .font(.caption)
                     .foregroundColor(.secondary)

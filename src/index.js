@@ -198,8 +198,8 @@ async function startServer() {
     // logger.info("Task scheduler started");
 
     // Start the web server
-    const server = app.listen(config.app.port, () => {
-      logger.info(`Server running on port ${config.app.port}`);
+    const server = app.listen(config.app.port, "0.0.0.0", () => {
+      logger.info(`Server running on port ${config.app.port} (0.0.0.0)`);
     });
 
     // Graceful shutdown handling
