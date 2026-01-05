@@ -12,17 +12,16 @@ struct WorkoutDetailView: View {
     @State private var editingEntry: ExerciseLogEntry?
     @State private var entryToDelete: Int?
     @State private var showingDeleteEntryConfirmation = false
-    @State private var isCompactView = true // Default to compact for "at-a-glance"
     
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                VStack(alignment: .leading, spacing: isCompactView ? 12 : 24) {
+                VStack(alignment: .leading, spacing: 12) {
                     // Header
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Workout")
-                                .font(isCompactView ? .title : .largeTitle)
+                                .font(.title)
                                 .fontWeight(.bold)
                             
                             Spacer()
@@ -53,17 +52,10 @@ struct WorkoutDetailView: View {
                     
                     // Exercises
                     if let details = workoutDetails {
-                        VStack(alignment: .leading, spacing: isCompactView ? 8 : 16) {
-                            if !isCompactView {
-                                Text("Exercises")
-                                    .font(.headline)
-                                    .padding(.horizontal)
-                            }
-                            
+                        VStack(alignment: .leading, spacing: 8) {
                             ForEach(details.entries) { entry in
                                 ExerciseEntryCard(
                                     entry: entry,
-                                    isCompact: isCompactView,
                                     onEdit: {
                                         editingEntry = entry
                                     },
@@ -138,25 +130,14 @@ struct WorkoutDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                HStack {
-                    Button {
-                        withAnimation {
-                            isCompactView.toggle()
-                        }
+                Menu {
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
                     } label: {
-                        Image(systemName: isCompactView ? "list.bullet.below.rectangle" : "rectangle.grid.1x2")
-                            .font(.system(size: 14))
+                        Label("Delete Workout", systemImage: "trash")
                     }
-                    
-                    Menu {
-                        Button(role: .destructive) {
-                            showingDeleteConfirmation = true
-                        } label: {
-                            Label("Delete Workout", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
             }
         }
