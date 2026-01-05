@@ -12,16 +12,17 @@ struct WorkoutDetailView: View {
     @State private var editingEntry: ExerciseLogEntry?
     @State private var entryToDelete: Int?
     @State private var showingDeleteEntryConfirmation = false
+    @State private var isCompactView = true // Default to compact for "at-a-glance"
     
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: isCompactView ? 12 : 24) {
                     // Header
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Workout")
-                                .font(.largeTitle)
+                                .font(isCompactView ? .title : .largeTitle)
                                 .fontWeight(.bold)
                             
                             Spacer()
@@ -51,43 +52,46 @@ struct WorkoutDetailView: View {
                     .padding(.horizontal)
                     
                     // Exercises
-                        if let details = workoutDetails {
-                            VStack(alignment: .leading, spacing: 16) {
+                    if let details = workoutDetails {
+                        VStack(alignment: .leading, spacing: isCompactView ? 8 : 16) {
+                            if !isCompactView {
                                 Text("Exercises")
                                     .font(.headline)
                                     .padding(.horizontal)
-                                
-                                ForEach(details.entries) { entry in
-                                    ExerciseEntryCard(
-                                        entry: entry,
-                                        onEdit: {
-                                            editingEntry = entry
-                                        },
-                                        onDelete: {
-                                            if let entryId = entry.backendId {
-                                                entryToDelete = entryId
-                                                showingDeleteEntryConfirmation = true
-                                            }
-                                        }
-                                    )
-                                    .padding(.horizontal)
-                                }
                             }
-                        } else {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding()
+                            
+                            ForEach(details.entries) { entry in
+                                ExerciseEntryCard(
+                                    entry: entry,
+                                    isCompact: isCompactView,
+                                    onEdit: {
+                                        editingEntry = entry
+                                    },
+                                    onDelete: {
+                                        if let entryId = entry.backendId {
+                                            entryToDelete = entryId
+                                            showingDeleteEntryConfirmation = true
+                                        }
+                                    }
+                                )
+                                .padding(.horizontal)
+                            }
                         }
-                        
-                        // Spacer for fixed footer
-                        Spacer(minLength: 160)
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
-                    .padding(.vertical)
+                    
+                    // Spacer for fixed footer
+                    Spacer(minLength: 160)
                 }
-                .background(Color(.systemGroupedBackground))
-                
-                // Fixed Bottom Footer
-                VStack(spacing: 12) {
+                .padding(.vertical)
+            }
+            .background(Color(.systemGroupedBackground))
+            
+            // Fixed Bottom Footer
+            VStack(spacing: 12) {
                 Divider()
                 
                 VStack(spacing: 12) {
@@ -134,14 +138,25 @@ struct WorkoutDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button(role: .destructive) {
-                        showingDeleteConfirmation = true
+                HStack {
+                    Button {
+                        withAnimation {
+                            isCompactView.toggle()
+                        }
                     } label: {
-                        Label("Delete Workout", systemImage: "trash")
+                        Image(systemName: isCompactView ? "list.bullet.below.rectangle" : "rectangle.grid.1x2")
+                            .font(.system(size: 14))
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+                    
+                    Menu {
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete Workout", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
             }
         }
