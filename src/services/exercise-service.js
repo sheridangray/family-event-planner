@@ -763,16 +763,25 @@ class ExerciseService {
    */
   async createExercise(exerciseName, llmService, options = {}) {
     try {
-      // Check if a NON-ARCHIVED exercise already exists
+      // Check if the exercise already exists (even if archived)
       const existing = await this.database.query(
         `SELECT * FROM exercises 
          WHERE LOWER(exercise_name) = LOWER($1) 
-         AND (is_archived = false OR is_archived IS NULL)`,
+         LIMIT 1`,
         [exerciseName]
       );
 
       if (existing.rows.length > 0) {
-        return existing.rows[0];
+        const exercise = existing.rows[0];
+        // If it's archived, unarchive it
+        if (exercise.is_archived) {
+          await this.database.query(
+            "UPDATE exercises SET is_archived = false, updated_at = NOW() WHERE id = $1",
+            [exercise.id]
+          );
+          exercise.is_archived = false;
+        }
+        return exercise;
       }
 
       // Generate details using LLM

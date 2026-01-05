@@ -27,9 +27,8 @@ function createExerciseRouter(database, logger) {
    * Create a new exercise (triggers LLM generation)
    */
   router.post("/exercises", authenticateFlexible, async (req, res) => {
+    const { exerciseName, category } = req.body;
     try {
-      const { exerciseName, category } = req.body;
-
       if (!exerciseName) {
         return res.status(400).json({
           success: false,
