@@ -51,42 +51,43 @@ struct WorkoutDetailView: View {
                     .padding(.horizontal)
                     
                     // Exercises
-                    if let details = workoutDetails {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Exercises")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            ForEach(details.entries) { entry in
-                                ExerciseEntryCard(
-                                    entry: entry,
-                                    onEdit: {
-                                        editingEntry = entry
-                                    },
-                                    onDelete: {
-                                        if let entryId = entry.backendId {
-                                            entryToDelete = entryId
-                                            showingDeleteEntryConfirmation = true
+                        if let details = workoutDetails {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Exercises")
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                
+                                ForEach(details.entries) { entry in
+                                    ExerciseEntryCard(
+                                        entry: entry,
+                                        onEdit: {
+                                            editingEntry = entry
+                                        },
+                                        onDelete: {
+                                            if let entryId = entry.backendId {
+                                                entryToDelete = entryId
+                                                showingDeleteEntryConfirmation = true
+                                            }
                                         }
-                                    }
-                                )
-                                .padding(.horizontal)
+                                    )
+                                    .padding(.horizontal)
+                                }
                             }
+                        } else {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding()
                         }
-                    } else {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding()
+                        
+                        // Spacer for fixed footer
+                        Spacer(minLength: 160)
                     }
-                    
-                    // Spacer for fixed footer
-                    Spacer(minLength: 160)
+                    .padding(.vertical)
                 }
-                .padding(.vertical)
-            }
-            
-            // Fixed Bottom Footer
-            VStack(spacing: 12) {
+                .background(Color(.systemGroupedBackground))
+                
+                // Fixed Bottom Footer
+                VStack(spacing: 12) {
                 Divider()
                 
                 VStack(spacing: 12) {

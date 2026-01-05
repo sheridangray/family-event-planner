@@ -454,6 +454,8 @@ class PostgresDatabase {
       await this.runFileMigration("021_create_sleep_pillar.sql");
       await this.runFileMigration("022_create_coach_engine.sql");
       await this.runFileMigration("023_align_exercise_logs_with_prd.sql");
+      await this.runFileMigration("024_allow_duplicate_archived_exercise_names.sql");
+      await this.runFileMigration("025_add_updated_at_to_exercise_log_entries.sql");
 
       console.log("Database migrations completed successfully");
     } catch (error) {

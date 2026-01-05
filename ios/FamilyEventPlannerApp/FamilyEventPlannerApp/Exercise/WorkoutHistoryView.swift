@@ -71,6 +71,7 @@ struct WorkoutHistoryView: View {
                     }
                 }
                 .listStyle(.plain)
+                .background(Color(.systemGroupedBackground))
             }
         }
         .navigationTitle("Workout History")

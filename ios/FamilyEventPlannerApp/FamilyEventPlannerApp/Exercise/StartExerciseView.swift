@@ -61,185 +61,200 @@ struct StartExerciseView: View {
     }
     
     var body: some View {
-        ZStack {
-            // Background
-            Color(.systemBackground)
-                .ignoresSafeArea()
-            
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Video player (if available)
-                    if let youtubeUrl = exercise.youtubeUrl, let url = URL(string: youtubeUrl) {
-                        VideoThumbnailView(url: url, exerciseName: exercise.exerciseName)
-                            .frame(height: 220)
-                    } else {
-                        // Placeholder for video
-                        ZStack {
-                            Color.black.opacity(0.8)
-                            VStack(spacing: 12) {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.system(size: 60))
-                                    .foregroundColor(.white.opacity(0.7))
-                                Text(exercise.exerciseName)
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .frame(height: 220)
-                    }
-                    
-                    // Exercise name
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(exercise.bodyParts.joined(separator: ", ").uppercased())
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .textCase(.uppercase)
-                        
-                        Text(exercise.exerciseName)
-                            .font(.title2)
-                            .fontWeight(.bold)
-
-                        Button {
-                            showingExerciseInfo = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "info.circle")
-                                Text("Exercise information")
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
-                        }
-                        .padding(.top, 4)
-
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 24)
-                    
-                    // Sets section
+        ZStack(alignment: .bottom) {
+            ScrollViewReader { proxy in
+                ScrollView {
                     VStack(spacing: 0) {
-                        // Header labels
-                        HStack(spacing: 8) {
-                            Text(labels.0)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity)
-                            
-                            Text(labels.1)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity)
-                            
-                            Text(labels.2)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity)
-                            
-                            // Spacer to align with the delete button column
-                            Spacer().frame(width: 44)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 12)
-                        
-                        // Sets list
-                        ForEach(Array(sets.enumerated()), id: \.element.id) { index, _ in
-                            StartExerciseSetRowView(
-                                set: $sets[index],
-                                exerciseType: exercise.exerciseType,
-                                index: index,
-                                focusedField: $focusedField,
-                                onDelete: sets.count > 1 ? {
-                                    sets.remove(at: index)
-                                } : nil
-                            )
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 12)
+                        // Video player (if available)
+                        if let youtubeUrl = exercise.youtubeUrl, let url = URL(string: youtubeUrl) {
+                            VideoThumbnailView(url: url, exerciseName: exercise.exerciseName)
+                                .frame(height: 220)
+                                .id("video")
+                        } else {
+                            // Placeholder for video
+                            ZStack {
+                                Color.black.opacity(0.8)
+                                VStack(spacing: 12) {
+                                    Image(systemName: "play.circle.fill")
+                                        .font(.system(size: 60))
+                                        .foregroundColor(.white.opacity(0.7))
+                                    Text(exercise.exerciseName)
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            .frame(height: 220)
+                            .id("video")
                         }
                         
-                        // Add Set button
-                        Button {
-                            var newSet = ExerciseSet()
-                            if let lastSet = sets.last {
-                                // Copy forward values from previous set
-                                newSet.reps = lastSet.reps
-                                newSet.weight = lastSet.weight
-                                newSet.restSeconds = lastSet.restSeconds
-                                newSet.duration = lastSet.duration
-                                newSet.distance = lastSet.distance
-                                newSet.bandLevel = lastSet.bandLevel
-                                newSet.resistanceLevel = lastSet.resistanceLevel
-                                newSet.incline = lastSet.incline
-                                newSet.speed = lastSet.speed
-                            } else {
-                                newSet.restSeconds = 60
-                            }
-                            sets.append(newSet)
-                        } label: {
-                            HStack {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text("ADD SET")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color(.systemGray2))
-                            .cornerRadius(10)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 24)
-
-                        // Notes section
+                        // Exercise name
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("NOTES")
+                            Text(exercise.bodyParts.joined(separator: ", ").uppercased())
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                                .fontWeight(.semibold)
+                                .textCase(.uppercase)
                             
-                            TextEditor(text: $notes)
-                                .frame(height: 100)
-                                .padding(8)
-                                .background(Color.white)
-                                .cornerRadius(8)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color(.systemGray4), lineWidth: 1)
-                                )
+                            Text(exercise.exerciseName)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .id("exerciseName")
+
+                            Button {
+                                showingExerciseInfo = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "info.circle")
+                                    Text("Exercise information")
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                            }
+                            .padding(.top, 4)
+
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20)
+                        .padding(.top, 16)
                         .padding(.bottom, 24)
+                        
+                        // Sets section
+                        VStack(spacing: 0) {
+                            // Header labels
+                            HStack(spacing: 8) {
+                                Text(labels.0)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                
+                                Text(labels.1)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                
+                                Text(labels.2)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                
+                                // Spacer to align with the delete button column
+                                Spacer().frame(width: 44)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+                            .padding(.bottom, 12)
+                            
+                            // Sets list
+                            ForEach(Array(sets.enumerated()), id: \.element.id) { index, _ in
+                                StartExerciseSetRowView(
+                                    set: $sets[index],
+                                    exerciseType: exercise.exerciseType,
+                                    index: index,
+                                    focusedField: $focusedField,
+                                    onDelete: sets.count > 1 ? {
+                                        sets.remove(at: index)
+                                    } : nil
+                                )
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 12)
+                            }
+                            
+                            // Add Set button
+                            Button {
+                                var newSet = ExerciseSet()
+                                if let lastSet = sets.last {
+                                    // Copy forward values from previous set
+                                    newSet.reps = lastSet.reps
+                                    newSet.weight = lastSet.weight
+                                    newSet.restSeconds = lastSet.restSeconds
+                                    newSet.duration = lastSet.duration
+                                    newSet.distance = lastSet.distance
+                                    newSet.bandLevel = lastSet.bandLevel
+                                    newSet.resistanceLevel = lastSet.resistanceLevel
+                                    newSet.incline = lastSet.incline
+                                    newSet.speed = lastSet.speed
+                                } else {
+                                    newSet.restSeconds = 60
+                                }
+                                sets.append(newSet)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("ADD SET")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color(.systemGray2))
+                                .cornerRadius(10)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+                            .padding(.bottom, 24)
+
+                            // Notes section
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("NOTES")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fontWeight(.semibold)
+                                
+                                TextEditor(text: $notes)
+                                    .frame(height: 100)
+                                    .padding(8)
+                                    .background(Color(.systemBackground))
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color(.systemGray4), lineWidth: 1)
+                                    )
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 24)
+                        }
+                        .background(Color(.secondarySystemBackground))
+                        .padding(.top, 8)
+                        
+                        Spacer(minLength: 120) // Space for fixed footer
                     }
-                    .background(Color(.systemGray6))
-                    .padding(.top, 8)
-                    
-                    Spacer(minLength: 120) // Increased space for bottom button
+                }
+                .onAppear {
+                    // Scroll to exercise name to partially hide video
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        withAnimation {
+                            proxy.scrollTo("exerciseName", anchor: .top)
+                        }
+                    }
                 }
             }
+            .background(Color(.systemGroupedBackground))
             
-            // Bottom ADD button
-            VStack {
-                Spacer()
+            // Fixed Bottom Button
+            VStack(spacing: 0) {
+                Divider()
                 Button {
                     saveExercise()
                 } label: {
-                    Text(entry == nil ? "ADD EXERCISE" : "UPDATE ENTRY")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.blue)
-                        .cornerRadius(12)
+                    if isSaving {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Text(entry == nil ? "ADD EXERCISE" : "UPDATE ENTRY")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
                 }
                 .disabled(isSaving || sets.isEmpty)
-                .opacity(isSaving || sets.isEmpty ? 0.6 : 1.0)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(isSaving || sets.isEmpty ? Color.gray : Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+                .padding()
+                .background(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: -5)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -382,7 +397,7 @@ struct StartExerciseSetRowView: View {
                         .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
-                        .background(Color.white)
+                        .background(Color(.systemBackground))
                         .cornerRadius(8)
                     Text("m")
                         .font(.caption)
@@ -407,7 +422,7 @@ struct StartExerciseSetRowView: View {
                        .font(.system(size: 20, weight: .semibold))
                        .multilineTextAlignment(.center)
                        .frame(height: 44)
-                       .background(Color.white)
+                       .background(Color(.systemBackground))
                        .cornerRadius(8)
                     Text("min")
                        .font(.caption)
@@ -421,7 +436,7 @@ struct StartExerciseSetRowView: View {
                         .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
-                        .background(Color.white)
+                        .background(Color(.systemBackground))
                         .cornerRadius(8)
                     Text("reps")
                         .font(.caption)
@@ -441,7 +456,7 @@ struct StartExerciseSetRowView: View {
                         .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
-                        .background(Color.white)
+                        .background(Color(.systemBackground))
                         .cornerRadius(8)
                     Text("lbs")
                         .font(.caption)
@@ -457,7 +472,7 @@ struct StartExerciseSetRowView: View {
                         .font(.system(size: 18, weight: .medium))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
-                        .background(Color.white)
+                        .background(Color(.systemBackground))
                         .cornerRadius(8)
                     Text("band")
                         .font(.caption)
@@ -486,7 +501,7 @@ struct StartExerciseSetRowView: View {
                             .font(.system(size: 20, weight: .semibold))
                             .multilineTextAlignment(.center)
                             .frame(height: 44)
-                            .background(Color.white)
+                            .background(Color(.systemBackground))
                             .cornerRadius(8)
                          Text("min")
                             .font(.caption)
@@ -499,7 +514,7 @@ struct StartExerciseSetRowView: View {
                             .font(.system(size: 20, weight: .semibold))
                             .multilineTextAlignment(.center)
                             .frame(height: 44)
-                            .background(Color.white)
+                            .background(Color(.systemBackground))
                             .cornerRadius(8)
                         Text("cals")
                             .font(.caption)
@@ -523,7 +538,7 @@ struct StartExerciseSetRowView: View {
                         .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
-                        .background(Color.white)
+                        .background(Color(.systemBackground))
                         .cornerRadius(8)
                     Text("bpm")
                         .font(.caption)
@@ -537,7 +552,7 @@ struct StartExerciseSetRowView: View {
                         .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
-                        .background(Color.white)
+                        .background(Color(.systemBackground))
                         .cornerRadius(8)
                     Text("rest")
                         .font(.caption)

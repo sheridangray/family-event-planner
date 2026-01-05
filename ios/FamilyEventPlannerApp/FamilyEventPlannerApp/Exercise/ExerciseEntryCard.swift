@@ -125,19 +125,19 @@ struct ExerciseEntryCard: View {
                     }
                     .padding(.vertical, 4)
                     .padding(.horizontal, 4)
-                    .background(index % 2 == 0 ? Color.clear : Color.black.opacity(0.02))
+                    .background(index % 2 == 0 ? Color.clear : Color.primary.opacity(0.03))
                 }
             }
             .padding(12)
-            .background(Color.white)
+            .background(Color(.systemBackground))
             .cornerRadius(10)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.05), lineWidth: 1)
             )
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.03), radius: 5, x: 0, y: 2)
     }

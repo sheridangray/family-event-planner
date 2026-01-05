@@ -91,7 +91,7 @@ struct AddExerciseView: View {
                                     }
                                     .padding(.vertical, 8)
                                     .padding(.horizontal, 12)
-                                    .background(Color(.systemGray6))
+                                    .background(Color(.secondarySystemBackground))
                                     .cornerRadius(8)
                                 }
                             }
@@ -107,7 +107,7 @@ struct AddExerciseView: View {
                                     .font(.body)
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(.systemGray6))
+                                    .background(Color(.secondarySystemBackground))
                                     .cornerRadius(8)
                             }
                             
