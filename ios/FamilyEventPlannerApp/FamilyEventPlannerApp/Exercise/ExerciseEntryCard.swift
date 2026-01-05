@@ -143,12 +143,6 @@ struct ExerciseEntryCard: View {
                     .font(.subheadline)
                     .fontWeight(.bold)
                 
-                if let notes = entry.notes, !notes.isEmpty {
-                    Image(systemName: "note.text")
-                        .font(.caption2)
-                        .foregroundColor(.blue)
-                }
-                
                 Spacer()
                 
                 Text("\(entry.setsPerformed) sets")
@@ -164,6 +158,15 @@ struct ExerciseEntryCard: View {
                         setTag(for: index)
                     }
                 }
+            }
+            
+            if let notes = entry.notes, !notes.isEmpty {
+                Text(notes)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .italic()
+                    .lineLimit(2)
+                    .padding(.top, 2)
             }
         }
         .padding(12)
