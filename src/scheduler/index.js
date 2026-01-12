@@ -12,7 +12,9 @@ class TaskScheduler {
     smsManager,
     registrationAutomator,
     calendarManager,
-    unifiedNotifications
+    unifiedNotifications,
+    exerciseService = null,
+    notificationService = null
   ) {
     this.logger = logger;
     this.database = database;
@@ -23,6 +25,8 @@ class TaskScheduler {
     this.registrationAutomator = registrationAutomator;
     this.calendarManager = calendarManager;
     this.unifiedNotifications = unifiedNotifications;
+    this.exerciseService = exerciseService;
+    this.notificationService = notificationService;
     this.reportingService = new ReportingService(logger);
     this.tasks = [];
 
@@ -49,6 +53,7 @@ class TaskScheduler {
     // this.scheduleDailyReports(); // Disabled - daily report emails removed
     this.scheduleHealthChecks();
     this.scheduleHealthCoachWeekly();
+    this.scheduleWorkoutReminders();
 
     this.logger.info(
       `Task scheduler started with ${this.tasks.length} scheduled tasks`
@@ -202,6 +207,40 @@ class TaskScheduler {
       frequency: "Every Monday at 8:00 PM",
     });
     this.logger.info("Scheduled weekly health coach: Every Monday at 8:00 PM");
+  }
+
+  scheduleWorkoutReminders() {
+    if (!this.exerciseService || !this.notificationService) {
+      this.logger.warn(
+        "ExerciseService or NotificationService not provided, skipping workout reminders schedule"
+      );
+      return;
+    }
+
+    const WorkoutReminderRule = require("../services/notification-rules/workout-reminder-rule");
+    const rule = new WorkoutReminderRule(
+      this.logger,
+      this.database,
+      this.exerciseService,
+      this.notificationService
+    );
+
+    // Daily at 8:30 PM (20:30)
+    const task = cron.schedule("30 20 * * *", async () => {
+      try {
+        this.logger.info("Starting scheduled workout reminders...");
+        await rule.execute();
+      } catch (error) {
+        this.logger.error("Error in scheduled workout reminders:", error.message);
+      }
+    });
+
+    this.tasks.push({
+      name: "Workout Reminders",
+      task,
+      frequency: "Daily at 8:30 PM",
+    });
+    this.logger.info("Scheduled workout reminders: Daily at 8:30 PM");
   }
 
   async runWeeklyHealthCoach() {

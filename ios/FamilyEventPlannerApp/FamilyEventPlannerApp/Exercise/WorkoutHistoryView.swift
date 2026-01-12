@@ -28,12 +28,6 @@ struct WorkoutHistoryView: View {
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
-                    
-                    Button("Start New Workout") {
-                        startNewWorkout()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .padding(.top)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -77,15 +71,6 @@ struct WorkoutHistoryView: View {
         .navigationTitle("Workout History")
         .navigationBarTitleDisplayMode(.large)
         .toolbar(.hidden, for: .tabBar)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    startNewWorkout()
-                } label: {
-                    Text("Add")
-                }
-            }
-        }
         .navigationDestination(item: $selectedWorkout) { workout in
             WorkoutDetailView(workout: workout)
                 .environmentObject(exerciseManager)
@@ -240,7 +225,7 @@ struct WorkoutRow: View {
                 // Workout info
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("\(workout.timeOfDay)")
+                        Text(workout.routineName ?? workout.timeOfDay)
                             .font(.headline)
                             .foregroundColor(.primary)
                         

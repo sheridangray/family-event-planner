@@ -9,7 +9,6 @@ struct AddRoutineView: View {
     let routineToEdit: ExerciseRoutine?
     
     @State private var routineName = ""
-    @State private var description = ""
     @State private var selectedDays: Set<Int> = []
     @State private var routineExercises: [RoutineExerciseData] = []
     
@@ -18,12 +17,13 @@ struct AddRoutineView: View {
     @State private var showingError = false
     @State private var showingExercisePicker = false
     
+    @FocusState private var focusedField: UUID?
+    
     let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     
     init(routine: ExerciseRoutine? = nil) {
         self.routineToEdit = routine
         _routineName = State(initialValue: routine?.routineName ?? "")
-        _description = State(initialValue: routine?.description ?? "")
         
         if let day = routine?.dayOfWeek {
             _selectedDays = State(initialValue: [day])
@@ -54,11 +54,28 @@ struct AddRoutineView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                Form {
-                    routineDetailsSection
-                    scheduleSection
-                    exercisesSection
-                    footerSpacer
+                ScrollViewReader { proxy in
+                    Form {
+                        routineDetailsSection
+                        scheduleSection
+                        exercisesSection
+                        footerSpacer
+                    }
+                    .onChange(of: routineExercises.count) { oldCount, newCount in
+                        if newCount > oldCount, let lastId = routineExercises.last?.id {
+                            Task {
+                                // Small delay to allow the view to update and sheet to dismiss
+                                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+                                
+                                await MainActor.run {
+                                    withAnimation {
+                                        proxy.scrollTo(lastId, anchor: .bottom)
+                                    }
+                                    focusedField = lastId
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 fixedFooter
@@ -76,8 +93,8 @@ struct AddRoutineView: View {
                         let newData = RoutineExerciseData(
                             exerciseName: exercise.exerciseName,
                             targetSets: 3,
-                            targetRepsMin: 10,
-                            targetRepsMax: 12,
+                            targetRepsMin: nil,
+                            targetRepsMax: nil,
                             preferredEquipment: exercise.category.rawValue
                         )
                         routineExercises.append(newData)
@@ -95,7 +112,6 @@ struct AddRoutineView: View {
     private var routineDetailsSection: some View {
         Section("Routine Details") {
             TextField("Routine Name", text: $routineName)
-            TextField("Description", text: $description)
         }
     }
     
@@ -141,14 +157,14 @@ struct AddRoutineView: View {
     }
     
     private var exerciseList: some View {
-        ForEach($routineExercises) { $ex in
+        ForEach($routineExercises) { ex in
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(ex.exerciseName)
+                    Text(ex.wrappedValue.exerciseName)
                         .font(.headline)
                     Spacer()
                     Button(role: .destructive) {
-                        if let index = routineExercises.firstIndex(where: { $0.id == ex.id }) {
+                        if let index = routineExercises.firstIndex(where: { $0.id == ex.wrappedValue.id }) {
                             routineExercises.remove(at: index)
                         }
                     } label: {
@@ -158,9 +174,10 @@ struct AddRoutineView: View {
                     .buttonStyle(.plain)
                 }
                 
-                exerciseControls(for: $ex)
+                exerciseControls(for: ex)
             }
             .padding(.vertical, 8)
+            .id(ex.wrappedValue.id)
         }
         .onMove { from, to in
             routineExercises.move(fromOffsets: from, toOffset: to)
@@ -205,6 +222,7 @@ struct AddRoutineView: View {
                         .frame(width: 55)
                         .multilineTextAlignment(.center)
                         .font(.body)
+                        .focused($focusedField, equals: ex.wrappedValue.id)
                     
                     Text("-")
                         .foregroundColor(.secondary)
@@ -246,19 +264,21 @@ struct AddRoutineView: View {
         VStack(spacing: 0) {
             Divider()
             Button(action: saveRoutine) {
-                if isSaving {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                } else {
-                    Text(routineToEdit == nil ? "Create Routine" : "Save Changes")
-                        .font(.headline)
+                HStack {
+                    if isSaving {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Text(routineToEdit == nil ? "Create Routine" : "Save Changes")
+                            .font(.headline)
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(routineName.isEmpty || isSaving ? Color.gray : Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
             }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(routineName.isEmpty || isSaving ? Color.gray : Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(12)
             .disabled(routineName.isEmpty || isSaving)
             .padding()
             .background(Color(.systemBackground))
@@ -295,14 +315,14 @@ struct AddRoutineView: View {
                     _ = try await exerciseManager.updateRoutine(
                         id: routine.id,
                         name: routineName,
-                        description: description,
+                        description: nil,
                         dayOfWeek: firstDay,
                         exercises: exercises
                     )
                 } else {
                     _ = try await exerciseManager.createRoutine(
                         name: routineName,
-                        description: description,
+                        description: nil,
                         dayOfWeek: firstDay,
                         exercises: exercises
                     )
@@ -370,7 +390,8 @@ struct RoutineExercisePicker: View {
         }
         .navigationTitle("Add Exercise")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "Search exercises")
+        .listStyle(.plain)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search exercises")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Done") { dismiss() }

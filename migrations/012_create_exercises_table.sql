@@ -30,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_exercises_type ON exercises(exercise_type);
 CREATE INDEX IF NOT EXISTS idx_exercises_name_trgm ON exercises USING gin(exercise_name gin_trgm_ops);
 
 -- Trigger to update updated_at timestamp
+DROP TRIGGER IF EXISTS trigger_exercises_updated_at ON exercises;
 CREATE TRIGGER trigger_exercises_updated_at
     BEFORE UPDATE ON exercises
     FOR EACH ROW

@@ -22,9 +22,7 @@ CREATE TABLE IF NOT EXISTS health_coach_recommendations (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_health_coach_user_date ON health_coach_recommendations(user_id, generated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_health_coach_notification_sent ON health_coach_recommendations(notification_sent);
--- Partial index for recent recommendations
-CREATE INDEX IF NOT EXISTS idx_health_coach_user_recent ON health_coach_recommendations(user_id, generated_at DESC)
-    WHERE generated_at >= NOW() - INTERVAL '30 days';
+CREATE INDEX IF NOT EXISTS idx_health_coach_user_recent ON health_coach_recommendations(user_id, generated_at DESC);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_health_coach_updated_at()
@@ -36,6 +34,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger to auto-update updated_at
+DROP TRIGGER IF EXISTS trigger_health_coach_updated_at ON health_coach_recommendations;
 CREATE TRIGGER trigger_health_coach_updated_at
     BEFORE UPDATE ON health_coach_recommendations
     FOR EACH ROW

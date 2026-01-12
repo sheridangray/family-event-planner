@@ -454,8 +454,12 @@ class PostgresDatabase {
       await this.runFileMigration("021_create_sleep_pillar.sql");
       await this.runFileMigration("022_create_coach_engine.sql");
       await this.runFileMigration("023_align_exercise_logs_with_prd.sql");
-      await this.runFileMigration("024_allow_duplicate_archived_exercise_names.sql");
-      await this.runFileMigration("025_add_updated_at_to_exercise_log_entries.sql");
+      console.log("Running migrations 024-026...");
+      await this.runFileMigration(
+        "025_add_updated_at_to_exercise_log_entries.sql"
+      );
+      await this.runFileMigration("026_create_workout_analysis_table.sql");
+      await this.runFileMigration("027_create_user_push_tokens.sql");
 
       console.log("Database migrations completed successfully");
     } catch (error) {

@@ -10,13 +10,15 @@ const Database = require("./database");
 // const ScraperManager = require("./scrapers");
 // const EventFilter = require("./filters");
 // const EventScorer = require("./scoring");
+const ExerciseService = require("./services/exercise-service");
+const { NotificationService, PushNotificationProvider, EmailNotificationProvider } = require("./services/notification-service");
 // const FamilyDemographicsService = require("./services/family-demographics");
 // const CalendarManager = require("./services/calendar-manager");
 // CalendarConflictChecker functionality is integrated into GmailClient
 // const { SMSApprovalManager } = require("./mcp/twilio");
 // const UnifiedNotificationService = require("./services/unified-notification");
 // const RegistrationAutomator = require("./automation/registration");
-// const TaskScheduler = require("./scheduler");
+const TaskScheduler = require("./scheduler");
 
 // Safety and error handling
 const ErrorHandler = require("./safety/error-handler");
@@ -150,17 +152,46 @@ async function initializeComponents() {
     await database.init();
     logger.info("✅ Database initialized (single instance)");
 
-    // Store ONLY database and logger in app locals
+    // Initialize Exercise and Notification services
+    const exerciseService = new ExerciseService(database, logger);
+    const pushProvider = new PushNotificationProvider(logger, database);
+    const emailProvider = new EmailNotificationProvider(logger, database);
+    const notificationService = new NotificationService(logger, database, [pushProvider, emailProvider]);
+
+    // Store services in app locals
     app.locals.database = database;
     app.locals.logger = logger;
+    app.locals.exerciseService = exerciseService;
+    app.locals.notificationService = notificationService;
 
-    logger.info("📦 Creating API router with database and logger only...");
+    // Initialize the scheduler
+    const scheduler = new TaskScheduler(
+      logger,
+      database,
+      null, // scraperManager
+      null, // eventScorer
+      null, // eventFilter
+      null, // smsManager
+      null, // registrationAutomator
+      null, // calendarManager
+      null, // unifiedNotifications
+      exerciseService,
+      notificationService
+    );
+    app.locals.scheduler = scheduler;
 
-    // Initialize API router with minimal components
-    const apiRouter = createApiRouter(database, logger);
+    logger.info("📦 Creating API router with database and services...");
+
+    // Initialize API router with components
+    const apiRouter = createApiRouter(
+      database,
+      logger,
+      scheduler,
+      null, // registrationAutomator
+      null // unifiedNotifications
+    );
     app.use("/api", apiRouter);
-
-    logger.info("✅ API routes mounted at /api");
+    logger.info("🚀 API router mounted at /api");
 
     // 404 handler for undefined routes (must be after all other routes)
     app.use((req, res) => {
@@ -176,6 +207,7 @@ async function initializeComponents() {
 
     return {
       database,
+      scheduler,
     };
   } catch (error) {
     errorHandler.handleError(error, { component: "initialization" });
@@ -194,8 +226,8 @@ async function startServer() {
     const components = await initializeComponents();
 
     // Start the scheduler
-    // components.scheduler.start();
-    // logger.info("Task scheduler started");
+    components.scheduler.start();
+    logger.info("Task scheduler started");
 
     // Start the web server
     const server = app.listen(config.app.port, "0.0.0.0", () => {

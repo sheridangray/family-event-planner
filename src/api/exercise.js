@@ -14,6 +14,11 @@ function createExerciseRouter(database, logger) {
   const conversationService = new ExerciseConversationService(database, logger);
   const coachService = new ExerciseCoachService(database, logger);
 
+  router.use((req, res, next) => {
+    logger.info(`🏃 [ExerciseRouter] ${req.method} ${req.path}`);
+    next();
+  });
+
   // Helper to get userId from request
   const getUserId = (req) => {
     const id = req.user?.id || req.body.userId || req.params.userId;
@@ -279,6 +284,52 @@ function createExerciseRouter(database, logger) {
   });
 
   /**
+   * GET /api/exercise/workouts/:id/analysis
+   * Get AI analysis for a workout
+   */
+  router.get(
+    "/workouts/:id/analysis",
+    authenticateFlexible,
+    async (req, res) => {
+      try {
+        const workoutId = parseInt(req.params.id);
+        logger.info(`🔍 [API] Fetching analysis for workout ${workoutId}`);
+        
+        // Check if workout exists first
+        const workout = await exerciseService.getWorkoutLog(workoutId);
+        if (!workout) {
+          logger.warn(`❌ [API] Workout ${workoutId} not found for analysis request`);
+          return res.status(404).json({
+            success: false,
+            error: "Workout not found",
+          });
+        }
+
+        const analysis = await coachService.getAnalysis(workoutId);
+
+        if (!analysis) {
+          logger.info(`ℹ️ [API] No analysis found yet for workout ${workoutId}`);
+        }
+
+        res.json({
+          success: true,
+          data: analysis,
+        });
+      } catch (error) {
+        logger.error(
+          `❌ [API] Error fetching analysis for workout ${req.params.id}:`,
+          error
+        );
+        res.status(500).json({
+          success: false,
+          error: "Failed to fetch workout analysis",
+          message: error.message,
+        });
+      }
+    }
+  );
+
+  /**
    * GET /api/exercise/workouts/:id
    * Get workout by ID
    */
@@ -390,6 +441,45 @@ function createExerciseRouter(database, logger) {
   );
 
   /**
+   * PATCH /api/exercise/workouts/:id
+   * Update workout details
+   */
+  router.patch("/workouts/:id", authenticateFlexible, async (req, res) => {
+    try {
+      const workoutId = parseInt(req.params.id);
+      if (isNaN(workoutId)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid workout ID",
+        });
+      }
+
+      const updates = req.body;
+      const workout = await exerciseService.updateWorkout(workoutId, updates);
+
+      if (!workout) {
+        return res.status(404).json({
+          success: false,
+          error: "Workout not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: workout,
+      });
+    } catch (error) {
+      logger.error("Error updating workout:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to update workout",
+        message: error.message,
+        detail: error.detail, // Postgres error detail
+      });
+    }
+  });
+
+  /**
    * DELETE /api/exercise/workouts/:id
    * Delete a workout
    */
@@ -440,6 +530,17 @@ function createExerciseRouter(database, logger) {
           return res.status(404).json({
             success: false,
             error: "Workout not found",
+          });
+        }
+
+        // Trigger AI analysis asynchronously if COMPLETED
+        if (status === "COMPLETED") {
+          logger.info(`🚀 [API] Workout ${workoutId} COMPLETED. Triggering AI analysis...`);
+          coachService.analyzeWorkout(workoutId).catch((err) => {
+            logger.error(
+              `❌ [API] Error triggering AI analysis for workout ${workoutId}:`,
+              err
+            );
           });
         }
 
@@ -798,6 +899,45 @@ function createExerciseRouter(database, logger) {
       });
     }
   });
+
+  /**
+   * POST /api/exercise/routines/:id/apply-tweaks
+   * Apply AI-suggested tweaks to a routine
+   */
+  router.post(
+    "/routines/:id/apply-tweaks",
+    authenticateFlexible,
+    async (req, res) => {
+      try {
+        const routineId = parseInt(req.params.id);
+        const { tweaks } = req.body;
+
+        if (!tweaks || !Array.isArray(tweaks)) {
+          return res.status(400).json({
+            success: false,
+            error: "tweaks array required",
+          });
+        }
+
+        const routine = await exerciseService.applyRoutineTweaks(
+          routineId,
+          tweaks
+        );
+
+        res.json({
+          success: true,
+          data: routine,
+        });
+      } catch (error) {
+        logger.error(`Error applying tweaks to routine ${req.params.id}:`, error);
+        res.status(500).json({
+          success: false,
+          error: "Failed to apply routine tweaks",
+          message: error.message,
+        });
+      }
+    }
+  );
 
   // ==================== LOGGING ====================
 

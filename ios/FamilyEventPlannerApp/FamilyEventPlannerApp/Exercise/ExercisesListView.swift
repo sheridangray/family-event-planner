@@ -74,7 +74,7 @@ struct ExercisesListView: View {
                 Button {
                     showingAddExercise = true
                 } label: {
-                    Text("Add")
+                    Image(systemName: "plus")
                 }
             }
         }

@@ -184,6 +184,11 @@ class AuthenticationManager: ObservableObject {
         }
         
         saveSessionToKeychain(token: authResponse.token, user: authResponse.user)
+        
+        // Sync push token to backend if available
+        Task {
+            try? await NotificationManager.shared.syncPushTokenToBackend()
+        }
     }
     
     // MARK: - Session Management

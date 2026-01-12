@@ -17,6 +17,7 @@ const createRelationshipsRouter = require("./relationships");
 const createMoneyRouter = require("./money");
 const createSleepRouter = require("./sleep");
 const createCoachRouter = require("./coach");
+const createNotificationsRouter = require("./notifications");
 const GmailWebhookHandler = require("./gmail-webhooks");
 const { authenticateAPI } = require("../middleware/auth");
 
@@ -50,6 +51,7 @@ function createApiRouter(
   router.use("/money", createMoneyRouter(database, logger));
   router.use("/sleep", createSleepRouter(database, logger));
   router.use("/coach", createCoachRouter(database, logger));
+  router.use("/notifications", createNotificationsRouter(database, logger));
 
   // Gmail webhook routes - DISABLED for minimal server mode
   // if (logger) {

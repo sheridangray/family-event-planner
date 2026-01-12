@@ -3,7 +3,7 @@ import SwiftUI
 /// Main exercise tracking view with tab-based interface
 struct ExerciseView: View {
     @EnvironmentObject var exerciseManager: ExerciseManager
-    @State private var selectedTab = 0
+    @State private var selectedTab = 1
     
     var body: some View {
         VStack(spacing: 0) {

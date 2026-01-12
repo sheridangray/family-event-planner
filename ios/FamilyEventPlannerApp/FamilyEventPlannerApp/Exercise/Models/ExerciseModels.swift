@@ -298,22 +298,98 @@ struct ExerciseLog: Codable, Identifiable, Hashable {
     }
 }
 
+// MARK: - Workout Analysis (AI Coach)
+
+struct WorkoutAnalysis: Codable, Identifiable, Hashable {
+    let id: Int
+    let workoutId: Int
+    let userId: Int
+    let analysisText: String
+    let stats: AnalysisStats?
+    let routineTweaks: [RoutineTweak]?
+    let createdAt: Date?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, workoutId = "workout_id", userId = "user_id", analysisText = "analysis_text", stats, routineTweaks = "routine_tweaks", createdAt = "created_at"
+    }
+    
+    struct AnalysisStats: Codable, Hashable {
+        let calories: Int?
+        let volumeLbs: Double?
+        let durationMins: Int?
+        let totalReps: Int?
+        let totalSets: Int?
+        
+        enum CodingKeys: String, CodingKey {
+            case calories, volumeLbs = "volume_lbs", durationMins = "duration_mins", totalReps = "total_reps", totalSets = "total_sets"
+        }
+    }
+}
+
+struct RoutineTweak: Codable, Hashable, Identifiable {
+    var id: String { "\(exercise)-\(suggested.sets)-\(suggestedRepCount)" }
+    let exercise: String
+    let current: TweakMetrics
+    let suggested: TweakMetrics
+    let reason: String
+    
+    private var suggestedRepCount: Int {
+        if let reps = suggested.reps {
+            return reps
+        }
+        return 0
+    }
+    
+    struct TweakMetrics: Codable, Hashable {
+        let sets: Int
+        let reps: Int?
+        
+        enum CodingKeys: String, CodingKey {
+            case sets, reps
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            sets = try container.decode(Int.self, forKey: .sets)
+            
+            // Handle both Int and [Int] for reps
+            if let singleInt = try? container.decodeIfPresent(Int.self, forKey: .reps) {
+                reps = singleInt
+            } else if let intArray = try? container.decodeIfPresent([Int].self, forKey: .reps) {
+                // If it's an array, take the first value or the average
+                reps = intArray.first
+            } else {
+                reps = nil
+            }
+        }
+        
+        // Manual init for completeness
+        init(sets: Int, reps: Int?) {
+            self.sets = sets
+            self.reps = reps
+        }
+    }
+}
+
 // MARK: - Workout Session (PRD 1.3)
 typealias Workout = WorkoutSession
 
-struct WorkoutSession: Codable, Identifiable, Hashable {
-    let id: Int
-    let uuid: UUID
-    let userId: Int
-    let exerciseDate: String
-    let dayOfWeek: Int
-    let totalDurationMinutes: Int?
+    struct WorkoutSession: Codable, Identifiable, Hashable {
+        let id: Int
+        let uuid: UUID
+        let userId: Int
+        let routineId: Int?
+        let routineName: String?
+        let exerciseDate: String
+        let dayOfWeek: Int
+        let totalDurationMinutes: Int?
     let location: String?
     let notes: String?
     let status: SessionStatus
     let startedAt: Date?
     let endedAt: Date?
     let entries: [ExerciseLog]
+    var analysis: WorkoutAnalysis? // AI Analysis result
     
     var timeOfDay: String {
         // Use startedAt if available, otherwise fallback to current time for inProgress 
@@ -367,85 +443,94 @@ struct WorkoutSession: Codable, Identifiable, Hashable {
         case discarded = "DISCARDED"
     }
     
-    enum CodingKeys: String, CodingKey {
-        case id, uuid, userId = "user_id", exerciseDate = "exercise_date", dayOfWeek = "day_of_week"
-        case totalDurationMinutes = "total_duration_minutes", location, notes, status, startedAt = "started_at", endedAt = "ended_at", entries
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(Int.self, forKey: .id)
-        uuid = (try? container.decode(UUID.self, forKey: .uuid)) ?? UUID()
-        userId = (try? container.decode(Int.self, forKey: .userId)) ?? 0
-        exerciseDate = (try? container.decode(String.self, forKey: .exerciseDate)) ?? ""
-        dayOfWeek = (try? container.decode(Int.self, forKey: .dayOfWeek)) ?? 0
-        totalDurationMinutes = try? container.decodeIfPresent(Int.self, forKey: .totalDurationMinutes)
-        location = try? container.decodeIfPresent(String.self, forKey: .location)
-        notes = try? container.decodeIfPresent(String.self, forKey: .notes)
-        if let statusString = try? container.decode(String.self, forKey: .status) {
-            status = SessionStatus(rawValue: statusString.uppercased()) ?? .completed
-        } else {
-            status = .completed
+        enum CodingKeys: String, CodingKey {
+            case id, uuid, userId = "user_id", routineId = "routine_id", routineName = "routine_name", exerciseDate = "exercise_date", dayOfWeek = "day_of_week"
+            case totalDurationMinutes = "total_duration_minutes", location, notes, status, startedAt = "started_at", endedAt = "ended_at", entries, analysis
         }
         
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        if let startString = try? container.decode(String.self, forKey: .startedAt) {
-            startedAt = formatter.date(from: startString)
-        } else {
-            startedAt = nil
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(Int.self, forKey: .id)
+            uuid = (try? container.decode(UUID.self, forKey: .uuid)) ?? UUID()
+            userId = (try? container.decode(Int.self, forKey: .userId)) ?? 0
+            routineId = try? container.decodeIfPresent(Int.self, forKey: .routineId)
+            routineName = try? container.decodeIfPresent(String.self, forKey: .routineName)
+            exerciseDate = (try? container.decode(String.self, forKey: .exerciseDate)) ?? ""
+            dayOfWeek = (try? container.decode(Int.self, forKey: .dayOfWeek)) ?? 0
+            totalDurationMinutes = try? container.decodeIfPresent(Int.self, forKey: .totalDurationMinutes)
+            location = try? container.decodeIfPresent(String.self, forKey: .location)
+            notes = try? container.decodeIfPresent(String.self, forKey: .notes)
+            if let statusString = try? container.decode(String.self, forKey: .status) {
+                status = SessionStatus(rawValue: statusString.uppercased()) ?? .completed
+            } else {
+                status = .completed
+            }
+            
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            if let startString = try? container.decode(String.self, forKey: .startedAt) {
+                startedAt = formatter.date(from: startString)
+            } else {
+                startedAt = nil
+            }
+            
+            if let endString = try? container.decode(String.self, forKey: .endedAt) {
+                endedAt = formatter.date(from: endString)
+            } else {
+                endedAt = nil
+            }
+            
+            entries = (try? container.decode([ExerciseLog].self, forKey: .entries)) ?? []
+            analysis = try? container.decodeIfPresent(WorkoutAnalysis.self, forKey: .analysis)
         }
         
-        if let endString = try? container.decode(String.self, forKey: .endedAt) {
-            endedAt = formatter.date(from: endString)
-        } else {
-            endedAt = nil
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(uuid, forKey: .uuid)
+            try container.encode(userId, forKey: .userId)
+            try container.encodeIfPresent(routineId, forKey: .routineId)
+            try container.encodeIfPresent(routineName, forKey: .routineName)
+            try container.encode(exerciseDate, forKey: .exerciseDate)
+            try container.encode(dayOfWeek, forKey: .dayOfWeek)
+            try container.encodeIfPresent(totalDurationMinutes, forKey: .totalDurationMinutes)
+            try container.encodeIfPresent(location, forKey: .location)
+            try container.encodeIfPresent(notes, forKey: .notes)
+            try container.encode(status, forKey: .status)
+            
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            if let startedAt = startedAt {
+                try container.encode(formatter.string(from: startedAt), forKey: .startedAt)
+            }
+            
+            if let endedAt = endedAt {
+                try container.encode(formatter.string(from: endedAt), forKey: .endedAt)
+            }
+            
+            try container.encode(entries, forKey: .entries)
+            try container.encodeIfPresent(analysis, forKey: .analysis)
         }
         
-        entries = (try? container.decode([ExerciseLog].self, forKey: .entries)) ?? []
-    }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(uuid, forKey: .uuid)
-        try container.encode(userId, forKey: .userId)
-        try container.encode(exerciseDate, forKey: .exerciseDate)
-        try container.encode(dayOfWeek, forKey: .dayOfWeek)
-        try container.encodeIfPresent(totalDurationMinutes, forKey: .totalDurationMinutes)
-        try container.encodeIfPresent(location, forKey: .location)
-        try container.encodeIfPresent(notes, forKey: .notes)
-        try container.encode(status, forKey: .status)
-        
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        if let startedAt = startedAt {
-            try container.encode(formatter.string(from: startedAt), forKey: .startedAt)
+        init(id: Int, uuid: UUID = UUID(), userId: Int, routineId: Int? = nil, routineName: String? = nil, exerciseDate: String, dayOfWeek: Int, totalDurationMinutes: Int? = nil, location: String? = nil, notes: String? = nil, status: SessionStatus = .completed, startedAt: Date? = nil, endedAt: Date? = nil, entries: [ExerciseLog] = [], analysis: WorkoutAnalysis? = nil) {
+            self.id = id
+            self.uuid = uuid
+            self.userId = userId
+            self.routineId = routineId
+            self.routineName = routineName
+            self.exerciseDate = exerciseDate
+            self.dayOfWeek = dayOfWeek
+            self.totalDurationMinutes = totalDurationMinutes
+            self.location = location
+            self.notes = notes
+            self.status = status
+            self.startedAt = startedAt
+            self.endedAt = endedAt
+            self.entries = entries
+            self.analysis = analysis
         }
-        
-        if let endedAt = endedAt {
-            try container.encode(formatter.string(from: endedAt), forKey: .endedAt)
-        }
-        
-        try container.encode(entries, forKey: .entries)
-    }
-    
-    init(id: Int, uuid: UUID = UUID(), userId: Int, exerciseDate: String, dayOfWeek: Int, totalDurationMinutes: Int? = nil, location: String? = nil, notes: String? = nil, status: SessionStatus = .completed, startedAt: Date? = nil, endedAt: Date? = nil, entries: [ExerciseLog] = []) {
-        self.id = id
-        self.uuid = uuid
-        self.userId = userId
-        self.exerciseDate = exerciseDate
-        self.dayOfWeek = dayOfWeek
-        self.totalDurationMinutes = totalDurationMinutes
-        self.location = location
-        self.notes = notes
-        self.status = status
-        self.startedAt = startedAt
-        self.endedAt = endedAt
-        self.entries = entries
-    }
 }
 
 // MARK: - Exercise Set
@@ -453,6 +538,8 @@ struct ExerciseSet: Codable, Identifiable, Hashable {
     var id: UUID
     var weight: Double?
     var reps: Int?
+    var repsMin: Int?
+    var repsMax: Int?
     var duration: Int?
     var distance: Double?
     var restSeconds: Int?
@@ -470,7 +557,7 @@ struct ExerciseSet: Codable, Identifiable, Hashable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case weight, reps, duration, distance, restSeconds = "rest_seconds"
+        case weight, reps, repsMin = "reps_min", repsMax = "reps_max", duration, distance, restSeconds = "rest_seconds"
         case rpe, bandLevel = "band_level", resistanceLevel = "resistance_level"
         case tempo, heartRate = "heart_rate", calories, incline, speed
     }
@@ -480,6 +567,8 @@ struct ExerciseSet: Codable, Identifiable, Hashable {
         id = UUID()
         weight = try? container.decodeIfPresent(Double.self, forKey: .weight)
         reps = try? container.decodeIfPresent(Int.self, forKey: .reps)
+        repsMin = try? container.decodeIfPresent(Int.self, forKey: .repsMin)
+        repsMax = try? container.decodeIfPresent(Int.self, forKey: .repsMax)
         duration = try? container.decodeIfPresent(Int.self, forKey: .duration)
         distance = try? container.decodeIfPresent(Double.self, forKey: .distance)
         restSeconds = try? container.decodeIfPresent(Int.self, forKey: .restSeconds)

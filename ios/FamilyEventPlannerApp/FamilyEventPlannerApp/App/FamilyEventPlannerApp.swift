@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct FamilyEventPlannerApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    
     // Use singletons directly - no @StateObject to avoid memory conflicts
     @StateObject private var calendarManager = CalendarManager()
     

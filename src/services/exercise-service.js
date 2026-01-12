@@ -261,6 +261,40 @@ class ExerciseService {
   }
 
   /**
+   * Apply AI-suggested tweaks to a routine
+   * @param {number} routineId - Routine ID
+   * @param {Array} tweaks - Array of tweak objects
+   * @returns {Promise<Object>} Updated routine
+   */
+  async applyRoutineTweaks(routineId, tweaks) {
+    try {
+      this.logger.info(`🛠️ [Routine] Applying tweaks to routine ${routineId}...`);
+
+      for (const tweak of tweaks) {
+        const { exercise, suggested } = tweak;
+        const { sets, reps } = suggested;
+
+        // Update target_sets and target_reps for the specific exercise in the routine
+        // We match by exercise name (case-insensitive)
+        await this.database.query(
+          `UPDATE routine_exercises 
+           SET target_sets = COALESCE($1, target_sets),
+               target_reps_max = COALESCE($2, target_reps_max),
+               updated_at = NOW()
+           WHERE routine_id = $3 
+           AND LOWER(exercise_name) = LOWER($4)`,
+          [sets || null, reps || null, routineId, exercise]
+        );
+      }
+
+      return await this.getRoutine(routineId);
+    } catch (error) {
+      this.logger.error(`Error applying tweaks to routine ${routineId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete a routine
    * @param {number} routineId - Routine ID
    * @returns {Promise<boolean>} Success
@@ -445,7 +479,10 @@ class ExerciseService {
   async getWorkoutLog(logId) {
     try {
       const logResult = await this.database.query(
-        `SELECT * FROM exercise_logs WHERE id = $1 AND deleted_at IS NULL`,
+        `SELECT el.*, er.routine_name 
+         FROM exercise_logs el
+         LEFT JOIN exercise_routines er ON el.routine_id = er.id
+         WHERE el.id = $1 AND el.deleted_at IS NULL`,
         [logId]
       );
 
@@ -487,6 +524,15 @@ class ExerciseService {
         speedMph: entry.speed_mph || [],
         rpe: entry.rpe || [],
       }));
+
+      // Get AI analysis if exists
+      const analysisResult = await this.database.query(
+        `SELECT * FROM workout_analysis WHERE workout_id = $1`,
+        [logId]
+      );
+      if (analysisResult.rows.length > 0) {
+        log.analysis = analysisResult.rows[0];
+      }
 
       return log;
     } catch (error) {
@@ -953,6 +999,60 @@ class ExerciseService {
   // ==================== NEW WORKOUT METHODS ====================
 
   /**
+   * Update workout details
+   * @param {number} workoutId - Workout ID
+   * @param {Object} updates - Fields to update
+   * @returns {Promise<Object>} Updated workout
+   */
+  async updateWorkout(workoutId, updates) {
+    try {
+      this.logger.info(`📝 [Workout] Updating workout ${workoutId}...`, updates);
+      const fields = [];
+      const values = [];
+      let paramIndex = 1;
+
+      if (updates.exerciseDate !== undefined || updates.exercise_date !== undefined) {
+        fields.push(`exercise_date = $${paramIndex++}`);
+        values.push(updates.exerciseDate || updates.exercise_date);
+      }
+      if (updates.startedAt !== undefined || updates.started_at !== undefined) {
+        fields.push(`started_at = $${paramIndex++}`);
+        values.push(updates.startedAt || updates.started_at);
+      }
+      if (updates.location !== undefined) {
+        fields.push(`location = $${paramIndex++}`);
+        values.push(updates.location);
+      }
+      if (updates.notes !== undefined) {
+        fields.push(`notes = $${paramIndex++}`);
+        values.push(updates.notes);
+      }
+
+      if (fields.length === 0) {
+        return await this.getWorkoutLog(workoutId);
+      }
+
+      values.push(workoutId);
+      const sql = `UPDATE exercise_logs SET ${fields.join(
+        ", "
+      )}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
+
+      this.logger.debug(`🔍 [Workout] Executing SQL: ${sql} with values: ${JSON.stringify(values)}`);
+      const result = await this.database.query(sql, values);
+      
+      if (result.rowCount === 0) {
+        this.logger.warn(`⚠️ [Workout] No workout found with ID ${workoutId} to update`);
+        return null;
+      }
+
+      return await this.getWorkoutLog(workoutId);
+    } catch (error) {
+      this.logger.error(`Error updating workout ${workoutId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete a workout session (soft delete)
    * @param {number} workoutId - Workout ID
    * @returns {Promise<boolean>} Success
@@ -1146,6 +1246,8 @@ class ExerciseService {
           for (let i = 0; i < routineEx.target_sets; i++) {
             sets.push({
               reps: routineEx.target_reps_min || 0,
+              reps_min: routineEx.target_reps_min,
+              reps_max: routineEx.target_reps_max,
               weight: null,
               duration: routineEx.target_duration_seconds || null,
             });

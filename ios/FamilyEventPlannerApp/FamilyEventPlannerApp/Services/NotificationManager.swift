@@ -1,12 +1,16 @@
 import Foundation
 import Combine
 import UserNotifications
+import UIKit
 
 /// Core notification manager for handling iOS local notifications
 class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
     
     @Published var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    @Published var pushToken: String?
+    
+    private var backendURL: String { AppConfig.baseURL }
     
     private init() {
         checkAuthorizationStatus()
@@ -35,8 +39,74 @@ class NotificationManager: ObservableObject {
         UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
             DispatchQueue.main.async {
                 self?.authorizationStatus = settings.authorizationStatus
+                
+                // If authorized, trigger remote notification registration
+                if settings.authorizationStatus == .authorized {
+                    DispatchQueue.main.async {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
+                }
             }
         }
+    }
+    
+    // MARK: - Push Notifications
+    
+    /// Handle successfully registered device token
+    func handleDeviceTokenRegistration(token: Data) {
+        let tokenString = token.map { String(format: "%02.2hhx", $0) }.joined()
+        print("✅ Registered for remote notifications with token: \(tokenString)")
+        
+        Task { @MainActor in
+            self.pushToken = tokenString
+            // Automatically sync token if user is already authenticated
+            if AuthenticationManager.shared.isAuthenticated {
+                try? await syncPushTokenToBackend()
+            }
+        }
+    }
+    
+    /// Handle failed registration for remote notifications
+    func handleDeviceTokenRegistrationFailure(error: Error) {
+        print("❌ Failed to register for remote notifications: \(error.localizedDescription)")
+    }
+    
+    /// Sync the current push token to the backend
+    func syncPushTokenToBackend() async throws {
+        guard let token = pushToken else {
+            print("⚠️ No push token available to sync")
+            return
+        }
+        
+        guard let sessionToken = AuthenticationManager.shared.sessionToken else {
+            print("⚠️ No session token available to sync push token")
+            return
+        }
+        
+        let url = URL(string: "\(backendURL)/api/notifications/register-token")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "deviceToken": token,
+            "platform": "ios"
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        print("📤 Syncing push token to backend...")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("❌ Failed to sync push token to backend: \(errorMsg)")
+            return
+        }
+        
+        print("✅ Push token synced successfully to backend")
     }
     
     // MARK: - Send Notifications

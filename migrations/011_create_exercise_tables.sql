@@ -184,26 +184,31 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create triggers to auto-update updated_at
+DROP TRIGGER IF EXISTS trigger_exercise_routine_updated_at ON exercise_routines;
 CREATE TRIGGER trigger_exercise_routine_updated_at
     BEFORE UPDATE ON exercise_routines
     FOR EACH ROW
     EXECUTE FUNCTION update_exercise_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_routine_exercise_updated_at ON routine_exercises;
 CREATE TRIGGER trigger_routine_exercise_updated_at
     BEFORE UPDATE ON routine_exercises
     FOR EACH ROW
     EXECUTE FUNCTION update_exercise_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_exercise_log_updated_at ON exercise_logs;
 CREATE TRIGGER trigger_exercise_log_updated_at
     BEFORE UPDATE ON exercise_logs
     FOR EACH ROW
     EXECUTE FUNCTION update_exercise_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_exercise_history_updated_at ON exercise_history;
 CREATE TRIGGER trigger_exercise_history_updated_at
     BEFORE UPDATE ON exercise_history
     FOR EACH ROW
     EXECUTE FUNCTION update_exercise_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_exercise_conversation_updated_at ON exercise_conversations;
 CREATE TRIGGER trigger_exercise_conversation_updated_at
     BEFORE UPDATE ON exercise_conversations
     FOR EACH ROW

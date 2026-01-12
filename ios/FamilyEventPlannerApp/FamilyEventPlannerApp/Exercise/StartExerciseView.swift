@@ -27,7 +27,20 @@ struct StartExerciseView: View {
         self.onSave = onSave
         
         if let entry = entry {
-            _sets = State(initialValue: entry.sets)
+            // Update sets to default to repsMax if they are currently at repsMin
+            let updatedSets = entry.sets.map { set -> ExerciseSet in
+                var newSet = set
+                // Default reps to repsMax if available
+                if let max = set.repsMax, (set.reps == nil || set.reps == set.repsMin) {
+                    newSet.reps = max
+                }
+                // Default rest to 60 if not set
+                if newSet.restSeconds == nil || newSet.restSeconds == 0 {
+                    newSet.restSeconds = 60
+                }
+                return newSet
+            }
+            _sets = State(initialValue: updatedSets)
             _notes = State(initialValue: entry.notes ?? "")
             _equipmentUsed = State(initialValue: "")
         } else {
@@ -36,6 +49,21 @@ struct StartExerciseView: View {
             _sets = State(initialValue: [initialSet])
             _notes = State(initialValue: "")
             _equipmentUsed = State(initialValue: "")
+        }
+    }
+    
+    private var previousEntry: ExerciseLogEntry? {
+        // Find all entries for this exercise in history
+        let allEntries = exerciseManager.activeSessions
+            .flatMap { $0.entries }
+            .filter { $0.exerciseId == exercise.id || $0.exerciseName == exercise.exerciseName }
+            .sorted { $0.performedAt > $1.performedAt }
+        
+        // Find the most recent one that is NOT the current entry (if we are editing)
+        if let currentEntry = entry {
+            return allEntries.first { $0.performedAt < currentEntry.performedAt }
+        } else {
+            return allEntries.first
         }
     }
     
@@ -110,6 +138,36 @@ struct StartExerciseView: View {
                                 .foregroundColor(.blue)
                             }
                             .padding(.top, 4)
+                            
+                            // Previous session data (Last:)
+                            if let previous = previousEntry {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack(spacing: 8) {
+                                        Text("Last:")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.secondary)
+                                        
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 6) {
+                                                ForEach(0..<previous.setsPerformed, id: \.self) { index in
+                                                    setTag(for: index, from: previous)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    if let prevNotes = previous.notes, !prevNotes.isEmpty {
+                                        Text("Last Note: \(prevNotes)")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                            .italic()
+                                            .lineLimit(3)
+                                            .padding(.leading, 35) // Align with the start of the pills
+                                    }
+                                }
+                                .padding(.top, 8)
+                            }
 
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -289,7 +347,8 @@ struct StartExerciseView: View {
              case .time, .machineCardio, .mobility:
                  focusedField = .duration(0)
              default:
-                 focusedField = .reps(0)
+                 // Default to weight for strength exercises
+                 focusedField = .weight(0)
              }
         }
         .task {
@@ -372,6 +431,50 @@ struct StartExerciseView: View {
             }
         }
     }
+
+    private func formatNumber(_ number: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
+    }
+    
+    private func formatWeight(_ weight: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 1
+        return formatter.string(from: NSNumber(value: weight)) ?? "\(weight)"
+    }
+    
+    @ViewBuilder
+    private func setTag(for index: Int, from logEntry: ExerciseLogEntry) -> some View {
+        let set = logEntry.sets[index]
+        let color = Color.gray
+        
+        HStack(spacing: 2) {
+            // Always show reps x weight for historical display in this view
+            if let reps = set.reps {
+                Text("\(reps)")
+                    .fontWeight(.semibold)
+                
+                if let weight = set.weight {
+                    Text("×")
+                        .font(.caption2)
+                        .foregroundColor(color.opacity(0.6))
+                    Text(formatWeight(weight))
+                        .fontWeight(.semibold)
+                }
+            } else if let duration = set.duration {
+                Text("\(duration / 60)m")
+                    .fontWeight(.semibold)
+            }
+        }
+        .font(.caption)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.1))
+        .foregroundColor(color)
+        .cornerRadius(6)
+    }
 }
 
 // MARK: - Set Row View
@@ -394,6 +497,8 @@ struct StartExerciseSetRowView: View {
                     TextField("0", value: $set.distance, format: .number)
                         .keyboardType(.decimalPad)
                         .focused(focusedField, equals: .distance(index))
+                        .submitLabel(.next)
+                        .onSubmit { focusedField.wrappedValue = .duration(index) }
                         .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
@@ -419,6 +524,14 @@ struct StartExerciseSetRowView: View {
                    ), format: .number)
                        .keyboardType(.numberPad)
                        .focused(focusedField, equals: .duration(index))
+                       .submitLabel(.next)
+                       .onSubmit { 
+                           if exerciseType == .machineCardio {
+                               focusedField.wrappedValue = .calories(index)
+                           } else {
+                               focusedField.wrappedValue = .weight(index)
+                           }
+                       }
                        .font(.system(size: 20, weight: .semibold))
                        .multilineTextAlignment(.center)
                        .frame(height: 44)
@@ -432,8 +545,16 @@ struct StartExerciseSetRowView: View {
                     // Reps (Strength, etc)
                     TextField("0", value: $set.reps, format: .number)
                         .keyboardType(.numberPad)
-                        .focused(focusedField, equals: .reps(index))
-                        .font(.system(size: 20, weight: .semibold))
+                    .focused(focusedField, equals: .reps(index))
+                    .submitLabel(.next)
+                    .onSubmit { 
+                        if exerciseType == .bandAssisted {
+                            focusedField.wrappedValue = .bandLevel(index)
+                        } else {
+                            focusedField.wrappedValue = .weight(index)
+                        }
+                    }
+                    .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
                         .background(Color(.systemBackground))
@@ -452,8 +573,10 @@ struct StartExerciseSetRowView: View {
                     // Weight (Optional for some)
                     TextField("0", value: $set.weight, format: .number)
                         .keyboardType(.decimalPad)
-                        .focused(focusedField, equals: .weight(index))
-                        .font(.system(size: 20, weight: .semibold))
+                    .focused(focusedField, equals: .weight(index))
+                    .submitLabel(.next)
+                    .onSubmit { focusedField.wrappedValue = .rest(index) }
+                    .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
                         .background(Color(.systemBackground))
@@ -468,8 +591,10 @@ struct StartExerciseSetRowView: View {
                         get: { set.bandLevel ?? "" },
                         set: { set.bandLevel = $0 }
                     ))
-                        .focused(focusedField, equals: .bandLevel(index))
-                        .font(.system(size: 18, weight: .medium))
+                    .focused(focusedField, equals: .bandLevel(index))
+                    .submitLabel(.next)
+                    .onSubmit { focusedField.wrappedValue = .rest(index) }
+                    .font(.system(size: 18, weight: .medium))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
                         .background(Color(.systemBackground))
@@ -497,8 +622,10 @@ struct StartExerciseSetRowView: View {
                             }
                         ), format: .number)
                             .keyboardType(.numberPad)
-                            .focused(focusedField, equals: .duration(index))
-                            .font(.system(size: 20, weight: .semibold))
+                        .focused(focusedField, equals: .duration(index))
+                        .submitLabel(.next)
+                        .onSubmit { focusedField.wrappedValue = .heartRate(index) }
+                        .font(.system(size: 20, weight: .semibold))
                             .multilineTextAlignment(.center)
                             .frame(height: 44)
                             .background(Color(.systemBackground))
@@ -510,8 +637,10 @@ struct StartExerciseSetRowView: View {
                         // Calories
                         TextField("0", value: $set.calories, format: .number)
                             .keyboardType(.numberPad)
-                            .focused(focusedField, equals: .calories(index))
-                            .font(.system(size: 20, weight: .semibold))
+                        .focused(focusedField, equals: .calories(index))
+                        .submitLabel(.next)
+                        .onSubmit { focusedField.wrappedValue = .heartRate(index) }
+                        .font(.system(size: 20, weight: .semibold))
                             .multilineTextAlignment(.center)
                             .frame(height: 44)
                             .background(Color(.systemBackground))
@@ -535,6 +664,7 @@ struct StartExerciseSetRowView: View {
                     TextField("0", value: $set.heartRate, format: .number)
                         .keyboardType(.numberPad)
                         .focused(focusedField, equals: .heartRate(index))
+                        .submitLabel(.done)
                         .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)
@@ -549,6 +679,7 @@ struct StartExerciseSetRowView: View {
                     TextField("0", value: $set.restSeconds, format: .number)
                         .keyboardType(.numberPad)
                         .focused(focusedField, equals: .rest(index))
+                        .submitLabel(.done)
                         .font(.system(size: 20, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .frame(height: 44)

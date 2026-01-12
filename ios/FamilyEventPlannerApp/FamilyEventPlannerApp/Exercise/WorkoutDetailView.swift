@@ -12,33 +12,37 @@ struct WorkoutDetailView: View {
     @State private var editingEntry: ExerciseLogEntry?
     @State private var entryToDelete: Int?
     @State private var showingDeleteEntryConfirmation = false
+    @State private var isPollingAnalysis = false
+    @State private var showingDatePicker = false
+    @State private var tempDate = Date()
+    @State private var isUpdatingDate = false
     
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Header
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Workout")
-                                .font(.title)
-                                .fontWeight(.bold)
-                            
-                            Spacer()
-                            
-                            if let details = workoutDetails, details.status == .inProgress {
-                                Text("IN PROGRESS")
-                                    .font(.caption)
+                        // Header
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(workoutDetails?.routineName ?? "Workout")
+                                    .font(.title)
                                     .fontWeight(.bold)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.orange.opacity(0.2))
-                                    .foregroundColor(.orange)
-                                    .cornerRadius(6)
+                                
+                                Spacer()
+                                
+                                if let details = workoutDetails, details.status == .inProgress {
+                                    Text("IN PROGRESS")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.orange.opacity(0.2))
+                                        .foregroundColor(.orange)
+                                        .cornerRadius(6)
+                                }
                             }
-                        }
                         
-                        Text(formatDate(workout.exerciseDate))
+                        Text(formatDate(workoutDetails?.exerciseDate ?? workout.exerciseDate))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         
@@ -68,6 +72,11 @@ struct WorkoutDetailView: View {
                                 )
                                 .padding(.horizontal)
                             }
+                        }
+                        
+                        // AI Analysis Section
+                        if details.status == .completed {
+                            analysisSection(for: details)
                         }
                     } else {
                         ProgressView()
@@ -131,6 +140,24 @@ struct WorkoutDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
+                    Button {
+                        if let startedAt = workoutDetails?.startedAt {
+                            tempDate = startedAt
+                        } else {
+                            // Try to parse exerciseDate if startedAt is missing
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+                            if let date = formatter.date(from: workout.exerciseDate) {
+                                tempDate = date
+                            } else {
+                                tempDate = Date()
+                            }
+                        }
+                        showingDatePicker = true
+                    } label: {
+                        Label("Change Date/Time", systemImage: "calendar")
+                    }
+                    
                     Button(role: .destructive) {
                         showingDeleteConfirmation = true
                     } label: {
@@ -140,6 +167,38 @@ struct WorkoutDetailView: View {
                     Image(systemName: "ellipsis.circle")
                 }
             }
+        }
+        .sheet(isPresented: $showingDatePicker) {
+            NavigationStack {
+                VStack(spacing: 20) {
+                    DatePicker("Workout Date & Time", selection: $tempDate)
+                        .datePickerStyle(.graphical)
+                        .padding()
+                    
+                    Spacer()
+                }
+                .navigationTitle("Workout Time")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showingDatePicker = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            updateWorkoutDate()
+                        }
+                        .fontWeight(.bold)
+                        .disabled(isUpdatingDate)
+                    }
+                }
+                .overlay {
+                    if isUpdatingDate {
+                        Color.black.opacity(0.1).ignoresSafeArea()
+                        ProgressView()
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
         }
         .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showingAddExercise) {
@@ -194,6 +253,8 @@ struct WorkoutDetailView: View {
                 let updated = try await exerciseManager.updateWorkoutStatus(workoutId: details.id, status: .completed)
                 await MainActor.run {
                     workoutDetails = updated
+                    // Start polling for analysis immediately
+                    startAnalysis()
                 }
             } catch {
                 print("Error finishing workout: \(error)")
@@ -221,6 +282,35 @@ struct WorkoutDetailView: View {
                 loadWorkoutDetails()
             } catch {
                 print("Error deleting entry: \(error)")
+            }
+        }
+    }
+    
+    private func updateWorkoutDate() {
+        isUpdatingDate = true
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = dateFormatter.string(from: tempDate)
+        
+        Task {
+            do {
+                let updated = try await exerciseManager.updateWorkout(
+                    id: workout.id,
+                    exerciseDate: dateStr,
+                    startedAt: tempDate
+                )
+                
+                await MainActor.run {
+                    workoutDetails = updated
+                    isUpdatingDate = false
+                    showingDatePicker = false
+                }
+            } catch {
+                print("Error updating workout date: \(error)")
+                await MainActor.run {
+                    isUpdatingDate = false
+                }
             }
         }
     }
@@ -255,10 +345,20 @@ struct WorkoutDetailView: View {
                     try? await exerciseManager.fetchDefinitions()
                 }
                 
+                // Fetch history to populate "Last:" data in cards
+                if exerciseManager.activeSessions.count <= 1 {
+                    try? await exerciseManager.fetchWorkoutHistory(days: 30)
+                }
+                
                 let details = try await exerciseManager.getWorkout(id: workout.id)
                 await MainActor.run {
                     workoutDetails = details
                     isLoading = false
+                    
+                    // If workout is completed but has no analysis, start polling
+                    if details.status == .completed && details.analysis == nil {
+                        startAnalysis()
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -267,6 +367,227 @@ struct WorkoutDetailView: View {
                 print("Error loading workout details: \(error)")
             }
         }
+    }
+    
+    // MARK: - Analysis Views
+    
+    @ViewBuilder
+    private func analysisSection(for details: WorkoutSession) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .foregroundColor(.blue)
+                Text("AI COACH ANALYSIS")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            if let analysis = details.analysis {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Stats Grid
+                    if let stats = analysis.stats {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            StatCard(title: "CALORIES", value: formatNumber(stats.calories ?? 0), icon: "flame.fill", color: .orange)
+                            StatCard(title: "VOLUME", value: "\(formatNumber(Int(stats.volumeLbs ?? 0))) lbs", icon: "dumbbell.fill", color: .blue)
+                            StatCard(title: "TOTAL REPS", value: formatNumber(stats.totalReps ?? 0), icon: "repeat", color: .green)
+                            StatCard(title: "TOTAL SETS", value: formatNumber(stats.totalSets ?? 0), icon: "list.bullet", color: .purple)
+                        }
+                    }
+                    
+                    // Coach Feedback
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("COACH FEEDBACK")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.secondary)
+                        
+                        Text(analysis.analysisText)
+                            .font(.subheadline)
+                            .lineSpacing(4)
+                            .padding()
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                    }
+                    
+                    // Routine Tweaks
+                    if let tweaks = analysis.routineTweaks, !tweaks.isEmpty, details.routineId != nil {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("SUGGESTED ROUTINE TWEAKS")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.secondary)
+                            
+                            ForEach(tweaks) { tweak in
+                                RoutineTweakCard(tweak: tweak) {
+                                    // Handle apply tweak
+                                    if let routineId = details.routineId {
+                                        Task {
+                                            try? await exerciseManager.applyRoutineTweaks(routineId: routineId, tweaks: [tweak])
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            } else if isPollingAnalysis {
+                HStack {
+                    ProgressView()
+                    Text("Coach is analyzing your workout...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+                .padding(.horizontal)
+            }
+        }
+    }
+    
+    private func formatNumber(_ number: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
+    }
+    
+    private func startAnalysis() {
+        print("🕒 [WorkoutDetailView] Starting analysis polling for workout \(workout.id)")
+        isPollingAnalysis = true
+        pollAnalysis()
+    }
+    
+    private func pollAnalysis() {
+        guard isPollingAnalysis else {
+            print("🛑 [WorkoutDetailView] Polling stopped for workout \(workout.id)")
+            return
+        }
+        
+        Task {
+            do {
+                if let analysis = try await exerciseManager.fetchWorkoutAnalysis(workoutId: workout.id) {
+                    print("✅ [WorkoutDetailView] Analysis received for workout \(workout.id)")
+                    await MainActor.run {
+                        if var details = workoutDetails {
+                            details.analysis = analysis
+                            workoutDetails = details
+                        }
+                        isPollingAnalysis = false
+                    }
+                } else {
+                    // Try again in 3 seconds if still polling
+                    if isPollingAnalysis {
+                        print("⏳ [WorkoutDetailView] No analysis yet for workout \(workout.id), retrying in 3s...")
+                        try await Task.sleep(nanoseconds: 3_000_000_000)
+                        pollAnalysis()
+                    }
+                }
+            } catch {
+                print("❌ [WorkoutDetailView] Error polling analysis for workout \(workout.id): \(error)")
+                await MainActor.run { isPollingAnalysis = false }
+            }
+        }
+    }
+}
+
+// MARK: - Subviews
+
+struct StatCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+            }
+            
+            Text(value)
+                .font(.headline)
+                .fontWeight(.bold)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+}
+
+struct RoutineTweakCard: View {
+    let tweak: RoutineTweak
+    var onApply: () -> Void
+    
+    @State private var isApplied = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(tweak.exercise)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    
+                    HStack(spacing: 8) {
+                        Text("\(tweak.current.sets)x\(tweak.current.reps ?? 0)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .strikethrough()
+                        
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                        
+                        Text("\(tweak.suggested.sets)x\(tweak.suggested.reps ?? 0)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                    }
+                }
+                
+                Spacer()
+                
+                Button {
+                    onApply()
+                    withAnimation { isApplied = true }
+                } label: {
+                    if isApplied {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.title3)
+                    } else {
+                        Text("Apply")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(16)
+                    }
+                }
+                .disabled(isApplied)
+            }
+            
+            Text(tweak.reason)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .italic()
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
     }
 }
 

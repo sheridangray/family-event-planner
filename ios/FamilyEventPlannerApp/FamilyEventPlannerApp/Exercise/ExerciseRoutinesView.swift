@@ -209,12 +209,6 @@ struct RoutineDetailCard: View {
                 }
             }
             
-            if let description = routine.description {
-                Text(description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
             if !routine.exercises.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(routine.exercises.count) exercises")

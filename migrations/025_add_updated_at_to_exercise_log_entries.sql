@@ -2,6 +2,7 @@
 ALTER TABLE exercise_log_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 
 -- Update trigger to maintain updated_at
+DROP TRIGGER IF EXISTS trigger_exercise_log_entries_updated_at ON exercise_log_entries;
 CREATE TRIGGER trigger_exercise_log_entries_updated_at
     BEFORE UPDATE ON exercise_log_entries
     FOR EACH ROW

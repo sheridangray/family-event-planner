@@ -24,7 +24,11 @@ class ExerciseManager: ObservableObject {
     // MARK: - Initialization
     
     init() {
-        print("💪 ExerciseManager singleton initialized")
+        #if DEBUG
+        print("🛠️ ExerciseManager: Running in DEBUG mode. Backend: \(AppConfig.baseURL)")
+        #else
+        print("🚀 ExerciseManager: Running in PRODUCTION mode. Backend: \(AppConfig.baseURL)")
+        #endif
     }
     
     // MARK: - Exercise Definitions
@@ -273,6 +277,54 @@ class ExerciseManager: ObservableObject {
         return result.data
     }
     
+    /// Update workout details
+    func updateWorkout(id: Int, exerciseDate: String? = nil, startedAt: Date? = nil, location: String? = nil, notes: String? = nil) async throws -> WorkoutSession {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/workouts/\(id)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var body: [String: Any] = [:]
+        if let exerciseDate = exerciseDate { body["exerciseDate"] = exerciseDate }
+        
+        if let startedAt = startedAt {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            body["startedAt"] = formatter.string(from: startedAt)
+        }
+        
+        if let location = location { body["location"] = location }
+        if let notes = notes { body["notes"] = notes }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown server error"
+            print("❌ Failed to update workout: \(errorMsg)")
+            throw ExerciseError.serverError("Failed to update workout: \(errorMsg)")
+        }
+        
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let result = try decoder.decode(WorkoutSessionResponse.self, from: data)
+        
+        // Update local state
+        await MainActor.run {
+            if let index = activeSessions.firstIndex(where: { $0.id == id }) {
+                activeSessions[index] = result.data
+            }
+        }
+        
+        return result.data
+    }
+    
     /// Update workout status
     func updateWorkoutStatus(workoutId: Int, status: WorkoutSession.SessionStatus) async throws -> WorkoutSession {
         guard let token = sessionToken else {
@@ -306,6 +358,101 @@ class ExerciseManager: ObservableObject {
         }
         
         return result.data
+    }
+    
+    /// Fetch AI analysis for a workout
+    func fetchWorkoutAnalysis(workoutId: Int) async throws -> WorkoutAnalysis? {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(AppConfig.apiBaseURL)/exercise/workouts/\(workoutId)/analysis")!
+        print("🕒 [ExerciseManager] Polling analysis from: \(url.absoluteString)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ [ExerciseManager] Invalid response for workout \(workoutId)")
+            throw ExerciseError.serverError("Invalid server response")
+        }
+        
+        print("📥 [ExerciseManager] Analysis response status: \(httpResponse.statusCode) for workout \(workoutId)")
+        
+        if httpResponse.statusCode == 404 {
+            print("ℹ️ [ExerciseManager] No analysis yet for workout \(workoutId) (404)")
+            return nil
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "No error details"
+            print("❌ [ExerciseManager] Fetch analysis failed with status \(httpResponse.statusCode): \(errorBody)")
+            throw ExerciseError.serverError("Failed to fetch analysis (Status: \(httpResponse.statusCode))")
+        }
+        
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        
+        struct AnalysisResponse: Codable {
+            let success: Bool
+            let data: WorkoutAnalysis?
+        }
+        
+        do {
+            let result = try decoder.decode(AnalysisResponse.self, from: data)
+            
+            if let analysis = result.data {
+                print("✅ [ExerciseManager] Received analysis for workout \(workoutId)")
+                await MainActor.run {
+                    if let index = activeSessions.firstIndex(where: { $0.id == workoutId }) {
+                        activeSessions[index].analysis = analysis
+                    }
+                }
+            } else {
+                print("ℹ️ [ExerciseManager] Analysis data was null in successful response for workout \(workoutId)")
+            }
+            return result.data
+        } catch {
+            print("❌ [ExerciseManager] Failed to decode analysis response for workout \(workoutId): \(error)")
+            return nil
+        }
+    }
+    
+    /// Apply AI-suggested tweaks to a routine
+    func applyRoutineTweaks(routineId: Int, tweaks: [RoutineTweak]) async throws {
+        guard let token = sessionToken else {
+            throw ExerciseError.notAuthenticated
+        }
+        
+        let url = URL(string: "\(backendURL)/api/exercise/routines/\(routineId)/apply-tweaks")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let tweaksData = tweaks.map { tweak in
+            [
+                "exercise": tweak.exercise,
+                "suggested": [
+                    "sets": tweak.suggested.sets,
+                    "reps": tweak.suggested.reps
+                ]
+            ]
+        }
+        
+        let body: [String: Any] = ["tweaks": tweaksData]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw ExerciseError.serverError("Failed to apply tweaks")
+        }
+        
+        try await fetchRoutines() // Refresh routines
     }
     
     /// Delete a workout

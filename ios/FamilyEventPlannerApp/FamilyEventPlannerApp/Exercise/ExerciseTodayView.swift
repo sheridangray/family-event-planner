@@ -103,16 +103,8 @@ struct RoutineCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(routine.routineName)
-                    .font(.headline)
-                Spacer()
-                if let description = routine.description {
-                    Text(description)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
+            Text(routine.routineName)
+                .font(.headline)
             
             if !routine.exercises.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
