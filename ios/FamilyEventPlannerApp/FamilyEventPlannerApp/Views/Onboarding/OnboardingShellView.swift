@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import GoogleSignIn
 
 // --- Models ---
 
@@ -108,8 +109,11 @@ class OnboardingViewModel: ObservableObject {
         // Health
         self.healthEnabled = HealthKitManager.shared.isAuthorized
         
-        // Calendar (check logic placeholder)
-        // self.calendarEnabled = ...
+        // Calendar
+        if let currentUser = GIDSignIn.sharedInstance.currentUser,
+           let scopes = currentUser.grantedScopes {
+            self.calendarEnabled = scopes.contains("https://www.googleapis.com/auth/calendar")
+        }
     }
     
     func requestNotifications() {
@@ -272,6 +276,14 @@ struct OnboardingShellView: View {
                     
                     // Navigation Buttons
                     VStack(spacing: 12) {
+                        if let error = viewModel.errorMessage {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                        
                         if viewModel.currentStep != .welcome {
                             Button("Back") {
                                 withAnimation { viewModel.goBack() }
@@ -279,15 +291,23 @@ struct OnboardingShellView: View {
                             .foregroundColor(.secondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
+                            .disabled(viewModel.isLoading)
                         }
                         
                         Button(action: {
                             if viewModel.isLastStep {
                                 Task {
+                                    await MainActor.run { viewModel.isLoading = true; viewModel.errorMessage = nil }
                                     let success = await viewModel.completeOnboarding()
                                     if success {
                                         await MainActor.run {
+                                            viewModel.isLoading = false
                                             coordinator.didCompleteOnboarding()
+                                        }
+                                    } else {
+                                        await MainActor.run {
+                                            viewModel.isLoading = false
+                                            viewModel.errorMessage = "Failed to complete setup. Please try again."
                                         }
                                     }
                                 }
@@ -295,12 +315,20 @@ struct OnboardingShellView: View {
                                 withAnimation { viewModel.goNext() }
                             }
                         }) {
-                            Text(viewModel.isLastStep ? "Finish" : "Next")
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
+                            HStack {
+                                if viewModel.isLoading && viewModel.isLastStep {
+                                    ProgressView()
+                                        .tint(.white)
+                                        .padding(.trailing, 8)
+                                }
+                                Text(viewModel.isLastStep ? "Finish" : "Next")
+                            }
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
                         }
                         .buttonStyle(.borderedProminent)
+                        .disabled(viewModel.isLoading)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 30)

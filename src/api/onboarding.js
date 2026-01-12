@@ -154,8 +154,8 @@ function createOnboardingRouter(database, logger) {
       const payload = result.rows[0].payload;
 
       // 2. Create Household (if not exists)
-      // Use "Family Name" from payload or fallback to "My Household"
-      const familyName = payload.goals?.familyName || "My Household"; // Assuming payload structure
+      // The iOS app sends familyName at the top level of the payload
+      const familyName = payload.familyName || "My Household"; 
 
       // Check if user already owns a household
       const checkHousehold = `SELECT id FROM households WHERE created_by_user_id = $1`;
@@ -178,7 +178,8 @@ function createOnboardingRouter(database, logger) {
       }
 
       // 3. Create/Update Profile for the user (Owner)
-      const enabledPillars = payload.pillars?.enabledPillarIds || [
+      // The iOS app sends enabledPillarIds at the top level
+      const enabledPillars = payload.enabledPillarIds || [
         "time",
         "food",
         "health",

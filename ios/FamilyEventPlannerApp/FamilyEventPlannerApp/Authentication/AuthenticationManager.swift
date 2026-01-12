@@ -22,6 +22,15 @@ class AuthenticationManager: ObservableObject {
         print("🔐 AuthenticationManager singleton initialized")
         // Try to restore session from Keychain on app launch
         restoreSession()
+        
+        // Restore Google Sign-In state so currentUser is available
+        GIDSignIn.sharedInstance.restorePreviousSignIn { user, error in
+            if let error = error {
+                print("ℹ️ Google Sign-In restoration failed or not needed: \(error.localizedDescription)")
+            } else if let user = user {
+                print("✅ Google Sign-In state restored for: \(user.profile?.email ?? "unknown")")
+            }
+        }
     }
     
     deinit {
