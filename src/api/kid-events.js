@@ -6,13 +6,13 @@
 
 const express = require('express');
 const { DiscoveryOrchestrator } = require('../services/kid-events');
-const { authenticateAPI } = require('../middleware/auth');
+const { authenticateFlexible } = require('../middleware/auth');
 
 function createKidEventsRouter(database, logger) {
   const router = express.Router();
 
   // Get discovered kid events
-  router.get('/', authenticateAPI, async (req, res) => {
+  router.get('/', authenticateFlexible, async (req, res) => {
     try {
       const { 
         status = 'discovered',
@@ -59,7 +59,7 @@ function createKidEventsRouter(database, logger) {
   });
 
   // Get single event by ID
-  router.get('/:id', authenticateAPI, async (req, res) => {
+  router.get('/:id', authenticateFlexible, async (req, res) => {
     try {
       const result = await database.query(
         'SELECT * FROM kid_events WHERE id = $1',
@@ -81,7 +81,7 @@ function createKidEventsRouter(database, logger) {
   });
 
   // Update event status (interested, approved, rejected)
-  router.patch('/:id/status', authenticateAPI, async (req, res) => {
+  router.patch('/:id/status', authenticateFlexible, async (req, res) => {
     try {
       const { status } = req.body;
       const validStatuses = ['discovered', 'interested', 'approved', 'rejected', 'attended'];
@@ -116,7 +116,7 @@ function createKidEventsRouter(database, logger) {
   });
 
   // Rate an attended event
-  router.post('/:id/rate', authenticateAPI, async (req, res) => {
+  router.post('/:id/rate', authenticateFlexible, async (req, res) => {
     try {
       const { rating, notes } = req.body;
 
@@ -153,7 +153,7 @@ function createKidEventsRouter(database, logger) {
   });
 
   // Trigger on-demand discovery
-  router.post('/discover', authenticateAPI, async (req, res) => {
+  router.post('/discover', authenticateFlexible, async (req, res) => {
     try {
       console.log('📨 [API] ========== POST /kid-events/discover ==========');
       console.log('📨 [API] Request body:', JSON.stringify(req.body, null, 2));
@@ -220,7 +220,7 @@ function createKidEventsRouter(database, logger) {
   });
 
   // Get discovery run history
-  router.get('/discovery/runs', authenticateAPI, async (req, res) => {
+  router.get('/discovery/runs', authenticateFlexible, async (req, res) => {
     try {
       const { limit = 10 } = req.query;
 
@@ -241,7 +241,7 @@ function createKidEventsRouter(database, logger) {
   });
 
   // Get user preferences
-  router.get('/preferences', authenticateAPI, async (req, res) => {
+  router.get('/preferences', authenticateFlexible, async (req, res) => {
     try {
       const userId = req.user?.id || 1; // Default to user 1 for now
 
@@ -261,7 +261,7 @@ function createKidEventsRouter(database, logger) {
   });
 
   // Update user preferences
-  router.put('/preferences', authenticateAPI, async (req, res) => {
+  router.put('/preferences', authenticateFlexible, async (req, res) => {
     try {
       const userId = req.user?.id || 1;
       const {
