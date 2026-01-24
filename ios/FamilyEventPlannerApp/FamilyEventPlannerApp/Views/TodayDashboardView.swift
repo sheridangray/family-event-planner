@@ -190,7 +190,10 @@ struct TodayDashboardView: View {
                             PillarSummaryCard(title: "Money", icon: "banknote.fill", value: "+$240", color: .green)
                         }
                         if activePillars.contains("relationships") {
-                            PillarSummaryCard(title: "Relationships", icon: "person.2.fill", value: "Date Night", color: .purple)
+                            NavigationLink(destination: RelationshipsView()) {
+                                PillarSummaryCard(title: "Relationships", icon: "person.2.fill", value: "Date Night", color: .purple)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
                         if activePillars.contains("sleep") {
                             PillarSummaryCard(title: "Sleep", icon: "moon.fill", value: "7.5h", color: .indigo)
