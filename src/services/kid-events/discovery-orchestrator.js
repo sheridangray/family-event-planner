@@ -27,6 +27,8 @@ class DiscoveryOrchestrator {
     this.filter = new ProbabilisticFilter(logger, database, config);
     
     // Configuration
+    // Note: Eventbrite API was deprecated in 2019, disabled by default
+    // Eventbrite events can still be found via SERP + LLM extraction
     this.config = {
       location: config.location || 'San Francisco, CA',
       radiusMiles: config.radiusMiles || 25,
@@ -34,7 +36,7 @@ class DiscoveryOrchestrator {
       ageMin: config.ageMin,
       ageMax: config.ageMax,
       enableSerp: config.enableSerp !== false,
-      enableEventbrite: config.enableEventbrite !== false,
+      enableEventbrite: config.enableEventbrite === true, // Disabled by default (API deprecated)
       enableNewsletters: config.enableNewsletters !== false,
       ...config
     };

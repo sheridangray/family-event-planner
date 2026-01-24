@@ -13,8 +13,10 @@ class NewsletterSource {
     this.database = database;
     this.gmailClient = new GmailClient(logger, database);
     
+    // Gmail label for kid event newsletters
+    // You can create additional labels like 'events/datenights' for other event types
     this.config = {
-      labelName: config.labelName || 'events/newsletters',
+      labelName: config.labelName || 'events/kids',
       maxEmails: config.maxEmails || 10,
       ...config
     };

@@ -25,22 +25,34 @@ class EventbriteSource {
 
   /**
    * Search for kid events on Eventbrite
+   * 
+   * NOTE: Eventbrite deprecated their public /events/search/ API in 2019.
+   * This source is disabled by default. Eventbrite events can still be 
+   * discovered via SERP (Google will return Eventbrite URLs which get
+   * processed by the LLM extractor).
+   * 
    * @param {Object} options - Search options
    * @returns {Promise<Array>} Array of structured event data
    */
   async search(options = {}) {
     const searchConfig = { ...this.config, ...options };
     
-    console.log('🎫 [Eventbrite] ========== EVENTBRITE SEARCH STARTING ==========');
+    console.log('🎫 [Eventbrite] ========== EVENTBRITE SEARCH ==========');
+    console.log('⚠️  [Eventbrite] NOTE: Eventbrite public search API was deprecated in 2019.');
+    console.log('⚠️  [Eventbrite] This source is disabled by default. Eventbrite events');
+    console.log('⚠️  [Eventbrite] can still be found via SERP + LLM extraction.');
     console.log('🎫 [Eventbrite] Config:', JSON.stringify(searchConfig, null, 2));
     console.log('🎫 [Eventbrite] API Key present:', !!this.apiKey);
-    console.log('🎫 [Eventbrite] API Key (first 10 chars):', this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'MISSING');
     
     if (!this.apiKey) {
-      console.log('❌ [Eventbrite] Missing API key - aborting search');
-      this.logger.warn('Eventbrite Source: Missing API key (EVENTBRITE_API_KEY)');
+      console.log('ℹ️  [Eventbrite] No API key configured - skipping (expected)');
+      this.logger.info('Eventbrite Source: Skipped (API deprecated, no key configured)');
       return [];
     }
+
+    // Even with an API key, the search endpoint returns 404
+    // Only proceed if explicitly enabled (for testing/future use)
+    console.log('🎫 [Eventbrite] Attempting API call (may fail due to deprecation)...');
 
     try {
       const events = await this.searchEvents(searchConfig);
@@ -54,11 +66,13 @@ class EventbriteSource {
       return transformed;
     } catch (error) {
       console.log('❌ [Eventbrite] Search failed:', error.message);
-      if (error.response) {
+      if (error.response?.status === 404) {
+        console.log('ℹ️  [Eventbrite] 404 = API endpoint deprecated (expected)');
+      } else if (error.response) {
         console.log('❌ [Eventbrite] Response status:', error.response.status);
         console.log('❌ [Eventbrite] Response data:', JSON.stringify(error.response.data));
       }
-      this.logger.error('Eventbrite search failed:', error.message);
+      this.logger.info('Eventbrite Source: API deprecated, returning 0 events');
       return [];
     }
   }

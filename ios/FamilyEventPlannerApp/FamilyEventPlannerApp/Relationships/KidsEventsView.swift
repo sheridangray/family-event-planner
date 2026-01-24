@@ -321,7 +321,7 @@ struct DiscoveryConfig: CustomStringConvertible {
     var ageMin: Int = 0
     var ageMax: Int = 12
     var enableSerp: Bool = true
-    var enableEventbrite: Bool = true
+    var enableEventbrite: Bool = false  // Disabled by default (Eventbrite API deprecated in 2019)
     var enableNewsletters: Bool = true
     
     var description: String {
@@ -612,12 +612,18 @@ struct DiscoverySheet: View {
                 // Sources Section
                 Section {
                     Toggle("Google Search", isOn: $config.enableSerp)
-                    Toggle("Eventbrite", isOn: $config.enableEventbrite)
                     Toggle("Email Newsletters", isOn: $config.enableNewsletters)
+                    
+                    HStack {
+                        Toggle("Eventbrite", isOn: $config.enableEventbrite)
+                        Text("(API deprecated)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 } header: {
                     Text("Event Sources")
                 } footer: {
-                    Text("Enable or disable specific sources for this discovery run")
+                    Text("Eventbrite's public API was deprecated in 2019. Eventbrite events can still be found via Google Search.")
                 }
                 
                 // Status Section
