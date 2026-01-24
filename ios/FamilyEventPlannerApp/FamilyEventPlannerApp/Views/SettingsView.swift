@@ -95,7 +95,9 @@ struct SettingsView: View {
 #Preview {
     NavigationStack {
         SettingsView()
-            .environmentObject(AuthenticationManager())
+            .environmentObject(AuthenticationManager.shared)
+            .environmentObject(HealthKitManager.shared)
+            .environmentObject(CalendarManager.shared)
     }
 }
 

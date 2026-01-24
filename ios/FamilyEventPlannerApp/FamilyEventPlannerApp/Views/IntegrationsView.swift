@@ -105,6 +105,15 @@ struct IntegrationsView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
+                        } else if calendarManager.isExpired {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                                Text("Expired - tap to reconnect")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
                         } else {
                             Text("Not connected")
                                 .font(.caption)
@@ -114,20 +123,46 @@ struct IntegrationsView: View {
                     
                     Spacer()
                     
-                    Toggle("", isOn: Binding(
-                        get: { calendarManager.isAuthorized },
-                        set: { newValue in
-                            handleCalendarToggle(newValue)
+                    if calendarManager.isExpired {
+                        // Show reconnect button for expired state
+                        Button(action: { connectCalendar() }) {
+                            Text("Reconnect")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.sunsetDustyBlue)
+                                .cornerRadius(8)
                         }
-                    ))
-                    .labelsHidden()
-                    .disabled(isTogglingCalendar)
+                        .disabled(isTogglingCalendar)
+                    } else {
+                        Toggle("", isOn: Binding(
+                            get: { calendarManager.isAuthorized },
+                            set: { newValue in
+                                handleCalendarToggle(newValue)
+                            }
+                        ))
+                        .labelsHidden()
+                        .disabled(isTogglingCalendar)
+                    }
                 }
                 .padding(.vertical, 4)
+                
+                // Show error message if any
+                if let error = calendarManager.connectionError {
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.orange)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
             } header: {
                 Text("Calendar Integration")
             } footer: {
-                Text("View and create events in your Google Calendar")
+                Text("View and create events in your Google Calendar. Also enables Gmail access for newsletter parsing.")
             }
             
             // Coming Soon Section
@@ -346,8 +381,9 @@ struct IntegrationRow: View {
 #Preview {
     NavigationStack {
         IntegrationsView()
-            .environmentObject(AuthenticationManager())
-            .environmentObject(HealthKitManager())
+            .environmentObject(AuthenticationManager.shared)
+            .environmentObject(HealthKitManager.shared)
+            .environmentObject(CalendarManager.shared)
     }
 }
 

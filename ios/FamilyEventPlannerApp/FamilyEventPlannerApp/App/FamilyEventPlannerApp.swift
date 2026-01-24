@@ -4,9 +4,6 @@ import SwiftUI
 struct FamilyEventPlannerApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     
-    // Use singletons directly - no @StateObject to avoid memory conflicts
-    @StateObject private var calendarManager = CalendarManager()
-    
     init() {
         // Register background tasks for health syncing
         BackgroundTaskManager.shared.registerBackgroundTasks()
@@ -29,6 +26,7 @@ struct FamilyEventPlannerApp: App {
                 .environmentObject(HealthKitManager.shared)
                 .environmentObject(NavigationCoordinator.shared)
                 .environmentObject(ExerciseManager.shared)
+                .environmentObject(CalendarManager.shared)
         }
     }
 }
