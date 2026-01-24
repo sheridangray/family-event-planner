@@ -1,36 +1,39 @@
 import SwiftUI
+import Combine
 
 // MARK: - Models
 struct KidEvent: Identifiable, Codable {
     let id: Int
     let title: String
     let description: String?
-    let eventDate: String?
-    let eventTime: String?
+    let date: String?
+    let startTime: String?
     let venue: String?
-    let location: String?
-    let costMin: Double?
-    let costMax: Double?
-    let ageMin: Int?
-    let ageMax: Int?
-    let sourceUrl: String?
+    let city: String?
+    let cost: KidEventCost?
+    let ageRange: KidEventAgeRange?
+    let urls: KidEventUrls?
     let relevanceScore: Double?
     let status: String
     
-    enum CodingKeys: String, CodingKey {
-        case id, title, description, venue, location, status
-        case eventDate = "event_date"
-        case eventTime = "event_time"
-        case costMin = "cost_min"
-        case costMax = "cost_max"
-        case ageMin = "age_min"
-        case ageMax = "age_max"
-        case sourceUrl = "source_url"
-        case relevanceScore = "relevance_score"
+    struct KidEventCost: Codable {
+        let adult: Double?
+        let child: Double?
+        let isFree: Bool?
+    }
+    
+    struct KidEventAgeRange: Codable {
+        let min: Int?
+        let max: Int?
+    }
+    
+    struct KidEventUrls: Codable {
+        let event: String?
+        let registration: String?
     }
     
     var formattedDate: String {
-        guard let dateStr = eventDate else { return "TBD" }
+        guard let dateStr = date else { return "TBD" }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
         if let date = formatter.date(from: String(dateStr.prefix(10))) {
@@ -42,40 +45,62 @@ struct KidEvent: Identifiable, Codable {
     }
     
     var formattedCost: String {
-        if let min = costMin, let max = costMax {
-            if min == 0 && max == 0 {
-                return "Free"
-            } else if min == max {
-                return "$\(Int(min))"
-            } else {
-                return "$\(Int(min))-$\(Int(max))"
-            }
-        } else if let min = costMin {
-            return min == 0 ? "Free" : "$\(Int(min))"
+        if let isFree = cost?.isFree, isFree {
+            return "Free"
+        }
+        if let adult = cost?.adult {
+            return adult == 0 ? "Free" : "$\(Int(adult))"
         }
         return "Free"
     }
     
     var formattedAge: String {
-        if let min = ageMin, let max = ageMax {
+        if let min = ageRange?.min, let max = ageRange?.max {
             if min == max {
                 return "Age \(min)"
             } else {
                 return "Ages \(min)-\(max)"
             }
-        } else if let min = ageMin {
+        } else if let min = ageRange?.min {
             return "Ages \(min)+"
         }
         return "All ages"
     }
+    
+    var sourceUrl: String? {
+        urls?.event ?? urls?.registration
+    }
 }
 
-struct KidEventsResponse: Codable {
+struct KidEventsApiResponse: Codable {
     let success: Bool
-    let events: [KidEvent]
-    let total: Int
-    let page: Int
-    let limit: Int
+    let data: KidEventsData?
+    let error: String?
+    
+    struct KidEventsData: Codable {
+        let events: [KidEvent]
+        let pagination: Pagination?
+        
+        struct Pagination: Codable {
+            let total: Int
+            let limit: Int
+            let offset: Int
+            let hasMore: Bool
+        }
+    }
+}
+
+struct DiscoveryResponse: Codable {
+    let success: Bool
+    let message: String?
+    let config: DiscoveryConfig?
+    let error: String?
+    
+    struct DiscoveryConfig: Codable {
+        let location: String?
+        let radiusMiles: Int?
+        let daysAhead: Int?
+    }
 }
 
 // MARK: - View Model
@@ -84,6 +109,7 @@ class KidsEventsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
     @Published var selectedFilter: EventFilter = .all
+    @Published var discoveryLog: [String] = []
     
     private let authManager = AuthenticationManager.shared
     private var apiBaseURL: String { AppConfig.apiBaseURL }
@@ -95,7 +121,18 @@ class KidsEventsViewModel: ObservableObject {
         case saved = "Saved"
     }
     
+    func log(_ message: String) {
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        let logMessage = "[\(timestamp)] \(message)"
+        print("📱 [KidsEvents] \(message)")
+        DispatchQueue.main.async {
+            self.discoveryLog.append(logMessage)
+        }
+    }
+    
     func fetchEvents() async {
+        log("Fetching events with filter: \(selectedFilter.rawValue)")
+        
         await MainActor.run { 
             isLoading = true 
             error = nil
@@ -111,7 +148,6 @@ class KidsEventsViewModel: ObservableObject {
             case .saved:
                 queryItems.append(URLQueryItem(name: "status", value: "saved"))
             case .thisWeek:
-                // Could add date filtering
                 break
             case .all:
                 break
@@ -121,21 +157,39 @@ class KidsEventsViewModel: ObservableObject {
                 urlComponents.queryItems = queryItems
             }
             
+            log("Request URL: \(urlComponents.url?.absoluteString ?? "nil")")
+            
             let request = authManager.authenticatedRequest(url: urlComponents.url!)
             let (data, response) = try await URLSession.shared.data(for: request)
             
             if let httpResponse = response as? HTTPURLResponse {
+                log("Response status: \(httpResponse.statusCode)")
+                
+                // Log raw response for debugging
+                if let responseStr = String(data: data, encoding: .utf8) {
+                    log("Response body (first 500 chars): \(String(responseStr.prefix(500)))")
+                }
+                
                 if httpResponse.statusCode == 200 {
-                    let decoded = try JSONDecoder().decode(KidEventsResponse.self, from: data)
-                    await MainActor.run {
-                        self.events = decoded.events
-                        self.isLoading = false
+                    let decoded = try JSONDecoder().decode(KidEventsApiResponse.self, from: data)
+                    
+                    if decoded.success, let eventsData = decoded.data {
+                        log("Successfully decoded \(eventsData.events.count) events")
+                        await MainActor.run {
+                            self.events = eventsData.events
+                            self.isLoading = false
+                        }
+                    } else {
+                        log("API returned success=false: \(decoded.error ?? "unknown")")
+                        throw NSError(domain: "API", code: -1, userInfo: [NSLocalizedDescriptionKey: decoded.error ?? "Unknown error"])
                     }
                 } else {
-                    throw NSError(domain: "API", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Failed to load events"])
+                    log("HTTP error: \(httpResponse.statusCode)")
+                    throw NSError(domain: "API", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Failed to load events (HTTP \(httpResponse.statusCode))"])
                 }
             }
         } catch {
+            log("Error: \(error.localizedDescription)")
             await MainActor.run {
                 self.error = error.localizedDescription
                 self.isLoading = false
@@ -144,6 +198,8 @@ class KidsEventsViewModel: ObservableObject {
     }
     
     func updateEventStatus(eventId: Int, status: String) async {
+        log("Updating event \(eventId) status to: \(status)")
+        
         do {
             let url = URL(string: "\(apiBaseURL)/kid-events/\(eventId)/status")!
             var request = authManager.authenticatedRequest(url: url)
@@ -151,17 +207,22 @@ class KidsEventsViewModel: ObservableObject {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: ["status": status])
             
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                await fetchEvents()
+            if let httpResponse = response as? HTTPURLResponse {
+                log("Update status response: \(httpResponse.statusCode)")
+                if httpResponse.statusCode == 200 {
+                    await fetchEvents()
+                }
             }
         } catch {
-            print("❌ Failed to update status: \(error)")
+            log("Failed to update status: \(error)")
         }
     }
     
     func rateEvent(eventId: Int, rating: Int, notes: String?) async {
+        log("Rating event \(eventId): \(rating) stars")
+        
         do {
             let url = URL(string: "\(apiBaseURL)/kid-events/\(eventId)/rate")!
             var request = authManager.authenticatedRequest(url: url)
@@ -176,29 +237,95 @@ class KidsEventsViewModel: ObservableObject {
             
             let (_, _) = try await URLSession.shared.data(for: request)
         } catch {
-            print("❌ Failed to rate event: \(error)")
+            log("Failed to rate event: \(error)")
         }
     }
     
-    func triggerDiscovery() async {
-        await MainActor.run { isLoading = true }
+    func triggerDiscovery(config: DiscoveryConfig) async -> Bool {
+        log("========== STARTING DISCOVERY ==========")
+        log("Config: \(config)")
+        
+        await MainActor.run { 
+            isLoading = true 
+            discoveryLog = []
+        }
         
         do {
             let url = URL(string: "\(apiBaseURL)/kid-events/discover")!
+            log("POST \(url.absoluteString)")
+            
             var request = authManager.authenticatedRequest(url: url)
             request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             
-            let (_, _) = try await URLSession.shared.data(for: request)
+            let body: [String: Any] = [
+                "location": config.location,
+                "radiusMiles": config.radiusMiles,
+                "daysAhead": config.daysAhead,
+                "ageMin": config.ageMin,
+                "ageMax": config.ageMax,
+                "enableSerp": config.enableSerp,
+                "enableEventbrite": config.enableEventbrite,
+                "enableNewsletters": config.enableNewsletters
+            ]
             
-            // Wait a moment then refresh
-            try await Task.sleep(nanoseconds: 2_000_000_000)
-            await fetchEvents()
+            log("Request body: \(body)")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                log("Response status: \(httpResponse.statusCode)")
+                
+                if let responseStr = String(data: data, encoding: .utf8) {
+                    log("Response: \(responseStr)")
+                }
+                
+                if httpResponse.statusCode == 200 {
+                    let decoded = try JSONDecoder().decode(DiscoveryResponse.self, from: data)
+                    if decoded.success {
+                        log("Discovery started successfully!")
+                        log("Waiting for background processing...")
+                        
+                        // Wait for discovery to process
+                        try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+                        
+                        log("Refreshing events...")
+                        await fetchEvents()
+                        log("========== DISCOVERY COMPLETE ==========")
+                        return true
+                    } else {
+                        log("Discovery API returned error: \(decoded.error ?? "unknown")")
+                    }
+                }
+            }
+            
+            await MainActor.run { self.isLoading = false }
+            return false
         } catch {
+            log("Discovery failed: \(error.localizedDescription)")
             await MainActor.run {
-                self.error = "Failed to trigger discovery"
+                self.error = "Discovery failed: \(error.localizedDescription)"
                 self.isLoading = false
             }
+            return false
         }
+    }
+}
+
+// MARK: - Discovery Config
+struct DiscoveryConfig: CustomStringConvertible {
+    var location: String = "San Francisco, CA"
+    var radiusMiles: Int = 25
+    var daysAhead: Int = 14
+    var ageMin: Int = 0
+    var ageMax: Int = 12
+    var enableSerp: Bool = true
+    var enableEventbrite: Bool = true
+    var enableNewsletters: Bool = true
+    
+    var description: String {
+        "location=\(location), radius=\(radiusMiles)mi, days=\(daysAhead), ages=\(ageMin)-\(ageMax), serp=\(enableSerp), eventbrite=\(enableEventbrite), newsletters=\(enableNewsletters)"
     }
 }
 
@@ -206,6 +333,7 @@ class KidsEventsViewModel: ObservableObject {
 struct KidsEventsView: View {
     @StateObject private var viewModel = KidsEventsViewModel()
     @State private var showingDiscoverySheet = false
+    @State private var showingLogSheet = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -239,10 +367,21 @@ struct KidsEventsView: View {
                         .foregroundColor(.orange)
                     Text(error)
                         .foregroundColor(.secondary)
-                    Button("Retry") {
-                        Task { await viewModel.fetchEvents() }
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    HStack(spacing: 16) {
+                        Button("Retry") {
+                            Task { await viewModel.fetchEvents() }
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        Button("View Log") {
+                            showingLogSheet = true
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.gray)
                     }
-                    .buttonStyle(.bordered)
                 }
                 Spacer()
             } else if viewModel.events.isEmpty {
@@ -284,13 +423,22 @@ struct KidsEventsView: View {
         .navigationTitle("Kids Events")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: { showingDiscoverySheet = true }) {
-                    Image(systemName: "plus.magnifyingglass")
+                HStack(spacing: 12) {
+                    Button(action: { showingLogSheet = true }) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                    }
+                    
+                    Button(action: { showingDiscoverySheet = true }) {
+                        Image(systemName: "plus.magnifyingglass")
+                    }
                 }
             }
         }
         .sheet(isPresented: $showingDiscoverySheet) {
             DiscoverySheet(viewModel: viewModel, isPresented: $showingDiscoverySheet)
+        }
+        .sheet(isPresented: $showingLogSheet) {
+            LogSheet(logs: viewModel.discoveryLog, isPresented: $showingLogSheet)
         }
         .task {
             await viewModel.fetchEvents()
@@ -411,79 +559,146 @@ struct FilterPill: View {
     }
 }
 
-// MARK: - Discovery Sheet
+// MARK: - Discovery Sheet (Configurable)
 struct DiscoverySheet: View {
     @ObservedObject var viewModel: KidsEventsViewModel
     @Binding var isPresented: Bool
+    
+    @State private var config = DiscoveryConfig()
     @State private var isRunning = false
+    @State private var showAdvanced = false
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 60))
-                    .foregroundColor(.orange)
-                
-                Text("Discover Events")
-                    .font(.title)
-                    .bold()
-                
-                Text("Search for kid-friendly events using Google, Eventbrite, and your subscribed newsletters.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Google Search for local events")
+            Form {
+                // Location Section
+                Section {
+                    TextField("City or ZIP", text: $config.location)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Search Radius: \(config.radiusMiles) miles")
+                            .font(.subheadline)
+                        Slider(value: Binding(
+                            get: { Double(config.radiusMiles) },
+                            set: { config.radiusMiles = Int($0) }
+                        ), in: 5...50, step: 5)
                     }
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Eventbrite family activities")
-                    }
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Newsletter parsing")
-                    }
+                } header: {
+                    Text("Location")
                 }
-                .font(.subheadline)
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
                 
-                Spacer()
-                
-                if isRunning {
-                    ProgressView("Discovering events...")
-                        .padding()
-                } else {
-                    Button(action: {
-                        isRunning = true
-                        Task {
-                            await viewModel.triggerDiscovery()
-                            isRunning = false
-                            isPresented = false
-                        }
-                    }) {
-                        Text("Start Discovery")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                // Date Range Section
+                Section {
+                    Picker("Look ahead", selection: $config.daysAhead) {
+                        Text("This weekend").tag(3)
+                        Text("Next week").tag(7)
+                        Text("Next 2 weeks").tag(14)
+                        Text("Next month").tag(30)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                } header: {
+                    Text("Date Range")
+                }
+                
+                // Age Range Section
+                Section {
+                    Stepper("Min Age: \(config.ageMin)", value: $config.ageMin, in: 0...17)
+                    Stepper("Max Age: \(config.ageMax)", value: $config.ageMax, in: config.ageMin...18)
+                } header: {
+                    Text("Children's Ages")
+                } footer: {
+                    Text("Events will be filtered based on age appropriateness")
+                }
+                
+                // Sources Section
+                Section {
+                    Toggle("Google Search", isOn: $config.enableSerp)
+                    Toggle("Eventbrite", isOn: $config.enableEventbrite)
+                    Toggle("Email Newsletters", isOn: $config.enableNewsletters)
+                } header: {
+                    Text("Event Sources")
+                } footer: {
+                    Text("Enable or disable specific sources for this discovery run")
+                }
+                
+                // Status Section
+                if isRunning {
+                    Section {
+                        HStack {
+                            ProgressView()
+                                .padding(.trailing, 8)
+                            Text("Discovering events...")
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
-            .padding()
+            .navigationTitle("Discover Events")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
+                        isPresented = false
+                    }
+                    .disabled(isRunning)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: startDiscovery) {
+                        if isRunning {
+                            ProgressView()
+                        } else {
+                            Text("Start")
+                                .bold()
+                        }
+                    }
+                    .disabled(isRunning)
+                }
+            }
+        }
+    }
+    
+    private func startDiscovery() {
+        isRunning = true
+        Task {
+            let success = await viewModel.triggerDiscovery(config: config)
+            await MainActor.run {
+                isRunning = false
+                if success {
+                    isPresented = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Log Sheet
+struct LogSheet: View {
+    let logs: [String]
+    @Binding var isPresented: Bool
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    if logs.isEmpty {
+                        Text("No logs yet. Run a discovery to see debug output.")
+                            .foregroundColor(.secondary)
+                            .padding()
+                    } else {
+                        ForEach(Array(logs.enumerated()), id: \.offset) { _, log in
+                            Text(log)
+                                .font(.system(.caption, design: .monospaced))
+                                .padding(.horizontal)
+                        }
+                    }
+                }
+                .padding(.vertical)
+            }
+            .navigationTitle("Discovery Log")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
                         isPresented = false
                     }
                 }

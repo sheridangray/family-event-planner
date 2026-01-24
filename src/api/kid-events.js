@@ -155,6 +155,9 @@ function createKidEventsRouter(database, logger) {
   // Trigger on-demand discovery
   router.post('/discover', authenticateAPI, async (req, res) => {
     try {
+      console.log('📨 [API] ========== POST /kid-events/discover ==========');
+      console.log('📨 [API] Request body:', JSON.stringify(req.body, null, 2));
+      
       const {
         location,
         radiusMiles,
@@ -178,17 +181,28 @@ function createKidEventsRouter(database, logger) {
         triggerType: 'on_demand'
       };
 
+      console.log('📨 [API] Final config:', JSON.stringify(config, null, 2));
+      console.log('📨 [API] Environment check:');
+      console.log('   - GOOGLE_CUSTOM_SEARCH_API_KEY:', !!process.env.GOOGLE_CUSTOM_SEARCH_API_KEY);
+      console.log('   - GOOGLE_CSE_ID:', !!process.env.GOOGLE_CSE_ID);
+      console.log('   - EVENTBRITE_API_KEY:', !!process.env.EVENTBRITE_API_KEY);
+      console.log('   - OPENAI_API_KEY:', !!process.env.OPENAI_API_KEY || !!process.env.OPEN_AI_API_KEY);
+      
       logger.info('Starting on-demand kid events discovery with config:', config);
 
       // Run discovery in background
       const orchestrator = new DiscoveryOrchestrator(logger, database, config);
       
       // Return immediately, process in background
+      console.log('📨 [API] Starting discovery in background...');
       orchestrator.discover(config)
         .then(results => {
+          console.log('✅ [API] Discovery completed:', JSON.stringify(results, null, 2));
           logger.info('On-demand discovery completed:', results);
         })
         .catch(error => {
+          console.log('❌ [API] Discovery failed:', error.message);
+          console.log('❌ [API] Error stack:', error.stack);
           logger.error('On-demand discovery failed:', error.message);
         });
 
@@ -198,6 +212,8 @@ function createKidEventsRouter(database, logger) {
         config
       });
     } catch (error) {
+      console.log('❌ [API] Error starting discovery:', error.message);
+      console.log('❌ [API] Error stack:', error.stack);
       logger.error('Error starting discovery:', error.message);
       res.status(500).json({ success: false, error: 'Failed to start discovery' });
     }

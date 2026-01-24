@@ -34,19 +34,36 @@ class SerpSource {
   async search(options = {}) {
     const searchConfig = { ...this.config, ...options };
     
+    console.log('🌐 [SERP] ========== SERP SEARCH STARTING ==========');
+    console.log('🌐 [SERP] Config:', JSON.stringify(searchConfig, null, 2));
+    console.log('🌐 [SERP] API Key present:', !!this.apiKey);
+    console.log('🌐 [SERP] API Key (first 10 chars):', this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'MISSING');
+    console.log('🌐 [SERP] CSE ID present:', !!this.searchEngineId);
+    console.log('🌐 [SERP] CSE ID:', this.searchEngineId || 'MISSING');
+    
     if (!this.apiKey || !this.searchEngineId) {
+      console.log('❌ [SERP] Missing API key or CSE ID - aborting search');
       this.logger.warn('SERP Source: Missing API key or CSE ID');
       return [];
     }
 
     const queries = this.buildSearchQueries(searchConfig);
+    console.log('🌐 [SERP] Generated queries:', queries);
+    
     const allResults = [];
 
     for (const query of queries) {
       try {
+        console.log('🌐 [SERP] Executing query:', query);
         const results = await this.executeSearch(query, searchConfig.maxResults);
+        console.log('🌐 [SERP] Query returned:', results.length, 'results');
         allResults.push(...results);
       } catch (error) {
+        console.log('❌ [SERP] Query failed:', query, '-', error.message);
+        if (error.response) {
+          console.log('❌ [SERP] Response status:', error.response.status);
+          console.log('❌ [SERP] Response data:', JSON.stringify(error.response.data));
+        }
         this.logger.error(`SERP search failed for query "${query}":`, error.message);
       }
     }
@@ -54,6 +71,8 @@ class SerpSource {
     // Deduplicate by URL
     const uniqueResults = this.deduplicateByUrl(allResults);
     
+    console.log('🌐 [SERP] Total unique results:', uniqueResults.length);
+    console.log('🌐 [SERP] ========== SERP SEARCH COMPLETE ==========');
     this.logger.info(`SERP Source: Found ${uniqueResults.length} unique results`);
     return uniqueResults;
   }

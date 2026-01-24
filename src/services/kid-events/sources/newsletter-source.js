@@ -28,19 +28,30 @@ class NewsletterSource {
   async search(options = {}) {
     const searchConfig = { ...this.config, ...options };
     
+    console.log('📧 [Newsletter] ========== NEWSLETTER SEARCH STARTING ==========');
+    console.log('📧 [Newsletter] Config:', JSON.stringify(searchConfig, null, 2));
+    console.log('📧 [Newsletter] Label to search:', searchConfig.labelName);
+    
     try {
       // Get the primary user
+      console.log('📧 [Newsletter] Looking up primary user...');
       const user = await this.database.getUserByEmail('sheridan.gray@gmail.com');
       if (!user) {
+        console.log('❌ [Newsletter] Primary user not found in database');
         this.logger.warn('Newsletter Source: Primary user not found');
         return [];
       }
+      console.log('📧 [Newsletter] Found user:', user.id);
 
       const newsletters = await this.fetchNewsletters(user.id, searchConfig);
       
+      console.log('📧 [Newsletter] Total newsletters found:', newsletters.length);
+      console.log('📧 [Newsletter] ========== NEWSLETTER SEARCH COMPLETE ==========');
       this.logger.info(`Newsletter Source: Found ${newsletters.length} unread newsletters`);
       return newsletters;
     } catch (error) {
+      console.log('❌ [Newsletter] Search failed:', error.message);
+      console.log('❌ [Newsletter] Error stack:', error.stack);
       this.logger.error('Newsletter search failed:', error.message);
       return [];
     }
@@ -51,16 +62,20 @@ class NewsletterSource {
    */
   async fetchNewsletters(userId, config) {
     try {
+      console.log('📧 [Newsletter] Authenticating Gmail client for user:', userId);
       const authenticatedClient = await this.gmailClient.getAuthenticatedClient(userId);
       if (!authenticatedClient) {
+        console.log('❌ [Newsletter] Gmail authentication failed');
         this.logger.warn('Newsletter Source: Could not authenticate Gmail');
         return [];
       }
+      console.log('📧 [Newsletter] Gmail authenticated successfully');
 
       const gmail = authenticatedClient.gmail;
       
       // Search for unread newsletters with the specific label
       const query = `label:${config.labelName} is:unread`;
+      console.log('📧 [Newsletter] Gmail query:', query);
       
       const response = await gmail.users.messages.list({
         userId: 'me',
@@ -68,7 +83,10 @@ class NewsletterSource {
         maxResults: config.maxEmails
       });
 
+      console.log('📧 [Newsletter] Gmail response messages:', response.data.messages?.length || 0);
+
       if (!response.data.messages) {
+        console.log('📧 [Newsletter] No unread newsletters found');
         return [];
       }
 
@@ -76,6 +94,7 @@ class NewsletterSource {
       const newsletters = [];
       for (const msg of response.data.messages) {
         try {
+          console.log('📧 [Newsletter] Fetching message:', msg.id);
           const fullMsg = await gmail.users.messages.get({
             userId: 'me',
             id: msg.id,
@@ -84,15 +103,20 @@ class NewsletterSource {
 
           const newsletter = this.parseEmailContent(fullMsg.data);
           if (newsletter) {
+            console.log('📧 [Newsletter] Parsed newsletter:', newsletter.subject);
             newsletters.push(newsletter);
+          } else {
+            console.log('📧 [Newsletter] Could not parse message:', msg.id);
           }
         } catch (error) {
+          console.log('❌ [Newsletter] Failed to fetch message', msg.id, ':', error.message);
           this.logger.warn(`Failed to fetch email ${msg.id}:`, error.message);
         }
       }
 
       return newsletters;
     } catch (error) {
+      console.log('❌ [Newsletter] fetchNewsletters failed:', error.message);
       this.logger.error('Failed to fetch newsletters:', error.message);
       return [];
     }

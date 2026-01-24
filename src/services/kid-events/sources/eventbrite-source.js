@@ -31,7 +31,13 @@ class EventbriteSource {
   async search(options = {}) {
     const searchConfig = { ...this.config, ...options };
     
+    console.log('🎫 [Eventbrite] ========== EVENTBRITE SEARCH STARTING ==========');
+    console.log('🎫 [Eventbrite] Config:', JSON.stringify(searchConfig, null, 2));
+    console.log('🎫 [Eventbrite] API Key present:', !!this.apiKey);
+    console.log('🎫 [Eventbrite] API Key (first 10 chars):', this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'MISSING');
+    
     if (!this.apiKey) {
+      console.log('❌ [Eventbrite] Missing API key - aborting search');
       this.logger.warn('Eventbrite Source: Missing API key (EVENTBRITE_API_KEY)');
       return [];
     }
@@ -39,9 +45,19 @@ class EventbriteSource {
     try {
       const events = await this.searchEvents(searchConfig);
       
+      console.log('🎫 [Eventbrite] Raw events found:', events.length);
+      const transformed = events.map(event => this.transformEvent(event));
+      console.log('🎫 [Eventbrite] Transformed events:', transformed.length);
+      console.log('🎫 [Eventbrite] ========== EVENTBRITE SEARCH COMPLETE ==========');
+      
       this.logger.info(`Eventbrite Source: Found ${events.length} events`);
-      return events.map(event => this.transformEvent(event));
+      return transformed;
     } catch (error) {
+      console.log('❌ [Eventbrite] Search failed:', error.message);
+      if (error.response) {
+        console.log('❌ [Eventbrite] Response status:', error.response.status);
+        console.log('❌ [Eventbrite] Response data:', JSON.stringify(error.response.data));
+      }
       this.logger.error('Eventbrite search failed:', error.message);
       return [];
     }
@@ -67,17 +83,26 @@ class EventbriteSource {
       'expand': 'venue,ticket_availability',
     };
 
+    console.log('🎫 [Eventbrite] API params:', JSON.stringify(params, null, 2));
+    console.log('🎫 [Eventbrite] API URL:', `${this.baseUrl}/events/search/`);
+
     const allEvents = [];
     let page = 1;
     let hasMore = true;
 
     while (hasMore && page <= 3) { // Limit to 3 pages
       try {
+        console.log('🎫 [Eventbrite] Fetching page:', page);
         const response = await axios.get(`${this.baseUrl}/events/search/`, {
           params: { ...params, page },
           headers: {
             'Authorization': `Bearer ${this.apiKey}`
           }
+        });
+
+        console.log('🎫 [Eventbrite] Page', page, 'response:', {
+          eventsCount: response.data.events?.length || 0,
+          hasMore: response.data.pagination?.has_more_items
         });
 
         if (response.data.events) {
@@ -87,15 +112,19 @@ class EventbriteSource {
         hasMore = response.data.pagination?.has_more_items || false;
         page++;
       } catch (error) {
+        console.log('❌ [Eventbrite] Page', page, 'failed:', error.message);
         if (error.response?.status === 401) {
+          console.log('❌ [Eventbrite] Invalid API key (401)');
           this.logger.error('Eventbrite: Invalid API key');
         } else if (error.response?.status === 429) {
+          console.log('❌ [Eventbrite] Rate limited (429)');
           this.logger.warn('Eventbrite: Rate limited');
         }
         hasMore = false;
       }
     }
 
+    console.log('🎫 [Eventbrite] Total raw events:', allEvents.length);
     return allEvents;
   }
 

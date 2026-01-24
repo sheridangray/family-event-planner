@@ -47,8 +47,18 @@ class DiscoveryOrchestrator {
    */
   async discover(options = {}) {
     const runConfig = { ...this.config, ...options };
+    
+    console.log('🚀 [Discovery] ========== STARTING DISCOVERY ==========');
+    console.log('🚀 [Discovery] Config:', JSON.stringify(runConfig, null, 2));
+    console.log('🚀 [Discovery] Sources enabled:', {
+      serp: runConfig.enableSerp,
+      eventbrite: runConfig.enableEventbrite,
+      newsletters: runConfig.enableNewsletters
+    });
+    
     const runId = await this.startDiscoveryRun(options.triggerType || 'manual', runConfig);
     
+    console.log('🚀 [Discovery] Run ID:', runId);
     this.logger.info(`Starting discovery run ${runId}`);
     
     const results = {
@@ -61,21 +71,32 @@ class DiscoveryOrchestrator {
 
     try {
       // Step 1: Fetch from all sources in parallel
+      console.log('📡 [Discovery] Step 1: Fetching from sources...');
+      
       const [serpResults, eventbriteResults, newsletterResults] = await Promise.all([
         runConfig.enableSerp ? this.fetchSerp(runConfig) : [],
         runConfig.enableEventbrite ? this.fetchEventbrite(runConfig) : [],
         runConfig.enableNewsletters ? this.fetchNewsletters(runConfig) : []
       ]);
 
+      console.log('📊 [Discovery] Source results:');
+      console.log('   - SERP:', serpResults.length, 'results');
+      console.log('   - Eventbrite:', eventbriteResults.length, 'events');
+      console.log('   - Newsletters:', newsletterResults.length, 'emails');
+      
       results.bySource.serp = serpResults.length;
       results.bySource.eventbrite = eventbriteResults.length;
       results.bySource.newsletter = newsletterResults.length;
 
       // Step 2: Process SERP results (need LLM extraction)
+      console.log('🤖 [Discovery] Step 2: Processing SERP results with LLM...');
       const processedSerp = await this.processSerp(serpResults);
+      console.log('🤖 [Discovery] SERP LLM extracted:', processedSerp.length, 'events');
       
       // Step 3: Process newsletters (need LLM extraction)
+      console.log('📧 [Discovery] Step 3: Processing newsletters with LLM...');
       const processedNewsletters = await this.processNewsletters(newsletterResults);
+      console.log('📧 [Discovery] Newsletter LLM extracted:', processedNewsletters.length, 'events');
       
       // Eventbrite already has structured data
       const allEvents = [
@@ -84,25 +105,33 @@ class DiscoveryOrchestrator {
         ...processedNewsletters
       ];
 
+      console.log('📦 [Discovery] Total events before dedup:', allEvents.length);
       results.eventsFound = allEvents.length;
       this.logger.info(`Total events found: ${allEvents.length}`);
 
       // Step 4: Deduplicate
+      console.log('🔄 [Discovery] Step 4: Deduplicating...');
       const deduplicated = this.deduplicate(allEvents);
+      console.log('🔄 [Discovery] After deduplication:', deduplicated.length, 'events');
       this.logger.info(`After deduplication: ${deduplicated.length}`);
 
       // Step 5: Filter and score
+      console.log('🎯 [Discovery] Step 5: Filtering and scoring...');
       const filtered = await this.filter.filter(deduplicated, {
         userId: options.userId
       });
+      console.log('🎯 [Discovery] After filtering:', filtered.length, 'events');
       this.logger.info(`After filtering: ${filtered.length}`);
 
       // Step 6: Save to database
+      console.log('💾 [Discovery] Step 6: Saving to database...');
       for (const event of filtered) {
         try {
-          await this.saveEvent(event);
+          const eventId = await this.saveEvent(event);
+          console.log('💾 [Discovery] Saved event:', event.title, '(ID:', eventId, ')');
           results.eventsSaved++;
         } catch (error) {
+          console.log('❌ [Discovery] Failed to save:', event.title, '-', error.message);
           results.errors.push(`Save failed for "${event.title}": ${error.message}`);
         }
       }
@@ -110,6 +139,8 @@ class DiscoveryOrchestrator {
       // Complete the run
       await this.completeDiscoveryRun(runId, results);
       
+      console.log('✅ [Discovery] ========== DISCOVERY COMPLETE ==========');
+      console.log('✅ [Discovery] Results:', JSON.stringify(results, null, 2));
       this.logger.info(`Discovery complete: ${results.eventsSaved} events saved`);
       return results;
 
