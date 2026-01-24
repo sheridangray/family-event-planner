@@ -309,6 +309,19 @@ function createExerciseRouter(database, logger) {
 
         if (!analysis) {
           logger.info(`ℹ️ [API] No analysis found yet for workout ${workoutId}`);
+
+          // Trigger lazy analysis if the workout is completed but no analysis exists
+          if (workout.status === "COMPLETED") {
+            logger.info(
+              `🚀 [API] Workout ${workoutId} is COMPLETED but has no analysis. Triggering lazy analysis...`
+            );
+            coachService.analyzeWorkout(workoutId).catch((err) => {
+              logger.error(
+                `❌ [API] Error during lazy AI analysis for workout ${workoutId}:`,
+                err
+              );
+            });
+          }
         }
 
         res.json({

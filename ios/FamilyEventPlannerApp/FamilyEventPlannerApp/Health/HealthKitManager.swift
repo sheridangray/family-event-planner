@@ -141,6 +141,11 @@ class HealthKitManager: ObservableObject {
             throw HealthKitError.notAvailable
         }
         
+        let typesToShare: Set = [
+            HKObjectType.workoutType(),
+            HKQuantityType(.activeEnergyBurned)
+        ]
+        
         let typesToRead: Set = [
             // Activity & Fitness
             HKQuantityType(.stepCount),
@@ -183,7 +188,7 @@ class HealthKitManager: ObservableObject {
         ]
         
         do {
-            try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+            try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)
             await MainActor.run {
                 self.isAuthorized = true
             }
@@ -1248,6 +1253,52 @@ class HealthKitManager: ObservableObject {
             
             healthStore.execute(query)
         }
+    }
+    
+    // MARK: - Save Workout
+    
+    /// Save a completed workout to Apple Health
+    func saveWorkoutToHealthKit(workout: WorkoutSession) async throws {
+        guard isAuthorized else {
+            print("⚠️ Cannot save workout: HealthKit not authorized")
+            return
+        }
+        
+        // 1. Determine start and end times
+        let startDate = workout.startedAt ?? Date()
+        let endDate = workout.endedAt ?? Date()
+        
+        // 2. Determine activity type (defaulting to traditionalStrengthTraining for our app)
+        let workoutActivityType: HKWorkoutActivityType = .traditionalStrengthTraining
+        
+        // 3. Calculate total energy burned (from our estimated calories)
+        var totalEnergyBurned: HKQuantity? = nil
+        // If we have an analysis with stats, use those calories
+        if let calories = workout.analysis?.stats?.calories, calories > 0 {
+            totalEnergyBurned = HKQuantity(unit: .kilocalorie(), doubleValue: Double(calories))
+        } else {
+            // Fallback estimation if no analysis yet
+            let duration = endDate.timeIntervalSince(startDate) / 60
+            let estimatedCals = duration * 6.5
+            totalEnergyBurned = HKQuantity(unit: .kilocalorie(), doubleValue: estimatedCals)
+        }
+        
+        // 4. Create the workout object
+        let hkWorkout = HKWorkout(activityType: workoutActivityType,
+                                 start: startDate,
+                                 end: endDate,
+                                 duration: endDate.timeIntervalSince(startDate),
+                                 totalEnergyBurned: totalEnergyBurned,
+                                 totalDistance: nil,
+                                 metadata: [
+                                    HKMetadataKeyWorkoutBrandName: "Family Event Planner",
+                                    HKMetadataKeyExternalUUID: "\(workout.id)",
+                                    "Routine": workout.routineName ?? "Custom Workout"
+                                 ])
+        
+        // 5. Save to HealthKit
+        try await healthStore.save(hkWorkout)
+        print("✅ Workout \(workout.id) saved to Apple Health")
     }
     
     // MARK: - Sync to Backend

@@ -6,6 +6,10 @@ struct ExerciseEntryCard: View {
     var onEdit: () -> Void
     var onDelete: () -> Void
     
+    private var exerciseDefinition: ExerciseDefinition? {
+        exerciseManager.definitions.first { $0.id == entry.exerciseId }
+    }
+    
     private var previousEntry: ExerciseLogEntry? {
         // Find all entries for this exercise in history
         let allEntries = exerciseManager.activeSessions
@@ -127,8 +131,9 @@ struct ExerciseEntryCard: View {
                 Text("\(reps)")
                     .fontWeight(.semibold)
                 
-                // If it's historical, maybe show the 0 weight to be clear it was logged
-                if isHistorical, let weight = set.weight {
+                // Show weight if it was logged and is > 0
+                // Or if it's 0 and NOT a bodyweight exercise (to be clear it was logged)
+                if let weight = set.weight, weight > 0 || (exerciseDefinition?.category != .bodyweight && weight == 0) {
                     Text("×")
                         .font(.caption2)
                         .foregroundColor(color.opacity(0.6))

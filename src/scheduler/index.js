@@ -1,174 +1,72 @@
 const cron = require("node-cron");
 const { config } = require("../config");
 const ReportingService = require("../services/reporting");
+const { DiscoveryOrchestrator } = require("../services/kid-events");
 
 class TaskScheduler {
   constructor(
     logger,
     database,
-    scraperManager,
-    eventScorer,
-    eventFilter,
-    smsManager,
-    registrationAutomator,
-    calendarManager,
-    unifiedNotifications,
     exerciseService = null,
     notificationService = null
   ) {
     this.logger = logger;
     this.database = database;
-    this.scraperManager = scraperManager;
-    this.eventScorer = eventScorer;
-    this.eventFilter = eventFilter;
-    this.smsManager = smsManager;
-    this.registrationAutomator = registrationAutomator;
-    this.calendarManager = calendarManager;
-    this.unifiedNotifications = unifiedNotifications;
     this.exerciseService = exerciseService;
     this.notificationService = notificationService;
     this.reportingService = new ReportingService(logger);
     this.tasks = [];
-
-    // Discovery progress tracking
-    this.discoveryProgress = {
-      running: false,
-      discoveryRunId: null,
-      totalScrapers: 0,
-      completedScrapers: 0,
-      currentScraper: null,
-      scraperResults: [],
-      startTime: null,
-    };
   }
 
   start() {
     this.logger.info("Starting task scheduler...");
 
-    this.scheduleEventDiscovery();
-    this.scheduleEventProcessing();
-    this.scheduleApprovalTimeouts();
-    this.scheduleRegistrationProcessing();
-    this.scheduleCalendarSync();
-    // this.scheduleDailyReports(); // Disabled - daily report emails removed
     this.scheduleHealthChecks();
     this.scheduleHealthCoachWeekly();
     this.scheduleWorkoutReminders();
+    this.scheduleKidEventsDiscovery();
 
     this.logger.info(
       `Task scheduler started with ${this.tasks.length} scheduled tasks`
     );
   }
 
-  scheduleEventDiscovery() {
-    const scanFrequency = config.discovery.scanFrequencyHours;
-    const cronExpression = `0 */${scanFrequency} * * *`; // Every N hours
-
-    const task = cron.schedule(cronExpression, async () => {
+  scheduleKidEventsDiscovery() {
+    // Run kid events discovery twice daily at 6 AM and 6 PM
+    const task = cron.schedule("0 6,18 * * *", async () => {
       try {
-        this.logger.info("Starting scheduled event discovery...");
-        await this.runEventDiscovery();
+        this.logger.info("🎉 Starting scheduled kid events discovery...");
+        await this.runKidEventsDiscovery();
       } catch (error) {
-        this.logger.error("Error in scheduled event discovery:", error.message);
+        this.logger.error("Error in kid events discovery:", error.message);
       }
     });
 
     this.tasks.push({
-      name: "Event Discovery",
+      name: "Kid Events Discovery",
       task,
-      frequency: `Every ${scanFrequency} hours`,
+      frequency: "Daily at 6 AM and 6 PM",
     });
-    this.logger.info(`Scheduled event discovery: every ${scanFrequency} hours`);
+    this.logger.info("Scheduled kid events discovery: daily at 6 AM and 6 PM");
   }
 
-  scheduleEventProcessing() {
-    const task = cron.schedule("0 9 * * *", async () => {
-      try {
-        this.logger.info("Starting scheduled event processing...");
-        await this.runEventProcessing();
-      } catch (error) {
-        this.logger.error(
-          "Error in scheduled event processing:",
-          error.message
-        );
-      }
-    });
+  async runKidEventsDiscovery() {
+    try {
+      const orchestrator = new DiscoveryOrchestrator(this.logger, this.database, {
+        triggerType: 'scheduled'
+      });
 
-    this.tasks.push({
-      name: "Event Processing",
-      task,
-      frequency: "Daily at 9:00 AM",
-    });
-    this.logger.info("Scheduled event processing: daily at 9:00 AM");
+      const results = await orchestrator.discover({
+        triggerType: 'scheduled'
+      });
+
+      this.logger.info(`Kid events discovery completed: ${results.eventsSaved} events saved`);
+      return results;
+    } catch (error) {
+      this.logger.error("Kid events discovery failed:", error.message);
+      throw error;
+    }
   }
-
-  scheduleApprovalTimeouts() {
-    const task = cron.schedule("0 */4 * * *", async () => {
-      try {
-        this.logger.info("Checking for approval timeouts...");
-        await this.checkApprovalTimeouts();
-      } catch (error) {
-        this.logger.error("Error checking approval timeouts:", error.message);
-      }
-    });
-
-    this.tasks.push({
-      name: "Approval Timeouts",
-      task,
-      frequency: "Every 4 hours",
-    });
-    this.logger.info("Scheduled approval timeout checks: every 4 hours");
-  }
-
-  scheduleRegistrationProcessing() {
-    const task = cron.schedule("*/30 * * * *", async () => {
-      try {
-        this.logger.info("Processing approved events for registration...");
-        await this.processRegistrations();
-      } catch (error) {
-        this.logger.error("Error processing registrations:", error.message);
-      }
-    });
-
-    this.tasks.push({
-      name: "Registration Processing",
-      task,
-      frequency: "Every 30 minutes",
-    });
-    this.logger.info("Scheduled registration processing: every 30 minutes");
-  }
-
-  scheduleCalendarSync() {
-    const task = cron.schedule("0 10 * * *", async () => {
-      try {
-        this.logger.info("Syncing booked events to calendars...");
-        await this.syncCalendars();
-      } catch (error) {
-        this.logger.error("Error syncing calendars:", error.message);
-      }
-    });
-
-    this.tasks.push({
-      name: "Calendar Sync",
-      task,
-      frequency: "Daily at 10:00 AM",
-    });
-    this.logger.info("Scheduled calendar sync: daily at 10:00 AM");
-  }
-
-  // scheduleDailyReports() {
-  //   const task = cron.schedule('0 18 * * *', async () => {
-  //     try {
-  //       this.logger.info('Generating daily report...');
-  //       await this.generateDailyReport();
-  //     } catch (error) {
-  //       this.logger.error('Error generating daily report:', error.message);
-  //     }
-  //   });
-  //
-  //   this.tasks.push({ name: 'Daily Reports', task, frequency: 'Daily at 6:00 PM' });
-  //   this.logger.info('Scheduled daily reports: daily at 6:00 PM');
-  // }
 
   scheduleHealthChecks() {
     const task = cron.schedule("*/15 * * * *", async () => {

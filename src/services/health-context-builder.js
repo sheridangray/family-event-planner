@@ -131,7 +131,8 @@ class HealthContextBuilder {
         sleep_hours,
         resting_heart_rate,
         weight_lbs,
-        active_calories
+        active_calories,
+        mindful_minutes
       FROM health_physical_metrics
       WHERE user_id = $1
         AND metric_date >= CURRENT_DATE - INTERVAL '${days} days'
@@ -162,6 +163,7 @@ class HealthContextBuilder {
       "sleep_hours",
       "resting_heart_rate",
       "active_calories",
+      "mindful_minutes",
     ];
 
     metricKeys.forEach((key) => {
@@ -227,6 +229,12 @@ class HealthContextBuilder {
       "active_calories",
       "distance_miles",
       "weight_lbs",
+      "mindful_minutes",
+      "calories_consumed",
+      "water_oz",
+      "heart_rate_variability",
+      "body_fat_percentage",
+      "sleep_quality_score",
     ];
 
     metricKeys.forEach((key) => {
@@ -521,10 +529,32 @@ CURRENT STATE (This Week):
     }
     text += "\n";
 
+    if (week.mindful_minutes) {
+      text += `- Mindfulness: ${week.mindful_minutes} min/day avg\n`;
+    }
+
     if (week.resting_heart_rate) {
       text += `- Resting HR: ${week.resting_heart_rate} bpm`;
       if (week.resting_heart_rate < 60) text += " (excellent)";
       else if (week.resting_heart_rate < 70) text += " (good)";
+      text += "\n";
+    }
+
+    if (week.heart_rate_variability) {
+      text += `- HRV: ${week.heart_rate_variability} ms\n`;
+    }
+
+    if (week.body_fat_percentage) {
+      text += `- Body Fat: ${week.body_fat_percentage}%\n`;
+    }
+
+    if (week.sleep_quality_score) {
+      text += `- Sleep Quality: ${week.sleep_quality_score}/100\n`;
+    }
+
+    if (week.calories_consumed) {
+      text += `- Nutrition: ${week.calories_consumed.toLocaleString()} kcal/day avg`;
+      if (week.water_oz) text += `, ${week.water_oz} oz water`;
       text += "\n";
     }
 

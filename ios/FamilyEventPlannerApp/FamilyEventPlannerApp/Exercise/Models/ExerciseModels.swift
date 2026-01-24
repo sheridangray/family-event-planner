@@ -75,7 +75,7 @@ enum ExerciseCategory: String, Codable, CaseIterable {
         case .weighted, .cableMachine:
             return ("Repetitions", "Lbs", "Rest")
         case .bodyweight:
-            return ("Repetitions", "Lbs (+/-)", "Rest")
+            return ("Repetitions", "", "Rest")
         case .bandAssisted:
             return ("Repetitions", "Band", "Rest")
         case .time, .mobility:

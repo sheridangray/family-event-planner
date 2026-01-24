@@ -4,7 +4,6 @@ const dashboardRouter = require("./dashboard");
 const createAutomationRouter = require("./automation");
 const adminRouter = require("./admin");
 const { router: familyRouter } = require("./family");
-const chatgptEventDiscoveriesRouter = require("./chatgpt-event-discoveries");
 const createHealthRouter = require("./health");
 const createExerciseRouter = require("./exercise");
 const createMobileAuthRouter = require("./auth-mobile");
@@ -18,27 +17,21 @@ const createMoneyRouter = require("./money");
 const createSleepRouter = require("./sleep");
 const createCoachRouter = require("./coach");
 const createNotificationsRouter = require("./notifications");
-const GmailWebhookHandler = require("./gmail-webhooks");
-const { authenticateAPI } = require("../middleware/auth");
+const createKidEventsRouter = require("./kid-events");
 
 function createApiRouter(
   database,
   logger,
   scheduler = null,
-  registrationAutomator = null,
   unifiedNotifications = null
 ) {
   const router = express.Router();
 
   router.use("/events", eventsRouter);
   router.use("/dashboard", dashboardRouter);
-  router.use(
-    "/automation",
-    createAutomationRouter(database, scheduler, registrationAutomator)
-  );
+  router.use("/automation", createAutomationRouter(database, scheduler));
   router.use("/admin", adminRouter);
   router.use("/family", familyRouter);
-  router.use("/chatgpt-event-discoveries", chatgptEventDiscoveriesRouter);
   router.use("/health", createHealthRouter(database, logger));
   router.use("/exercise", createExerciseRouter(database, logger));
   router.use("/calendar", createCalendarRouter(database, logger));
@@ -52,21 +45,7 @@ function createApiRouter(
   router.use("/sleep", createSleepRouter(database, logger));
   router.use("/coach", createCoachRouter(database, logger));
   router.use("/notifications", createNotificationsRouter(database, logger));
-
-  // Gmail webhook routes - DISABLED for minimal server mode
-  // if (logger) {
-  //   const gmailWebhookHandler = new GmailWebhookHandler(
-  //     logger,
-  //     database,
-  //     unifiedNotifications
-  //   );
-  //   gmailWebhookHandler.init().catch((err) => {
-  //     logger.error("Failed to initialize Gmail webhook handler:", err);
-  //   });
-  //   router.use("/webhooks", gmailWebhookHandler.createRouter());
-  // }
-
-  logger.info("📧 Gmail webhooks disabled (minimal mode)");
+  router.use("/kid-events", createKidEventsRouter(database, logger));
 
   router.get("/status", (req, res) => {
     res.json({
@@ -77,77 +56,10 @@ function createApiRouter(
     });
   });
 
-  router.post("/scrape", authenticateAPI, async (req, res) => {
-    try {
-      const { scraperManager, logger } = req.app.locals;
-      const source = req.body.source;
-
-      let events;
-      if (source) {
-        events = await scraperManager.scrapeSource(source);
-      } else {
-        events = await scraperManager.scrapeAll();
-      }
-
-      res.json({
-        success: true,
-        message: `Scraping completed${source ? ` for ${source}` : ""}`,
-        eventsFound: events.length,
-      });
-    } catch (error) {
-      req.app.locals.logger.error("Error during manual scrape:", error.message);
-      res.status(500).json({
-        success: false,
-        error: "Scraping failed",
-      });
-    }
-  });
-
-  router.post("/score", authenticateAPI, async (req, res) => {
-    try {
-      const { database, eventScorer, logger } = req.app.locals;
-
-      const events = await database.getEventsByStatus("discovered");
-      const scoredEvents = await eventScorer.scoreEvents(events);
-
-      res.json({
-        success: true,
-        message: "Events scored successfully",
-        eventCount: scoredEvents.length,
-      });
-    } catch (error) {
-      req.app.locals.logger.error("Error during scoring:", error.message);
-      res.status(500).json({
-        success: false,
-        error: "Scoring failed",
-      });
-    }
-  });
-
-  router.post("/process-approvals", authenticateAPI, async (req, res) => {
-    try {
-      const { registrationAutomator, logger } = req.app.locals;
-
-      const results = await registrationAutomator.processApprovedEvents();
-
-      res.json({
-        success: true,
-        message: "Approved events processed",
-        results,
-      });
-    } catch (error) {
-      req.app.locals.logger.error("Error processing approvals:", error.message);
-      res.status(500).json({
-        success: false,
-        error: "Failed to process approvals",
-      });
-    }
-  });
-
   // Twilio webhook endpoint for incoming SMS messages
   router.post("/sms-webhook", async (req, res) => {
     try {
-      const { smsManager, registrationAutomator, logger } = req.app.locals;
+      const { smsManager, logger } = req.app.locals;
 
       // Extract Twilio webhook parameters
       const { From: from, Body: body, MessageSid: messageId } = req.body;
@@ -167,32 +79,20 @@ function createApiRouter(
       );
 
       if (result) {
-        // Immediately process approved events if SMS was approved
         if (result.approved) {
           logger.info(
-            `🚀 Immediately processing approved event: ${result.eventTitle}`
+            `🚀 Processing approved event: ${result.eventTitle}`
           );
 
           try {
-            // Process the specific approved event
             await smsManager.processApprovedEvent(
               result.eventId,
               result.approvalId
             );
-
-            // If it's a free event, trigger registration automation immediately
-            if (!result.requiresPayment) {
-              const registrationResults =
-                await registrationAutomator.processApprovedEvents();
-              logger.info(
-                `Registration automation triggered: ${registrationResults.length} events processed`
-              );
-            }
           } catch (processingError) {
             logger.error(
               `Error in immediate processing: ${processingError.message}`
             );
-            // Don't fail the webhook - the scheduled task will pick it up
           }
         }
 

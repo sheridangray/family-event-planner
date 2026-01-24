@@ -178,51 +178,11 @@ export const api = {
   getAutomationStatus: (): Promise<any> =>
     apiRequest('/automation/status'),
 
-  getDiscoveryProgress: (): Promise<any> =>
-    apiRequest('/automation/discovery-progress'),
-
-  runDiscovery: (): Promise<{ success: boolean; message: string; timestamp: string }> =>
-    apiRequest('/automation/run-discovery', { method: 'POST' }),
-
-  getScrapers: (timeRange?: string): Promise<any[]> => {
-    const params = timeRange ? `?timeRange=${timeRange}` : '';
-    return apiRequest(`/automation/scrapers${params}`);
-  },
-
-  toggleScraper: (scraperId: number): Promise<{ success: boolean; enabled: boolean; message: string }> =>
-    apiRequest(`/automation/scrapers/${scraperId}/toggle`, { method: 'POST' }),
-
-  runScraper: (scraperId: number): Promise<{ success: boolean; message: string; timestamp: string }> =>
-    apiRequest(`/automation/scrapers/${scraperId}/run`, { method: 'POST' }),
-
   getAutomationActivity: (): Promise<any[]> =>
     apiRequest('/automation/activity'),
 
   getSystemHealth: (): Promise<any> =>
     apiRequest('/automation/health'),
-
-  getAutomationRules: (): Promise<any[]> =>
-    apiRequest('/automation/rules'),
-
-  getScraperRuns: (limit?: number): Promise<any[]> => {
-    const params = limit ? `?limit=${limit}` : '';
-    return apiRequest(`/automation/scraper-runs${params}`);
-  },
-
-  getDiscoveryRunEvents: (runId: number): Promise<any[]> =>
-    apiRequest(`/automation/discovery-run/${runId}/events`),
-
-  getLatestDiscoveryRun: (): Promise<any> =>
-    apiRequest('/automation/latest-discovery-run'),
-
-  deleteScraper: (scraperId: number): Promise<{ success: boolean; message: string }> =>
-    apiRequest(`/automation/scrapers/${scraperId}`, { method: 'DELETE' }),
-
-  submitScraperRequest: (domain: string, description?: string): Promise<{ success: boolean; message: string; requestId: number }> =>
-    apiRequest('/automation/scraper-requests', {
-      method: 'POST',
-      body: JSON.stringify({ domain, description }),
-    }),
 
   // Admin/MCP endpoints
   getMcpStatus: (): Promise<any> =>

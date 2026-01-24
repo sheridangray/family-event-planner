@@ -272,18 +272,29 @@ class ExerciseService {
 
       for (const tweak of tweaks) {
         const { exercise, suggested } = tweak;
-        const { sets, reps } = suggested;
+        const { sets, reps, reps_min, reps_max } = suggested;
+
+        // Determine min/max reps from suggestion, handling both old 'reps' field and new min/max fields
+        const finalRepsMin = reps_min !== undefined ? reps_min : reps;
+        const finalRepsMax = reps_max !== undefined ? reps_max : reps;
 
         // Update target_sets and target_reps for the specific exercise in the routine
         // We match by exercise name (case-insensitive)
         await this.database.query(
           `UPDATE routine_exercises 
            SET target_sets = COALESCE($1, target_sets),
-               target_reps_max = COALESCE($2, target_reps_max),
+               target_reps_min = COALESCE($2, target_reps_min),
+               target_reps_max = COALESCE($3, target_reps_max),
                updated_at = NOW()
-           WHERE routine_id = $3 
-           AND LOWER(exercise_name) = LOWER($4)`,
-          [sets || null, reps || null, routineId, exercise]
+           WHERE routine_id = $4 
+           AND LOWER(exercise_name) = LOWER($5)`,
+          [
+            sets || null,
+            finalRepsMin || null,
+            finalRepsMax || null,
+            routineId,
+            exercise,
+          ]
         );
       }
 
@@ -405,8 +416,13 @@ class ExerciseService {
         notes,
         difficultyRating,
         performedAt,
+        startedAt,
+        started_at,
+        endedAt,
+        ended_at,
         source = "manual",
         syncState = "synced",
+        user_id,
       } = entryData;
 
       // Ensure exercise exists or name is provided
@@ -437,8 +453,9 @@ class ExerciseService {
           uuid, log_id, exercise_id, exercise_name, exercise_order, 
           equipment_used, sets_performed, sets, reps_performed, weight_used, 
           duration_seconds, notes, difficulty_rating, performed_at,
+          started_at, ended_at,
           source, sync_state, user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING *`,
         [
           uuid || null,
@@ -455,9 +472,11 @@ class ExerciseService {
           notes || null,
           difficultyRating || null,
           performedAt || new Date(),
+          startedAt || started_at || null,
+          endedAt || ended_at || null,
           source,
           syncState,
-          userId || null,
+          userId || user_id || null,
         ]
       );
 
@@ -1508,6 +1527,14 @@ class ExerciseService {
       if (updates.exerciseOrder !== undefined) {
         fields.push(`exercise_order = $${paramIndex++}`);
         values.push(updates.exerciseOrder);
+      }
+      if (updates.startedAt !== undefined || updates.started_at !== undefined) {
+        fields.push(`started_at = $${paramIndex++}`);
+        values.push(updates.startedAt || updates.started_at);
+      }
+      if (updates.endedAt !== undefined || updates.ended_at !== undefined) {
+        fields.push(`ended_at = $${paramIndex++}`);
+        values.push(updates.endedAt || updates.ended_at);
       }
 
       if (fields.length === 0) {

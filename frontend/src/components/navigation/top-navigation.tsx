@@ -8,17 +8,11 @@ import { format } from "date-fns";
 import { WeatherDisplay } from "./weather-display";
 import { 
   HomeIcon, 
-  CalendarIcon, 
   Cog6ToothIcon,
-  ChartBarIcon,
   ListBulletIcon,
-  WrenchScrewdriverIcon,
-  BeakerIcon,
   ChevronDownIcon,
   Bars3Icon,
   XMarkIcon,
-  ShieldCheckIcon,
-  SparklesIcon,
   HeartIcon
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
@@ -35,7 +29,6 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, current: false },
   { name: 'Events', href: '/dashboard/events', icon: ListBulletIcon, current: false },
   { name: 'Health', href: '/dashboard/health', icon: HeartIcon, current: false },
-  { name: 'ChatGPT Suggestions', href: '/dashboard/chatgpt-suggestions', icon: SparklesIcon, current: false },
 ];
 
 export function TopNavigation({ user }: TopNavigationProps) {

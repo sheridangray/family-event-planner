@@ -129,7 +129,7 @@ class LLMAgeEvaluator {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 30000 // 30 second timeout for longer responses
+        timeout: 120000 // 120 second timeout for longer responses
       });
 
       return response.data.choices[0].message.content;

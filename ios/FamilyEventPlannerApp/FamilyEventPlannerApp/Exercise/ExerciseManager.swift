@@ -349,15 +349,23 @@ class ExerciseManager: ObservableObject {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let result = try decoder.decode(WorkoutSessionResponse.self, from: data)
+        let updatedWorkout = result.data
+        
+        // If completed, save to Apple Health
+        if status == .completed {
+            Task {
+                try? await HealthKitManager.shared.saveWorkoutToHealthKit(workout: updatedWorkout)
+            }
+        }
         
         // Update local state
         await MainActor.run {
             if let index = activeSessions.firstIndex(where: { $0.id == workoutId }) {
-                activeSessions[index] = result.data
+                activeSessions[index] = updatedWorkout
             }
         }
         
-        return result.data
+        return updatedWorkout
     }
     
     /// Fetch AI analysis for a workout

@@ -184,15 +184,19 @@ struct StartExerciseView: View {
                                     .foregroundColor(.secondary)
                                     .frame(maxWidth: .infinity)
                                 
-                                Text(labels.1)
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity)
+                                if !labels.1.isEmpty {
+                                    Text(labels.1)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .frame(maxWidth: .infinity)
+                                }
                                 
-                                Text(labels.2)
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity)
+                                if !labels.2.isEmpty {
+                                    Text(labels.2)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .frame(maxWidth: .infinity)
+                                }
                                 
                                 // Spacer to align with the delete button column
                                 Spacer().frame(width: 44)
@@ -346,8 +350,10 @@ struct StartExerciseView: View {
                  focusedField = .distance(0)
              case .time, .machineCardio, .mobility:
                  focusedField = .duration(0)
+             case .bodyweight:
+                 focusedField = .reps(0)
              default:
-                 // Default to weight for strength exercises
+                 // Default to weight for strength exercises (Weighted, Cable Machine, Band Assisted)
                  focusedField = .weight(0)
              }
         }
@@ -456,7 +462,7 @@ struct StartExerciseView: View {
                 Text("\(reps)")
                     .fontWeight(.semibold)
                 
-                if let weight = set.weight {
+                if let weight = set.weight, weight > 0 || (exercise.exerciseType != .bodyweight && weight == 0) {
                     Text("×")
                         .font(.caption2)
                         .foregroundColor(color.opacity(0.6))
@@ -486,6 +492,10 @@ struct StartExerciseSetRowView: View {
     var focusedField: FocusState<StartExerciseView.Field?>.Binding
     @State private var durationMinutes: Int?
     var onDelete: (() -> Void)?
+    
+    var labels: (String, String, String) {
+        exerciseType.metricLabels
+    }
     
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -567,130 +577,134 @@ struct StartExerciseSetRowView: View {
             .frame(maxWidth: .infinity)
 
             // COLUMN 2 (Secondary Metric)
-            VStack(spacing: 4) {
-                switch exerciseType {
-                case .weighted, .time, .bodyweight, .mobility, .cableMachine:
-                    // Weight (Optional for some)
-                    TextField("0", value: $set.weight, format: .number)
-                        .keyboardType(.decimalPad)
-                    .focused(focusedField, equals: .weight(index))
-                    .submitLabel(.next)
-                    .onSubmit { focusedField.wrappedValue = .rest(index) }
-                    .font(.system(size: 20, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .frame(height: 44)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(8)
-                    Text("lbs")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        
-                case .bandAssisted:
-                    // Band Level (could be Picker, using Text for now or just string input)
-                    TextField("-", text: Binding(
-                        get: { set.bandLevel ?? "" },
-                        set: { set.bandLevel = $0 }
-                    ))
-                    .focused(focusedField, equals: .bandLevel(index))
-                    .submitLabel(.next)
-                    .onSubmit { focusedField.wrappedValue = .rest(index) }
-                    .font(.system(size: 18, weight: .medium))
-                        .multilineTextAlignment(.center)
-                        .frame(height: 44)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(8)
-                    Text("band")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        
-                case .distanceTime, .machineCardio:
-                    // Duration (for distance) or Calories/Intensity?
-                    // Labels said: DistanceTime -> Duration (col 2)
-                    // Labels said: MachineCardio -> Calories (col 2)
-                    
-                    if exerciseType == .distanceTime {
-                        // Duration input
-                        TextField("0", value: Binding(
-                            get: { durationMinutes },
-                            set: { 
-                                durationMinutes = $0
-                                if let minutes = $0 {
-                                    set.duration = minutes * 60
-                                } else {
-                                    set.duration = nil
-                                }
-                            }
-                        ), format: .number)
-                            .keyboardType(.numberPad)
-                        .focused(focusedField, equals: .duration(index))
+            if !labels.1.isEmpty {
+                VStack(spacing: 4) {
+                    switch exerciseType {
+                    case .weighted, .time, .bodyweight, .mobility, .cableMachine:
+                        // Weight (Optional for some)
+                        TextField("0", value: $set.weight, format: .number)
+                            .keyboardType(.decimalPad)
+                        .focused(focusedField, equals: .weight(index))
                         .submitLabel(.next)
-                        .onSubmit { focusedField.wrappedValue = .heartRate(index) }
+                        .onSubmit { focusedField.wrappedValue = .rest(index) }
                         .font(.system(size: 20, weight: .semibold))
                             .multilineTextAlignment(.center)
                             .frame(height: 44)
                             .background(Color(.systemBackground))
                             .cornerRadius(8)
-                         Text("min")
+                        Text("lbs")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                    } else {
-                        // Calories
-                        TextField("0", value: $set.calories, format: .number)
-                            .keyboardType(.numberPad)
-                        .focused(focusedField, equals: .calories(index))
+                            
+                    case .bandAssisted:
+                        // Band Level (could be Picker, using Text for now or just string input)
+                        TextField("-", text: Binding(
+                            get: { set.bandLevel ?? "" },
+                            set: { set.bandLevel = $0 }
+                        ))
+                        .focused(focusedField, equals: .bandLevel(index))
                         .submitLabel(.next)
-                        .onSubmit { focusedField.wrappedValue = .heartRate(index) }
-                        .font(.system(size: 20, weight: .semibold))
+                        .onSubmit { focusedField.wrappedValue = .rest(index) }
+                        .font(.system(size: 18, weight: .medium))
                             .multilineTextAlignment(.center)
                             .frame(height: 44)
                             .background(Color(.systemBackground))
                             .cornerRadius(8)
-                        Text("cals")
+                        Text("band")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            
+                    case .distanceTime, .machineCardio:
+                        // Duration (for distance) or Calories/Intensity?
+                        // Labels said: DistanceTime -> Duration (col 2)
+                        // Labels said: MachineCardio -> Calories (col 2)
+                        
+                        if exerciseType == .distanceTime {
+                            // Duration input
+                            TextField("0", value: Binding(
+                                get: { durationMinutes },
+                                set: { 
+                                    durationMinutes = $0
+                                    if let minutes = $0 {
+                                        set.duration = minutes * 60
+                                    } else {
+                                        set.duration = nil
+                                    }
+                                }
+                            ), format: .number)
+                                .keyboardType(.numberPad)
+                            .focused(focusedField, equals: .duration(index))
+                            .submitLabel(.next)
+                            .onSubmit { focusedField.wrappedValue = .heartRate(index) }
+                            .font(.system(size: 20, weight: .semibold))
+                                .multilineTextAlignment(.center)
+                                .frame(height: 44)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(8)
+                             Text("min")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            // Calories
+                            TextField("0", value: $set.calories, format: .number)
+                                .keyboardType(.numberPad)
+                            .focused(focusedField, equals: .calories(index))
+                            .submitLabel(.next)
+                            .onSubmit { focusedField.wrappedValue = .heartRate(index) }
+                            .font(.system(size: 20, weight: .semibold))
+                                .multilineTextAlignment(.center)
+                                .frame(height: 44)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(8)
+                            Text("cals")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                    default:
+                        Spacer()
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            // COLUMN 3 (Tertiary/Rest)
+            if !labels.2.isEmpty {
+                VStack(spacing: 4) {
+                    switch exerciseType {
+                    case .distanceTime, .machineCardio:
+                        // Heart Rate
+                        TextField("0", value: $set.heartRate, format: .number)
+                            .keyboardType(.numberPad)
+                            .focused(focusedField, equals: .heartRate(index))
+                            .submitLabel(.done)
+                            .font(.system(size: 20, weight: .semibold))
+                            .multilineTextAlignment(.center)
+                            .frame(height: 44)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(8)
+                        Text("bpm")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            
+                    default:
+                        // Rest
+                        TextField("0", value: $set.restSeconds, format: .number)
+                            .keyboardType(.numberPad)
+                            .focused(focusedField, equals: .rest(index))
+                            .submitLabel(.done)
+                            .font(.system(size: 20, weight: .semibold))
+                            .multilineTextAlignment(.center)
+                            .frame(height: 44)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(8)
+                        Text("rest")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
-                default:
-                    Spacer()
                 }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
-
-            // COLUMN 3 (Tertiary/Rest)
-            VStack(spacing: 4) {
-                switch exerciseType {
-                case .distanceTime, .machineCardio:
-                    // Heart Rate
-                    TextField("0", value: $set.heartRate, format: .number)
-                        .keyboardType(.numberPad)
-                        .focused(focusedField, equals: .heartRate(index))
-                        .submitLabel(.done)
-                        .font(.system(size: 20, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .frame(height: 44)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(8)
-                    Text("bpm")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        
-                default:
-                    // Rest
-                    TextField("0", value: $set.restSeconds, format: .number)
-                        .keyboardType(.numberPad)
-                        .focused(focusedField, equals: .rest(index))
-                        .submitLabel(.done)
-                        .font(.system(size: 20, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .frame(height: 44)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(8)
-                    Text("rest")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity)
             
             // Delete button
             if let onDelete = onDelete {

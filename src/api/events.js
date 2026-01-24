@@ -231,43 +231,6 @@ router.post('/:id/reject', authenticateAPI, async (req, res) => {
   }
 });
 
-router.post('/:id/register', authenticateAPI, async (req, res) => {
-  try {
-    const { database, logger, registrationAutomator } = req.app.locals;
-    const eventId = req.params.id;
-    
-    const events = await database.getEventsByStatus('approved');
-    const event = events.find(e => e.id === eventId);
-    
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        error: 'Event not found or not approved'
-      });
-    }
-    
-    if (event.cost > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Cannot auto-register for paid events'
-      });
-    }
-    
-    const result = await registrationAutomator.registerForEvent(event);
-    
-    res.json({
-      success: true,
-      message: 'Registration completed successfully',
-      result
-    });
-  } catch (error) {
-    req.app.locals.logger.error(`Error registering for event ${req.params.id}:`, error.message);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
 
 router.post('/:id/calendar', authenticateAPI, async (req, res) => {
   try {

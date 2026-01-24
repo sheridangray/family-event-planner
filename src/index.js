@@ -7,17 +7,8 @@ const path = require("path");
 // Core components
 const { config, validateConfig } = require("./config");
 const Database = require("./database");
-// const ScraperManager = require("./scrapers");
-// const EventFilter = require("./filters");
-// const EventScorer = require("./scoring");
 const ExerciseService = require("./services/exercise-service");
 const { NotificationService, PushNotificationProvider, EmailNotificationProvider } = require("./services/notification-service");
-// const FamilyDemographicsService = require("./services/family-demographics");
-// const CalendarManager = require("./services/calendar-manager");
-// CalendarConflictChecker functionality is integrated into GmailClient
-// const { SMSApprovalManager } = require("./mcp/twilio");
-// const UnifiedNotificationService = require("./services/unified-notification");
-// const RegistrationAutomator = require("./automation/registration");
 const TaskScheduler = require("./scheduler");
 
 // Safety and error handling
@@ -168,13 +159,6 @@ async function initializeComponents() {
     const scheduler = new TaskScheduler(
       logger,
       database,
-      null, // scraperManager
-      null, // eventScorer
-      null, // eventFilter
-      null, // smsManager
-      null, // registrationAutomator
-      null, // calendarManager
-      null, // unifiedNotifications
       exerciseService,
       notificationService
     );
@@ -186,9 +170,7 @@ async function initializeComponents() {
     const apiRouter = createApiRouter(
       database,
       logger,
-      scheduler,
-      null, // registrationAutomator
-      null // unifiedNotifications
+      scheduler
     );
     app.use("/api", apiRouter);
     logger.info("🚀 API router mounted at /api");

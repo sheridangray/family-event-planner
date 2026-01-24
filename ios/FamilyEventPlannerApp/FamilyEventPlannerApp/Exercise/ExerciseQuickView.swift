@@ -5,19 +5,32 @@ struct ExerciseQuickView: View {
     @EnvironmentObject var exerciseManager: ExerciseManager
     
     var body: some View {
-        // Today's routine card
-        if let todayRoutine = exerciseManager.todayRoutine {
-            NavigationLink(destination: ExerciseView()
-                .environmentObject(exerciseManager)) {
-                ExerciseRoutineCard(routine: todayRoutine)
+        Group {
+            // Today's routine card
+            if let todayRoutine = exerciseManager.todayRoutine {
+                NavigationLink(destination: ExerciseView()
+                    .environmentObject(exerciseManager)) {
+                    ExerciseRoutineCard(routine: todayRoutine)
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                NavigationLink(destination: ExerciseView()
+                    .environmentObject(exerciseManager)) {
+                    ExerciseEmptyCard()
+                }
+                .buttonStyle(PlainButtonStyle())
             }
-            .buttonStyle(PlainButtonStyle())
-        } else {
-            NavigationLink(destination: ExerciseView()
-                .environmentObject(exerciseManager)) {
-                ExerciseEmptyCard()
+        }
+        .task {
+            // Fetch routines if not already loaded to show today's routine correctly on first load
+            if exerciseManager.routines.isEmpty {
+                try? await exerciseManager.fetchRoutines()
             }
-            .buttonStyle(PlainButtonStyle())
+            
+            // Fetch recent history to ensure "Logged today" status is accurate
+            if exerciseManager.activeSessions.isEmpty {
+                try? await exerciseManager.fetchWorkoutHistory(days: 7)
+            }
         }
     }
 }
@@ -87,8 +100,9 @@ struct ExerciseRoutineCard: View {
         .task {
             do {
                 hasLogged = try await exerciseManager.hasLoggedToday()
+                checkingLogged = false
             } catch {
-                // Ignore errors
+                checkingLogged = false
             }
         }
     }
