@@ -1,9 +1,6 @@
 import { AutomationHeader } from "@/components/automation/automation-header";
 import { LLMEventScanner } from "@/components/automation/llm-event-scanner";
-
-// Note: This page shows Discovery & Email Approval workflow, not auto-approval
 import { LatestDiscoveryRun } from "@/components/automation/latest-discovery-run";
-import { ScrapersManagement } from "@/components/automation/scrapers-management";
 import { RecentActivity } from "@/components/automation/recent-activity";
 import { SystemHealth } from "@/components/automation/system-health";
 import { Suspense } from "react";
@@ -28,13 +25,6 @@ export default function EventsPage() {
             <SystemHealth />
           </Suspense>
         </div>
-      </div>
-
-      {/* Middle Section - Scrapers Management */}
-      <div className="mb-6">
-        <Suspense fallback={<div className="animate-pulse bg-white rounded-lg h-96"></div>}>
-          <ScrapersManagement />
-        </Suspense>
       </div>
 
       {/* Bottom Section - Recent Activity */}
