@@ -320,12 +320,12 @@ struct DiscoveryConfig: CustomStringConvertible {
     var daysAhead: Int = 14
     var ageMin: Int = 0
     var ageMax: Int = 12
-    var enableSerp: Bool = true
+    var enableSerp: Bool = true  // Uses Brave Search API
     var enableEventbrite: Bool = false  // Disabled by default (Eventbrite API deprecated in 2019)
     var enableNewsletters: Bool = true
     
     var description: String {
-        "location=\(location), radius=\(radiusMiles)mi, days=\(daysAhead), ages=\(ageMin)-\(ageMax), serp=\(enableSerp), eventbrite=\(enableEventbrite), newsletters=\(enableNewsletters)"
+        "location=\(location), radius=\(radiusMiles)mi, days=\(daysAhead), ages=\(ageMin)-\(ageMax), webSearch=\(enableSerp), eventbrite=\(enableEventbrite), newsletters=\(enableNewsletters)"
     }
 }
 
@@ -611,7 +611,7 @@ struct DiscoverySheet: View {
                 
                 // Sources Section
                 Section {
-                    Toggle("Google Search", isOn: $config.enableSerp)
+                    Toggle("Web Search", isOn: $config.enableSerp)
                     Toggle("Email Newsletters", isOn: $config.enableNewsletters)
                     
                     HStack {
@@ -623,7 +623,7 @@ struct DiscoverySheet: View {
                 } header: {
                     Text("Event Sources")
                 } footer: {
-                    Text("Eventbrite's public API was deprecated in 2019. Eventbrite events can still be found via Google Search.")
+                    Text("Web search uses Brave Search API to find kid events across the internet.")
                 }
                 
                 // Status Section

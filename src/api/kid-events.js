@@ -183,8 +183,7 @@ function createKidEventsRouter(database, logger) {
 
       console.log('📨 [API] Final config:', JSON.stringify(config, null, 2));
       console.log('📨 [API] Environment check:');
-      console.log('   - GOOGLE_CUSTOM_SEARCH_API_KEY:', !!process.env.GOOGLE_CUSTOM_SEARCH_API_KEY);
-      console.log('   - GOOGLE_CSE_ID:', !!process.env.GOOGLE_CSE_ID);
+      console.log('   - BRAVE_SEARCH_API_KEY:', !!process.env.BRAVE_SEARCH_API_KEY);
       console.log('   - EVENTBRITE_API_KEY:', !!process.env.EVENTBRITE_API_KEY);
       console.log('   - OPENAI_API_KEY:', !!process.env.OPENAI_API_KEY || !!process.env.OPEN_AI_API_KEY);
       

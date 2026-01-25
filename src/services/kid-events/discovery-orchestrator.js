@@ -8,7 +8,7 @@
  * 4. Save to database
  */
 
-const { SerpSource, EventbriteSource, NewsletterSource } = require('./sources');
+const { BraveSearchSource, EventbriteSource, NewsletterSource } = require('./sources');
 const { LLMExtractor, ProbabilisticFilter } = require('./processing');
 const axios = require('axios');
 
@@ -18,7 +18,8 @@ class DiscoveryOrchestrator {
     this.database = database;
     
     // Initialize sources
-    this.serpSource = new SerpSource(logger, config);
+    // Using Brave Search API (Google Custom Search API closed to new customers)
+    this.braveSource = new BraveSearchSource(logger, config);
     this.eventbriteSource = new EventbriteSource(logger, config);
     this.newsletterSource = new NewsletterSource(logger, database, config);
     
@@ -28,14 +29,14 @@ class DiscoveryOrchestrator {
     
     // Configuration
     // Note: Eventbrite API was deprecated in 2019, disabled by default
-    // Eventbrite events can still be found via SERP + LLM extraction
+    // Eventbrite events can still be found via web search + LLM extraction
     this.config = {
       location: config.location || 'San Francisco, CA',
       radiusMiles: config.radiusMiles || 25,
       daysAhead: config.daysAhead || 14,
       ageMin: config.ageMin,
       ageMax: config.ageMax,
-      enableSerp: config.enableSerp !== false,
+      enableSerp: config.enableSerp !== false, // Keep same flag name for iOS compatibility
       enableEventbrite: config.enableEventbrite === true, // Disabled by default (API deprecated)
       enableNewsletters: config.enableNewsletters !== false,
       ...config
@@ -75,25 +76,25 @@ class DiscoveryOrchestrator {
       // Step 1: Fetch from all sources in parallel
       console.log('📡 [Discovery] Step 1: Fetching from sources...');
       
-      const [serpResults, eventbriteResults, newsletterResults] = await Promise.all([
-        runConfig.enableSerp ? this.fetchSerp(runConfig) : [],
+      const [braveResults, eventbriteResults, newsletterResults] = await Promise.all([
+        runConfig.enableSerp ? this.fetchBraveSearch(runConfig) : [],
         runConfig.enableEventbrite ? this.fetchEventbrite(runConfig) : [],
         runConfig.enableNewsletters ? this.fetchNewsletters(runConfig) : []
       ]);
 
       console.log('📊 [Discovery] Source results:');
-      console.log('   - SERP:', serpResults.length, 'results');
+      console.log('   - Web Search (Brave):', braveResults.length, 'results');
       console.log('   - Eventbrite:', eventbriteResults.length, 'events');
       console.log('   - Newsletters:', newsletterResults.length, 'emails');
       
-      results.bySource.serp = serpResults.length;
+      results.bySource.webSearch = braveResults.length;
       results.bySource.eventbrite = eventbriteResults.length;
       results.bySource.newsletter = newsletterResults.length;
 
-      // Step 2: Process SERP results (need LLM extraction)
-      console.log('🤖 [Discovery] Step 2: Processing SERP results with LLM...');
-      const processedSerp = await this.processSerp(serpResults);
-      console.log('🤖 [Discovery] SERP LLM extracted:', processedSerp.length, 'events');
+      // Step 2: Process web search results (need LLM extraction)
+      console.log('🤖 [Discovery] Step 2: Processing web search results with LLM...');
+      const processedWebSearch = await this.processWebSearch(braveResults);
+      console.log('🤖 [Discovery] Web search LLM extracted:', processedWebSearch.length, 'events');
       
       // Step 3: Process newsletters (need LLM extraction)
       console.log('📧 [Discovery] Step 3: Processing newsletters with LLM...');
@@ -102,7 +103,7 @@ class DiscoveryOrchestrator {
       
       // Eventbrite already has structured data
       const allEvents = [
-        ...processedSerp,
+        ...processedWebSearch,
         ...eventbriteResults,
         ...processedNewsletters
       ];
@@ -154,15 +155,15 @@ class DiscoveryOrchestrator {
   }
 
   /**
-   * Fetch from SERP source
+   * Fetch from Brave Search source
    */
-  async fetchSerp(config) {
+  async fetchBraveSearch(config) {
     try {
-      const results = await this.serpSource.search(config);
-      this.logger.info(`SERP returned ${results.length} results`);
+      const results = await this.braveSource.search(config);
+      this.logger.info(`Brave Search returned ${results.length} results`);
       return results;
     } catch (error) {
-      this.logger.error('SERP fetch failed:', error.message);
+      this.logger.error('Brave Search fetch failed:', error.message);
       return [];
     }
   }
@@ -196,9 +197,9 @@ class DiscoveryOrchestrator {
   }
 
   /**
-   * Process SERP results with LLM extraction
+   * Process web search results with LLM extraction
    */
-  async processSerp(results) {
+  async processWebSearch(results) {
     const processed = [];
     
     for (const result of results) {
