@@ -33,12 +33,16 @@ function createCalendarRouter(database, logger) {
       logger.info(`Storing calendar tokens for user ${userId}`);
 
       // Store tokens in database
+      // Note: expires_at from iOS is a Unix timestamp (seconds), convert to milliseconds
+      // and ensure it's an integer for PostgreSQL bigint column
+      const expiryMs = expires_at ? Math.floor(Number(expires_at) * 1000) : null;
+      
       await database.postgres.saveOAuthTokens(userId, "google", {
         access_token,
         refresh_token: refresh_token || null,
         token_type: "Bearer",
         scope: scope || "",
-        expiry_date: expires_at ? expires_at * 1000 : null,
+        expiry_date: expiryMs,
       });
 
       logger.info(`✅ Calendar connected for user ${userId}`);
@@ -136,13 +140,18 @@ function createCalendarRouter(database, logger) {
             const { credentials } = await oauth2Client.refreshAccessToken();
 
             // Store new tokens in database
+            // Ensure expiry_date is an integer for PostgreSQL bigint column
+            const refreshExpiryMs = credentials.expiry_date 
+              ? Math.floor(Number(credentials.expiry_date)) 
+              : null;
+              
             await database.postgres.saveOAuthTokens(userId, "google", {
               access_token: credentials.access_token,
               refresh_token:
                 credentials.refresh_token || tokenData.refresh_token,
               token_type: credentials.token_type || "Bearer",
               scope: credentials.scope || tokenData.scope,
-              expiry_date: credentials.expiry_date || null,
+              expiry_date: refreshExpiryMs,
             });
 
             logger.info(`✅ Calendar token refreshed for user ${userId}`);
