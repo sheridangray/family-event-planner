@@ -8,6 +8,8 @@
 		<string>com.sheridangray.FamilyEventPlanner.currentDayHealthSync</string>
 		<string>com.sheridangray.FamilyEventPlanner.notificationCheck</string>
 	</array>
+	<key>GIDClientID</key>
+	<string>584799141962-cbnd0u748aup2m0da500o7d2hig4cqth.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
