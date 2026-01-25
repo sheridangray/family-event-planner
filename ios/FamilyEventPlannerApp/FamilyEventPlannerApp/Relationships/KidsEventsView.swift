@@ -3,7 +3,7 @@ import Combine
 
 // MARK: - Models
 struct KidEvent: Identifiable, Codable {
-    let id: Int
+    let id: String
     let title: String
     let description: String?
     let date: String?
@@ -197,7 +197,7 @@ class KidsEventsViewModel: ObservableObject {
         }
     }
     
-    func updateEventStatus(eventId: Int, status: String) async {
+    func updateEventStatus(eventId: String, status: String) async {
         log("Updating event \(eventId) status to: \(status)")
         
         do {
@@ -220,7 +220,7 @@ class KidsEventsViewModel: ObservableObject {
         }
     }
     
-    func rateEvent(eventId: Int, rating: Int, notes: String?) async {
+    func rateEvent(eventId: String, rating: Int, notes: String?) async {
         log("Rating event \(eventId): \(rating) stars")
         
         do {
