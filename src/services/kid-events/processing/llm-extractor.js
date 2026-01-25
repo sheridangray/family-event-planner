@@ -29,6 +29,7 @@ class LLMExtractor {
    */
   async extract(source) {
     if (!this.apiKey) {
+      console.log('   ❌ [LLM] Missing OPENAI_API_KEY');
       this.logger.warn('LLM Extractor: Missing OPENAI_API_KEY');
       return null;
     }
@@ -38,19 +39,26 @@ class LLMExtractor {
       const cleanContent = this.cleanContent(source.htmlContent || source.snippet || '');
       
       if (cleanContent.length < 50) {
+        console.log(`   ⚠️  [LLM] Content too short after cleaning: ${cleanContent.length} chars`);
         return null;
       }
+      
+      console.log(`   📝 [LLM] Cleaned content: ${cleanContent.length} chars, sending to GPT...`);
 
       const prompt = this.buildExtractionPrompt(cleanContent, source);
       const response = await this.callOpenAI(prompt);
       
       if (!response) {
+        console.log('   ❌ [LLM] No response from OpenAI');
         return null;
       }
+      
+      console.log(`   📄 [LLM] Got response: ${response.substring(0, 100)}...`);
 
       const extracted = this.parseResponse(response, source);
       return extracted;
     } catch (error) {
+      console.log(`   ❌ [LLM] Extraction error: ${error.message}`);
       this.logger.error('LLM extraction failed:', error.message);
       return null;
     }
@@ -177,14 +185,26 @@ If no events found, return empty array: []`;
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000
       });
 
       return response.data.choices[0]?.message?.content;
     } catch (error) {
       if (error.response?.status === 429) {
+        console.log('   ⏳ [LLM] Rate limited, waiting 5s...');
         this.logger.warn('OpenAI rate limited, waiting...');
         await this.sleep(5000);
+        // Retry once after rate limit
+        return this.callOpenAI(prompt);
+      }
+      if (error.response?.status) {
+        console.log(`   ❌ [LLM] OpenAI API error: HTTP ${error.response.status}`);
+        if (error.response.data?.error?.message) {
+          console.log(`   ❌ [LLM] Message: ${error.response.data.error.message}`);
+        }
+      } else if (error.code === 'ECONNABORTED') {
+        console.log('   ⏱️  [LLM] OpenAI request timeout');
       }
       throw error;
     }
@@ -206,15 +226,17 @@ If no events found, return empty array: []`;
       if (cleaned.endsWith('```')) {
         cleaned = cleaned.slice(0, -3);
       }
+      cleaned = cleaned.trim();
 
       const data = JSON.parse(cleaned);
       
       if (!data.isEvent || data.isEvent === false) {
+        console.log('   ℹ️  [LLM] Page is not an event (isEvent: false)');
         return null;
       }
 
       return {
-        sourceType: source.sourceType || 'serp',
+        sourceType: source.sourceType || 'brave',
         sourceUrl: source.url || source.sourceUrl,
         
         title: data.title,
@@ -243,6 +265,8 @@ If no events found, return empty array: []`;
         rawContent: source.snippet || source.htmlContent?.substring(0, 1000)
       };
     } catch (error) {
+      console.log(`   ❌ [LLM] JSON parse error: ${error.message}`);
+      console.log(`   ❌ [LLM] Raw response: ${response.substring(0, 200)}...`);
       this.logger.warn('Failed to parse LLM response:', error.message);
       return null;
     }

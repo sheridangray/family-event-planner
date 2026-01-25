@@ -201,12 +201,31 @@ class DiscoveryOrchestrator {
    */
   async processWebSearch(results) {
     const processed = [];
+    let fetchSuccessCount = 0;
+    let fetchFailCount = 0;
+    let extractSuccessCount = 0;
+    let extractFailCount = 0;
+    let notEventCount = 0;
     
-    for (const result of results) {
+    console.log(`🤖 [LLM] Processing ${results.length} URLs...`);
+    
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      
       try {
+        console.log(`🤖 [LLM] [${i + 1}/${results.length}] Fetching: ${result.url}`);
+        
         // Fetch page content
         const content = await this.fetchPageContent(result.url);
-        if (!content) continue;
+        if (!content) {
+          console.log(`⚠️  [LLM] [${i + 1}] Fetch failed or empty content`);
+          fetchFailCount++;
+          continue;
+        }
+        
+        fetchSuccessCount++;
+        const contentLength = content.length;
+        console.log(`✅ [LLM] [${i + 1}] Fetched ${contentLength} chars`);
         
         // Extract event data
         const extracted = await this.extractor.extract({
@@ -215,12 +234,26 @@ class DiscoveryOrchestrator {
         });
         
         if (extracted) {
+          console.log(`✅ [LLM] [${i + 1}] Extracted event: "${extracted.title}" (confidence: ${extracted.extractionConfidence})`);
+          extractSuccessCount++;
           processed.push(extracted);
+        } else {
+          console.log(`⚠️  [LLM] [${i + 1}] Not an event or extraction failed`);
+          notEventCount++;
         }
       } catch (error) {
+        console.log(`❌ [LLM] [${i + 1}] Error: ${error.message}`);
+        extractFailCount++;
         this.logger.warn(`Failed to process ${result.url}:`, error.message);
       }
     }
+    
+    console.log(`🤖 [LLM] ========== EXTRACTION SUMMARY ==========`);
+    console.log(`🤖 [LLM] Total URLs: ${results.length}`);
+    console.log(`🤖 [LLM] Fetch success: ${fetchSuccessCount}, fail: ${fetchFailCount}`);
+    console.log(`🤖 [LLM] Events extracted: ${extractSuccessCount}`);
+    console.log(`🤖 [LLM] Not events: ${notEventCount}`);
+    console.log(`🤖 [LLM] Extraction errors: ${extractFailCount}`);
     
     return processed;
   }
@@ -244,18 +277,29 @@ class DiscoveryOrchestrator {
   }
 
   /**
-   * Fetch page content for SERP results
+   * Fetch page content for web search results
    */
   async fetchPageContent(url) {
     try {
       const response = await axios.get(url, {
-        timeout: 10000,
+        timeout: 15000,
+        maxRedirects: 5,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; FamilyEventBot/1.0)'
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5'
         }
       });
       return response.data;
     } catch (error) {
+      // Log specific error types for debugging
+      if (error.code === 'ECONNABORTED') {
+        console.log(`   ⏱️  Timeout after 15s`);
+      } else if (error.response?.status) {
+        console.log(`   🚫 HTTP ${error.response.status}`);
+      } else if (error.code) {
+        console.log(`   ❌ ${error.code}`);
+      }
       return null;
     }
   }
