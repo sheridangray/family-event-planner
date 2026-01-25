@@ -266,7 +266,8 @@ class KidsEventsViewModel: ObservableObject {
                 "ageMax": config.ageMax,
                 "enableSerp": config.enableSerp,
                 "enableEventbrite": config.enableEventbrite,
-                "enableNewsletters": config.enableNewsletters
+                "enableNewsletters": config.enableNewsletters,
+                "maxUrls": config.maxUrls
             ]
             
             log("Request body: \(body)")
@@ -323,9 +324,10 @@ struct DiscoveryConfig: CustomStringConvertible {
     var enableSerp: Bool = true  // Uses Brave Search API
     var enableEventbrite: Bool = false  // Disabled by default (Eventbrite API deprecated in 2019)
     var enableNewsletters: Bool = true
+    var maxUrls: Int = 5  // Limit URLs to process (for debugging)
     
     var description: String {
-        "location=\(location), radius=\(radiusMiles)mi, days=\(daysAhead), ages=\(ageMin)-\(ageMax), webSearch=\(enableSerp), eventbrite=\(enableEventbrite), newsletters=\(enableNewsletters)"
+        "location=\(location), radius=\(radiusMiles)mi, days=\(daysAhead), ages=\(ageMin)-\(ageMax), webSearch=\(enableSerp), eventbrite=\(enableEventbrite), newsletters=\(enableNewsletters), maxUrls=\(maxUrls)"
     }
 }
 
@@ -624,6 +626,15 @@ struct DiscoverySheet: View {
                     Text("Event Sources")
                 } footer: {
                     Text("Web search uses Brave Search API to find kid events across the internet.")
+                }
+                
+                // Debug Section
+                Section {
+                    Stepper("Max URLs to process: \(config.maxUrls)", value: $config.maxUrls, in: 1...50)
+                } header: {
+                    Text("Debug Options")
+                } footer: {
+                    Text("Limit URLs processed for faster debugging. Set higher for production use.")
                 }
                 
                 // Status Section

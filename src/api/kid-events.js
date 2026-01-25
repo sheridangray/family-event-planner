@@ -166,7 +166,8 @@ function createKidEventsRouter(database, logger) {
         ageMax,
         enableSerp = true,
         enableEventbrite = true,
-        enableNewsletters = true
+        enableNewsletters = true,
+        maxUrls = 5  // Default to 5 for faster debugging
       } = req.body;
 
       const config = {
@@ -178,6 +179,7 @@ function createKidEventsRouter(database, logger) {
         enableSerp,
         enableEventbrite,
         enableNewsletters,
+        maxUrls: Math.min(maxUrls, 50),  // Cap at 50 max
         triggerType: 'on_demand'
       };
 

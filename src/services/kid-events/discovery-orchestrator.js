@@ -39,6 +39,7 @@ class DiscoveryOrchestrator {
       enableSerp: config.enableSerp !== false, // Keep same flag name for iOS compatibility
       enableEventbrite: config.enableEventbrite === true, // Disabled by default (API deprecated)
       enableNewsletters: config.enableNewsletters !== false,
+      maxUrls: config.maxUrls || 5, // Limit URLs to process (for debugging)
       ...config
     };
   }
@@ -207,10 +208,14 @@ class DiscoveryOrchestrator {
     let extractFailCount = 0;
     let notEventCount = 0;
     
-    console.log(`🤖 [LLM] Processing ${results.length} URLs...`);
+    // Limit URLs to process based on config
+    const maxUrls = this.config.maxUrls || 5;
+    const urlsToProcess = results.slice(0, maxUrls);
     
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
+    console.log(`🤖 [LLM] Processing ${urlsToProcess.length} URLs (max: ${maxUrls}, available: ${results.length})...`);
+    
+    for (let i = 0; i < urlsToProcess.length; i++) {
+      const result = urlsToProcess[i];
       
       try {
         console.log(`🤖 [LLM] [${i + 1}/${results.length}] Fetching: ${result.url}`);
@@ -249,7 +254,7 @@ class DiscoveryOrchestrator {
     }
     
     console.log(`🤖 [LLM] ========== EXTRACTION SUMMARY ==========`);
-    console.log(`🤖 [LLM] Total URLs: ${results.length}`);
+    console.log(`🤖 [LLM] URLs available: ${results.length}, processed: ${urlsToProcess.length} (max: ${maxUrls})`);
     console.log(`🤖 [LLM] Fetch success: ${fetchSuccessCount}, fail: ${fetchFailCount}`);
     console.log(`🤖 [LLM] Events extracted: ${extractSuccessCount}`);
     console.log(`🤖 [LLM] Not events: ${notEventCount}`);
