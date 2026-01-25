@@ -9,6 +9,7 @@ struct KidEvent: Identifiable, Codable {
     let date: String?
     let startTime: String?
     let venue: String?
+    let address: String?
     let city: String?
     let cost: KidEventCost?
     let ageRange: KidEventAgeRange?
@@ -142,14 +143,26 @@ class KidsEventsViewModel: ObservableObject {
             var urlComponents = URLComponents(string: "\(apiBaseURL)/kid-events")!
             var queryItems: [URLQueryItem] = []
             
+            // Date formatter for API
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            let today = dateFormatter.string(from: Date())
+            
             switch selectedFilter {
             case .free:
                 queryItems.append(URLQueryItem(name: "cost", value: "free"))
             case .saved:
                 queryItems.append(URLQueryItem(name: "status", value: "saved"))
+                queryItems.append(URLQueryItem(name: "excludePast", value: "false"))
             case .thisWeek:
-                break
+                // From today to end of week (next Sunday)
+                let calendar = Calendar.current
+                let endOfWeek = calendar.date(byAdding: .day, value: 7 - calendar.component(.weekday, from: Date()) + 1, to: Date()) ?? Date()
+                let endDate = dateFormatter.string(from: endOfWeek)
+                queryItems.append(URLQueryItem(name: "dateFrom", value: today))
+                queryItems.append(URLQueryItem(name: "dateTo", value: endDate))
             case .all:
+                // Backend excludes past events by default
                 break
             }
             
@@ -413,7 +426,30 @@ struct KidsEventsView: View {
             } else {
                 List {
                     ForEach(viewModel.events) { event in
-                        KidEventCard(event: event, viewModel: viewModel)
+                        NavigationLink(destination: KidEventDetailView(event: event, viewModel: viewModel)) {
+                            KidEventCard(event: event)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task {
+                                    await viewModel.updateEventStatus(eventId: event.id, status: "dismissed")
+                                    await viewModel.fetchEvents()
+                                }
+                            } label: {
+                                Label("Dismiss", systemImage: "xmark")
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button {
+                                Task {
+                                    await viewModel.updateEventStatus(eventId: event.id, status: "saved")
+                                    await viewModel.fetchEvents()
+                                }
+                            } label: {
+                                Label("Save", systemImage: "bookmark.fill")
+                            }
+                            .tint(.orange)
+                        }
                     }
                 }
                 .listStyle(.plain)
@@ -451,19 +487,23 @@ struct KidsEventsView: View {
 // MARK: - Event Card
 struct KidEventCard: View {
     let event: KidEvent
-    @ObservedObject var viewModel: KidsEventsViewModel
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Title & Score
+        VStack(alignment: .leading, spacing: 10) {
+            // Title & Status/Score
             HStack {
                 Text(event.title)
                     .font(.headline)
                     .lineLimit(2)
+                    .foregroundColor(.primary)
                 
                 Spacer()
                 
-                if let score = event.relevanceScore {
+                if event.status == "saved" {
+                    Image(systemName: "bookmark.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                } else if let score = event.relevanceScore {
                     Text("\(Int(score * 100))%")
                         .font(.caption)
                         .padding(.horizontal, 8)
@@ -496,43 +536,8 @@ struct KidEventCard: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
-            
-            // Action Buttons
-            HStack(spacing: 12) {
-                Button(action: {
-                    Task {
-                        await viewModel.updateEventStatus(eventId: event.id, status: "saved")
-                    }
-                }) {
-                    Label("Save", systemImage: event.status == "saved" ? "bookmark.fill" : "bookmark")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .tint(event.status == "saved" ? .orange : .gray)
-                
-                Button(action: {
-                    Task {
-                        await viewModel.updateEventStatus(eventId: event.id, status: "dismissed")
-                    }
-                }) {
-                    Label("Not Interested", systemImage: "xmark")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .tint(.gray)
-                
-                Spacer()
-                
-                if let url = event.sourceUrl, let sourceUrl = URL(string: url) {
-                    Link(destination: sourceUrl) {
-                        Label("Details", systemImage: "arrow.up.right")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
     }
     
     private func scoreColor(_ score: Double) -> Color {

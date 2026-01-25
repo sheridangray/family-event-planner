@@ -19,26 +19,61 @@ function createKidEventsRouter(database, logger) {
         limit = 20,
         offset = 0,
         minScore = 0,
-        sortBy = 'relevance_score'
+        sortBy = 'relevance_score',
+        dateFrom,
+        dateTo,
+        cost,
+        excludePast = 'true'  // Exclude past events by default
       } = req.query;
 
       const validSortFields = ['relevance_score', 'event_date', 'discovered_at'];
       const sortField = validSortFields.includes(sortBy) ? sortBy : 'relevance_score';
       const sortDir = sortField === 'relevance_score' ? 'DESC' : 'ASC';
 
+      // Build dynamic WHERE clause
+      let whereClause = 'WHERE status = $1 AND (relevance_score IS NULL OR relevance_score >= $2)';
+      const params = [status, parseFloat(minScore)];
+      let paramIndex = 3;
+
+      // Exclude past events by default (unless viewing saved/attended)
+      const skipPastFilter = ['saved', 'attended', 'dismissed'].includes(status);
+      if (excludePast === 'true' && !skipPastFilter) {
+        whereClause += ` AND (event_date IS NULL OR event_date >= CURRENT_DATE)`;
+      }
+
+      // Date range filters
+      if (dateFrom) {
+        whereClause += ` AND (event_date IS NULL OR event_date >= $${paramIndex})`;
+        params.push(dateFrom);
+        paramIndex++;
+      }
+      if (dateTo) {
+        whereClause += ` AND (event_date IS NULL OR event_date <= $${paramIndex})`;
+        params.push(dateTo);
+        paramIndex++;
+      }
+
+      // Cost filter
+      if (cost === 'free') {
+        whereClause += ` AND (is_free = true OR (cost_adult IS NULL OR cost_adult = 0))`;
+      }
+
+      // Add pagination params
+      params.push(parseInt(limit), parseInt(offset));
+
       const result = await database.query(`
         SELECT * FROM kid_events
-        WHERE status = $1
-        AND (relevance_score IS NULL OR relevance_score >= $2)
+        ${whereClause}
         ORDER BY ${sortField} ${sortDir} NULLS LAST
-        LIMIT $3 OFFSET $4
-      `, [status, parseFloat(minScore), parseInt(limit), parseInt(offset)]);
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `, params);
 
+      // Count query (without pagination params)
+      const countParams = params.slice(0, -2);
       const countResult = await database.query(`
         SELECT COUNT(*) as total FROM kid_events
-        WHERE status = $1
-        AND (relevance_score IS NULL OR relevance_score >= $2)
-      `, [status, parseFloat(minScore)]);
+        ${whereClause}
+      `, countParams);
 
       res.json({
         success: true,
@@ -84,7 +119,7 @@ function createKidEventsRouter(database, logger) {
   router.patch('/:id/status', authenticateFlexible, async (req, res) => {
     try {
       const { status } = req.body;
-      const validStatuses = ['discovered', 'interested', 'approved', 'rejected', 'attended'];
+      const validStatuses = ['discovered', 'saved', 'dismissed', 'interested', 'approved', 'rejected', 'attended'];
 
       if (!validStatuses.includes(status)) {
         return res.status(400).json({
