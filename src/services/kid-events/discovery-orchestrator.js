@@ -204,9 +204,10 @@ class DiscoveryOrchestrator {
     const processed = [];
     let fetchSuccessCount = 0;
     let fetchFailCount = 0;
-    let extractSuccessCount = 0;
+    let totalEventsExtracted = 0;
+    let urlsWithEvents = 0;
+    let urlsWithoutEvents = 0;
     let extractFailCount = 0;
-    let notEventCount = 0;
     
     // Limit URLs to process based on config
     const maxUrls = this.config.maxUrls || 5;
@@ -218,36 +219,44 @@ class DiscoveryOrchestrator {
       const result = urlsToProcess[i];
       
       try {
-        console.log(`🤖 [LLM] [${i + 1}/${results.length}] Fetching: ${result.url}`);
+        console.log(`🤖 [LLM] [${i + 1}/${urlsToProcess.length}] Fetching: ${result.url}`);
         
         // Fetch page content
         const content = await this.fetchPageContent(result.url);
         if (!content) {
-          console.log(`⚠️  [LLM] [${i + 1}] Fetch failed or empty content`);
+          console.log(`   ⚠️  [LLM] Fetch failed or empty content`);
           fetchFailCount++;
           continue;
         }
         
         fetchSuccessCount++;
         const contentLength = content.length;
-        console.log(`✅ [LLM] [${i + 1}] Fetched ${contentLength} chars`);
+        console.log(`   ✅ [LLM] Fetched ${contentLength} chars`);
         
-        // Extract event data
-        const extracted = await this.extractor.extract({
+        // Extract event data (now returns array)
+        const extractedEvents = await this.extractor.extract({
           ...result,
           htmlContent: content
         });
         
-        if (extracted) {
-          console.log(`✅ [LLM] [${i + 1}] Extracted event: "${extracted.title}" (confidence: ${extracted.extractionConfidence})`);
-          extractSuccessCount++;
-          processed.push(extracted);
+        if (extractedEvents && extractedEvents.length > 0) {
+          if (extractedEvents.length === 1) {
+            console.log(`   ✅ [LLM] Extracted 1 event: "${extractedEvents[0].title}" (confidence: ${extractedEvents[0].extractionConfidence})`);
+          } else {
+            console.log(`   ✅ [LLM] Extracted ${extractedEvents.length} events from this page:`);
+            extractedEvents.forEach((e, idx) => {
+              console.log(`      ${idx + 1}. "${e.title}" (confidence: ${e.extractionConfidence})`);
+            });
+          }
+          totalEventsExtracted += extractedEvents.length;
+          urlsWithEvents++;
+          processed.push(...extractedEvents);
         } else {
-          console.log(`⚠️  [LLM] [${i + 1}] Not an event or extraction failed`);
-          notEventCount++;
+          console.log(`   ⚠️  [LLM] No events found on this page`);
+          urlsWithoutEvents++;
         }
       } catch (error) {
-        console.log(`❌ [LLM] [${i + 1}] Error: ${error.message}`);
+        console.log(`   ❌ [LLM] Error: ${error.message}`);
         extractFailCount++;
         this.logger.warn(`Failed to process ${result.url}:`, error.message);
       }
@@ -256,8 +265,8 @@ class DiscoveryOrchestrator {
     console.log(`🤖 [LLM] ========== EXTRACTION SUMMARY ==========`);
     console.log(`🤖 [LLM] URLs available: ${results.length}, processed: ${urlsToProcess.length} (max: ${maxUrls})`);
     console.log(`🤖 [LLM] Fetch success: ${fetchSuccessCount}, fail: ${fetchFailCount}`);
-    console.log(`🤖 [LLM] Events extracted: ${extractSuccessCount}`);
-    console.log(`🤖 [LLM] Not events: ${notEventCount}`);
+    console.log(`🤖 [LLM] URLs with events: ${urlsWithEvents}, without: ${urlsWithoutEvents}`);
+    console.log(`🤖 [LLM] Total events extracted: ${totalEventsExtracted}`);
     console.log(`🤖 [LLM] Extraction errors: ${extractFailCount}`);
     
     return processed;

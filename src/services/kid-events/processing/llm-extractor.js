@@ -25,13 +25,13 @@ class LLMExtractor {
   /**
    * Extract event information from content
    * @param {Object} source - Source data with URL and content
-   * @returns {Promise<Object>} Extracted event data with confidence
+   * @returns {Promise<Array>} Array of extracted events (may contain 0, 1, or multiple events)
    */
   async extract(source) {
     if (!this.apiKey) {
       console.log('   ❌ [LLM] Missing OPENAI_API_KEY');
       this.logger.warn('LLM Extractor: Missing OPENAI_API_KEY');
-      return null;
+      return [];
     }
 
     try {
@@ -40,7 +40,7 @@ class LLMExtractor {
       
       if (cleanContent.length < 50) {
         console.log(`   ⚠️  [LLM] Content too short after cleaning: ${cleanContent.length} chars`);
-        return null;
+        return [];
       }
       
       console.log(`   📝 [LLM] Cleaned content: ${cleanContent.length} chars, sending to GPT...`);
@@ -50,7 +50,7 @@ class LLMExtractor {
       
       if (!response) {
         console.log('   ❌ [LLM] No response from OpenAI');
-        return null;
+        return [];
       }
       
       console.log(`   📄 [LLM] Got response: ${response.substring(0, 100)}...`);
@@ -60,7 +60,7 @@ class LLMExtractor {
     } catch (error) {
       console.log(`   ❌ [LLM] Extraction error: ${error.message}`);
       this.logger.error('LLM extraction failed:', error.message);
-      return null;
+      return [];
     }
   }
 
@@ -97,19 +97,23 @@ class LLMExtractor {
   }
 
   /**
-   * Build extraction prompt for single event
+   * Build extraction prompt for events (handles single or multiple)
    */
   buildExtractionPrompt(content, source) {
     return `Extract kid-friendly event information from this webpage content.
-If this is NOT an event page, return {"isEvent": false}.
+
+RULES:
+- If this page has NO events, return: {"isEvent": false}
+- If this page has ONE event, return a single JSON object
+- If this page has MULTIPLE events (like an event calendar or roundup), return a JSON ARRAY of events
 
 WEBPAGE URL: ${source.url || source.sourceUrl || 'Unknown'}
 CONTENT:
 ${content.substring(0, 4000)}
 
-Return a JSON object with EXACTLY these fields:
+For each event, use this structure:
 {
-  "isEvent": true/false,
+  "isEvent": true,
   "title": "Event title",
   "description": "Brief description (max 200 chars)",
   "date": "YYYY-MM-DD or null",
@@ -123,6 +127,7 @@ Return a JSON object with EXACTLY these fields:
   "isFree": true/false,
   "ageMin": number or null,
   "ageMax": number or null,
+  "eventUrl": "Direct URL to this specific event or null",
   "registrationUrl": "URL or null",
   "confidence": 0.0-1.0
 }
@@ -211,7 +216,9 @@ If no events found, return empty array: []`;
   }
 
   /**
-   * Parse LLM response into structured event
+   * Parse LLM response into structured events
+   * Handles both single event objects and arrays of events
+   * @returns {Array} Array of extracted events
    */
   parseResponse(response, source) {
     try {
@@ -230,46 +237,65 @@ If no events found, return empty array: []`;
 
       const data = JSON.parse(cleaned);
       
+      // Handle array of events (e.g., event roundup articles)
+      if (Array.isArray(data)) {
+        const events = data.filter(item => item.isEvent !== false);
+        if (events.length === 0) {
+          console.log('   ℹ️  [LLM] Array response but no valid events');
+          return [];
+        }
+        console.log(`   📋 [LLM] Found ${events.length} events in array response`);
+        return events.map(event => this.formatEvent(event, source));
+      }
+      
+      // Handle single event object
       if (!data.isEvent || data.isEvent === false) {
         console.log('   ℹ️  [LLM] Page is not an event (isEvent: false)');
-        return null;
+        return [];
       }
 
-      return {
-        sourceType: source.sourceType || 'brave',
-        sourceUrl: source.url || source.sourceUrl,
-        
-        title: data.title,
-        description: data.description,
-        eventDate: data.date,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        
-        venueName: data.venueName,
-        address: data.address,
-        city: data.city || 'San Francisco',
-        
-        costAdult: data.costAdult,
-        costChild: data.costChild,
-        isFree: data.isFree || false,
-        
-        ageMin: data.ageMin,
-        ageMax: data.ageMax,
-        
-        eventUrl: source.url || source.sourceUrl,
-        registrationUrl: data.registrationUrl,
-        
-        extractionConfidence: data.confidence || 0.5,
-        extractionModel: this.model,
-        
-        rawContent: source.snippet || source.htmlContent?.substring(0, 1000)
-      };
+      return [this.formatEvent(data, source)];
     } catch (error) {
       console.log(`   ❌ [LLM] JSON parse error: ${error.message}`);
       console.log(`   ❌ [LLM] Raw response: ${response.substring(0, 200)}...`);
       this.logger.warn('Failed to parse LLM response:', error.message);
-      return null;
+      return [];
     }
+  }
+  
+  /**
+   * Format a single event object into the standard structure
+   */
+  formatEvent(data, source) {
+    return {
+      sourceType: source.sourceType || 'brave',
+      sourceUrl: source.url || source.sourceUrl,
+      
+      title: data.title,
+      description: data.description,
+      eventDate: data.date,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      
+      venueName: data.venueName,
+      address: data.address,
+      city: data.city || 'San Francisco',
+      
+      costAdult: data.costAdult,
+      costChild: data.costChild,
+      isFree: data.isFree || false,
+      
+      ageMin: data.ageMin,
+      ageMax: data.ageMax,
+      
+      eventUrl: data.eventUrl || source.url || source.sourceUrl,
+      registrationUrl: data.registrationUrl,
+      
+      extractionConfidence: data.confidence || 0.5,
+      extractionModel: this.model,
+      
+      rawContent: source.snippet || source.htmlContent?.substring(0, 1000)
+    };
   }
 
   /**
