@@ -202,7 +202,8 @@ function createKidEventsRouter(database, logger) {
         enableSerp = true,
         enableEventbrite = true,
         enableNewsletters = true,
-        maxUrls = 5  // Default to 5 for faster debugging
+        maxUrls = 5,  // Default to 5 for faster debugging
+        useCache = true  // Use URL content cache by default
       } = req.body;
 
       const config = {
@@ -215,6 +216,7 @@ function createKidEventsRouter(database, logger) {
         enableEventbrite,
         enableNewsletters,
         maxUrls: Math.min(maxUrls, 50),  // Cap at 50 max
+        useCache,
         triggerType: 'on_demand'
       };
 
@@ -273,6 +275,52 @@ function createKidEventsRouter(database, logger) {
     } catch (error) {
       logger.error('Error fetching discovery runs:', error.message);
       res.status(500).json({ success: false, error: 'Failed to fetch discovery runs' });
+    }
+  });
+
+  // Get cache stats
+  router.get('/cache/stats', authenticateFlexible, async (req, res) => {
+    try {
+      const stats = await database.query(`
+        SELECT 
+          COUNT(*) as total_entries,
+          COUNT(*) FILTER (WHERE fetch_status = 'success') as success_count,
+          COUNT(*) FILTER (WHERE fetch_status = 'error') as error_count,
+          SUM(content_length) as total_bytes,
+          MIN(fetched_at) as oldest_entry,
+          MAX(fetched_at) as newest_entry
+        FROM url_content_cache
+        WHERE expires_at > NOW()
+      `);
+
+      res.json({
+        success: true,
+        data: {
+          ...stats.rows[0],
+          total_mb: stats.rows[0].total_bytes ? (parseInt(stats.rows[0].total_bytes) / 1024 / 1024).toFixed(2) : '0'
+        }
+      });
+    } catch (error) {
+      // Table might not exist yet
+      res.json({
+        success: true,
+        data: { total_entries: 0, message: 'Cache table not initialized' }
+      });
+    }
+  });
+
+  // Clear cache
+  router.delete('/cache', authenticateFlexible, async (req, res) => {
+    try {
+      const result = await database.query('DELETE FROM url_content_cache');
+      
+      res.json({
+        success: true,
+        message: `Cleared ${result.rowCount} cached entries`
+      });
+    } catch (error) {
+      logger.error('Error clearing cache:', error.message);
+      res.status(500).json({ success: false, error: 'Failed to clear cache' });
     }
   });
 

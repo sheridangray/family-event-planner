@@ -11,6 +11,7 @@
 const { BraveSearchSource, EventbriteSource, NewsletterSource } = require('./sources');
 const { LLMExtractor, ProbabilisticFilter } = require('./processing');
 const axios = require('axios');
+const crypto = require('crypto');
 
 class DiscoveryOrchestrator {
   constructor(logger, database, config = {}) {
@@ -40,8 +41,66 @@ class DiscoveryOrchestrator {
       enableEventbrite: config.enableEventbrite === true, // Disabled by default (API deprecated)
       enableNewsletters: config.enableNewsletters !== false,
       maxUrls: config.maxUrls || 5, // Limit URLs to process (for debugging)
+      useCache: config.useCache !== false, // Use URL content cache by default
       ...config
     };
+  }
+
+  /**
+   * Generate hash for URL (used as cache key)
+   */
+  hashUrl(url) {
+    return crypto.createHash('md5').update(url).digest('hex');
+  }
+
+  /**
+   * Get cached content for a URL
+   */
+  async getCachedContent(url) {
+    if (!this.config.useCache) return null;
+    
+    try {
+      const urlHash = this.hashUrl(url);
+      const result = await this.database.query(
+        `SELECT html_content, fetch_status FROM url_content_cache 
+         WHERE url_hash = $1 AND expires_at > NOW() AND fetch_status = 'success'`,
+        [urlHash]
+      );
+      
+      if (result.rows.length > 0) {
+        return result.rows[0].html_content;
+      }
+      return null;
+    } catch (error) {
+      // Cache miss or table doesn't exist yet
+      return null;
+    }
+  }
+
+  /**
+   * Save content to cache
+   */
+  async cacheContent(url, content, status = 'success', errorMessage = null) {
+    if (!this.config.useCache) return;
+    
+    try {
+      const urlHash = this.hashUrl(url);
+      await this.database.query(
+        `INSERT INTO url_content_cache (url_hash, url, html_content, content_length, fetch_status, error_message)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (url_hash) DO UPDATE SET
+           html_content = $3,
+           content_length = $4,
+           fetch_status = $5,
+           error_message = $6,
+           fetched_at = NOW(),
+           expires_at = NOW() + INTERVAL '7 days'`,
+        [urlHash, url, content, content?.length || 0, status, errorMessage]
+      );
+    } catch (error) {
+      // Silently fail cache writes - not critical
+      this.logger.warn('Failed to cache content:', error.message);
+    }
   }
 
   /**
@@ -291,9 +350,16 @@ class DiscoveryOrchestrator {
   }
 
   /**
-   * Fetch page content for web search results
+   * Fetch page content for web search results (with caching)
    */
   async fetchPageContent(url) {
+    // Check cache first
+    const cached = await this.getCachedContent(url);
+    if (cached) {
+      console.log(`   📦 [Cache] HIT - ${cached.length} chars`);
+      return cached;
+    }
+    
     try {
       const response = await axios.get(url, {
         timeout: 15000,
@@ -304,16 +370,30 @@ class DiscoveryOrchestrator {
           'Accept-Language': 'en-US,en;q=0.5'
         }
       });
-      return response.data;
+      
+      const content = response.data;
+      
+      // Cache successful fetch
+      await this.cacheContent(url, content, 'success');
+      
+      return content;
     } catch (error) {
       // Log specific error types for debugging
+      let errorMessage = error.message;
       if (error.code === 'ECONNABORTED') {
         console.log(`   ⏱️  Timeout after 15s`);
+        errorMessage = 'timeout';
       } else if (error.response?.status) {
         console.log(`   🚫 HTTP ${error.response.status}`);
+        errorMessage = `HTTP ${error.response.status}`;
       } else if (error.code) {
         console.log(`   ❌ ${error.code}`);
+        errorMessage = error.code;
       }
+      
+      // Cache the failure too (to avoid retrying known-bad URLs)
+      await this.cacheContent(url, null, 'error', errorMessage);
+      
       return null;
     }
   }
