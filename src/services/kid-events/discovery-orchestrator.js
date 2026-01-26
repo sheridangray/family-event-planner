@@ -31,10 +31,17 @@ class DiscoveryOrchestrator {
     // Configuration
     // Note: Eventbrite API was deprecated in 2019, disabled by default
     // Eventbrite events can still be found via web search + LLM extraction
+    
+    // Calculate default dates if not provided
+    const today = new Date();
+    const defaultEndDate = new Date(today);
+    defaultEndDate.setDate(defaultEndDate.getDate() + 14);
+    
     this.config = {
       location: config.location || 'San Francisco, CA',
       radiusMiles: config.radiusMiles || 25,
-      daysAhead: config.daysAhead || 14,
+      startDate: config.startDate || today.toISOString().split('T')[0],
+      endDate: config.endDate || defaultEndDate.toISOString().split('T')[0],
       ageMin: config.ageMin,
       ageMax: config.ageMax,
       enableSerp: config.enableSerp !== false, // Keep same flag name for iOS compatibility

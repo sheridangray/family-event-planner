@@ -63,7 +63,14 @@ class LLMExtractor {
       console.log(`   📄 [LLM] Got response: ${response.substring(0, 100)}...`);
 
       const extracted = this.parseResponse(response, source);
-      return extracted;
+      
+      // Post-processing: filter out past events (safety net if LLM ignores date instructions)
+      const filtered = this.filterPastEvents(extracted);
+      if (filtered.length < extracted.length) {
+        console.log(`   🗓️  [LLM] Filtered out ${extracted.length - filtered.length} past events`);
+      }
+      
+      return filtered;
     } catch (error) {
       console.log(`   ❌ [LLM] Extraction error: ${error.message}`);
       this.logger.error('LLM extraction failed:', error.message);
@@ -107,10 +114,24 @@ class LLMExtractor {
    * Build extraction prompt for events (handles single or multiple)
    */
   buildExtractionPrompt(content, source) {
+    // Get date range from config (passed during construction or via source)
+    const startDate = this.config.startDate || source.startDate || new Date().toISOString().split('T')[0];
+    const endDate = this.config.endDate || source.endDate || (() => {
+      const d = new Date();
+      d.setDate(d.getDate() + 14);
+      return d.toISOString().split('T')[0];
+    })();
+    
     return `Extract kid-friendly event information from this webpage content.
 
+IMPORTANT DATE FILTER:
+- Today's date is ${new Date().toISOString().split('T')[0]}
+- ONLY extract events happening between ${startDate} and ${endDate}
+- SKIP any events that have already passed (dates before today)
+- If an event has no clear date, still include it but set date to null
+
 RULES:
-- If this page has NO events, return: {"isEvent": false}
+- If this page has NO relevant events in the date range, return: {"isEvent": false}
 - If this page has ONE event, return a single JSON object
 - If this page has MULTIPLE events (like an event calendar or roundup), return a JSON ARRAY of events
 
@@ -147,8 +168,20 @@ Return ONLY valid JSON, no explanation.`;
    * Build extraction prompt for newsletter with multiple events
    */
   buildNewsletterPrompt(content, newsletter) {
+    // Get date range from config
+    const startDate = this.config.startDate || new Date().toISOString().split('T')[0];
+    const endDate = this.config.endDate || (() => {
+      const d = new Date();
+      d.setDate(d.getDate() + 14);
+      return d.toISOString().split('T')[0];
+    })();
+    
     return `Extract ALL kid-friendly events mentioned in this newsletter.
-For each event, extract as much information as possible.
+
+IMPORTANT DATE FILTER:
+- Today's date is ${new Date().toISOString().split('T')[0]}
+- ONLY extract events happening between ${startDate} and ${endDate}
+- SKIP any events that have already passed
 
 NEWSLETTER FROM: ${newsletter.from}
 SUBJECT: ${newsletter.subject}
@@ -424,6 +457,31 @@ If no events found, return empty array: []`;
       this.logger.warn('Failed to parse newsletter response:', error.message);
       return [];
     }
+  }
+
+  /**
+   * Filter out events with past dates
+   * Events with null dates are kept (we can't determine if they're past)
+   */
+  filterPastEvents(events) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get start date from config if available
+    const startDate = this.config.startDate ? new Date(this.config.startDate + 'T00:00:00') : today;
+    
+    return events.filter(event => {
+      // Keep events with no date (can't determine if past)
+      if (!event.eventDate) {
+        return true;
+      }
+      
+      // Parse event date
+      const eventDate = new Date(event.eventDate + 'T00:00:00');
+      
+      // Keep if event date is on or after start date
+      return eventDate >= startDate;
+    });
   }
 
   /**

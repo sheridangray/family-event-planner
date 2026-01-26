@@ -83,39 +83,95 @@ class BraveSearchSource {
    * Build search queries based on configuration
    */
   buildSearchQueries(config) {
-    const { location, ageMin, ageMax, daysAhead } = config;
+    const { location, ageMin, ageMax, startDate, endDate } = config;
     
-    // Calculate date range
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + daysAhead);
+    // Parse dates from config (they come as YYYY-MM-DD strings)
+    const start = startDate ? new Date(startDate + 'T00:00:00') : new Date();
+    const end = endDate ? new Date(endDate + 'T00:00:00') : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     
-    const dateStr = this.formatDateRange(startDate, endDate);
+    // Generate multiple date query formats for better coverage
+    const dateQueries = this.generateDateQueries(start, end);
     
     // Build age-appropriate queries
     const queries = [];
     
+    // Use the primary date query format for main searches
+    const primaryDateStr = dateQueries.primary;
+    
     // Base query for kids events
-    queries.push(`kids events ${location} ${dateStr}`);
-    queries.push(`family activities ${location} ${dateStr}`);
+    queries.push(`kids events ${location} ${primaryDateStr}`);
+    queries.push(`family activities ${location} ${primaryDateStr}`);
     
     // Age-specific queries
     if (ageMin !== undefined && ageMax !== undefined) {
       if (ageMin <= 3) {
-        queries.push(`toddler events ${location} ${dateStr}`);
+        queries.push(`toddler events ${location} ${primaryDateStr}`);
       }
       if (ageMin <= 5 && ageMax >= 3) {
-        queries.push(`preschool activities ${location} ${dateStr}`);
+        queries.push(`preschool activities ${location} ${primaryDateStr}`);
       }
       if (ageMax >= 5 && ageMax <= 12) {
-        queries.push(`kids activities ${location} ${dateStr}`);
+        queries.push(`kids activities ${location} ${primaryDateStr}`);
       }
     }
     
     // Free events query
-    queries.push(`free kids events ${location} ${dateStr}`);
+    queries.push(`free kids events ${location} ${primaryDateStr}`);
+    
+    // Add alternative date format queries for better coverage
+    if (dateQueries.weekend) {
+      queries.push(`kids events ${location} ${dateQueries.weekend}`);
+    }
+    if (dateQueries.alternative) {
+      queries.push(`family events ${location} ${dateQueries.alternative}`);
+    }
     
     return queries;
+  }
+  
+  /**
+   * Generate multiple date query formats for better search coverage
+   */
+  generateDateQueries(startDate, endDate) {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const startMonth = months[startDate.getMonth()];
+    const endMonth = months[endDate.getMonth()];
+    const startDay = startDate.getDate();
+    const endDay = endDate.getDate();
+    const year = startDate.getFullYear();
+    
+    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    
+    const result = {
+      primary: null,
+      alternative: null,
+      weekend: null
+    };
+    
+    // Primary: specific date range (e.g., "January 26 - February 9 2026")
+    if (startMonth === endMonth) {
+      result.primary = `${startMonth} ${startDay}-${endDay} ${year}`;
+    } else {
+      result.primary = `${startMonth} ${startDay} - ${endMonth} ${endDay} ${year}`;
+    }
+    
+    // Alternative: month-based for broader results
+    if (startMonth === endMonth) {
+      result.alternative = `${startMonth} ${year}`;
+    } else {
+      result.alternative = `${startMonth} ${endMonth} ${year}`;
+    }
+    
+    // Weekend query if range is short (7 days or less)
+    if (daysDiff <= 7) {
+      result.weekend = 'this weekend';
+    } else if (daysDiff <= 14) {
+      result.weekend = 'upcoming weekend';
+    }
+    
+    return result;
   }
 
   /**
@@ -160,15 +216,6 @@ class BraveSearchSource {
       }
       throw error;
     }
-  }
-
-  /**
-   * Format date range for search query
-   */
-  formatDateRange(start, end) {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                    'July', 'August', 'September', 'October', 'November', 'December'];
-    return `${months[start.getMonth()]} ${start.getFullYear()}`;
   }
 
   /**

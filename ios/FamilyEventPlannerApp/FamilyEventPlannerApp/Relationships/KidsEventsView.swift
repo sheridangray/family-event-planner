@@ -94,13 +94,14 @@ struct KidEventsApiResponse: Codable {
 struct DiscoveryResponse: Codable {
     let success: Bool
     let message: String?
-    let config: DiscoveryConfig?
+    let config: DiscoveryResponseConfig?
     let error: String?
     
-    struct DiscoveryConfig: Codable {
+    struct DiscoveryResponseConfig: Codable {
         let location: String?
         let radiusMiles: Int?
-        let daysAhead: Int?
+        let startDate: String?
+        let endDate: String?
     }
 }
 
@@ -274,7 +275,8 @@ class KidsEventsViewModel: ObservableObject {
             let body: [String: Any] = [
                 "location": config.location,
                 "radiusMiles": config.radiusMiles,
-                "daysAhead": config.daysAhead,
+                "startDate": config.startDateString,
+                "endDate": config.endDateString,
                 "ageMin": config.ageMin,
                 "ageMax": config.ageMax,
                 "enableSerp": config.enableSerp,
@@ -331,7 +333,8 @@ class KidsEventsViewModel: ObservableObject {
 struct DiscoveryConfig: CustomStringConvertible {
     var location: String = "San Francisco, CA"
     var radiusMiles: Int = 25
-    var daysAhead: Int = 14
+    var startDate: Date = Date()
+    var endDate: Date = Calendar.current.date(byAdding: .day, value: 14, to: Date()) ?? Date()
     var ageMin: Int = 0
     var ageMax: Int = 12
     var enableSerp: Bool = true  // Uses Brave Search API
@@ -339,8 +342,23 @@ struct DiscoveryConfig: CustomStringConvertible {
     var enableNewsletters: Bool = true
     var maxUrls: Int = 5  // Limit URLs to process (for debugging)
     
+    // Format dates for API
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+    
+    var startDateString: String {
+        dateFormatter.string(from: startDate)
+    }
+    
+    var endDateString: String {
+        dateFormatter.string(from: endDate)
+    }
+    
     var description: String {
-        "location=\(location), radius=\(radiusMiles)mi, days=\(daysAhead), ages=\(ageMin)-\(ageMax), webSearch=\(enableSerp), eventbrite=\(enableEventbrite), newsletters=\(enableNewsletters), maxUrls=\(maxUrls)"
+        "location=\(location), radius=\(radiusMiles)mi, dates=\(startDateString) to \(endDateString), ages=\(ageMin)-\(ageMax), webSearch=\(enableSerp), eventbrite=\(enableEventbrite), newsletters=\(enableNewsletters), maxUrls=\(maxUrls)"
     }
 }
 
@@ -566,6 +584,24 @@ struct FilterPill: View {
     }
 }
 
+// MARK: - Quick Date Button
+struct QuickDateButton: View {
+    let title: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.1))
+                .foregroundColor(.orange)
+                .cornerRadius(12)
+        }
+    }
+}
+
 // MARK: - Discovery Sheet (Configurable)
 struct DiscoverySheet: View {
     @ObservedObject var viewModel: KidsEventsViewModel
@@ -596,14 +632,35 @@ struct DiscoverySheet: View {
                 
                 // Date Range Section
                 Section {
-                    Picker("Look ahead", selection: $config.daysAhead) {
-                        Text("This weekend").tag(3)
-                        Text("Next week").tag(7)
-                        Text("Next 2 weeks").tag(14)
-                        Text("Next month").tag(30)
+                    DatePicker("From", selection: $config.startDate, in: Date()..., displayedComponents: .date)
+                    DatePicker("To", selection: $config.endDate, in: config.startDate..., displayedComponents: .date)
+                    
+                    // Quick presets
+                    HStack(spacing: 8) {
+                        QuickDateButton(title: "Weekend") {
+                            let calendar = Calendar.current
+                            config.startDate = Date()
+                            let daysUntilSunday = 7 - calendar.component(.weekday, from: Date()) + 1
+                            config.endDate = calendar.date(byAdding: .day, value: daysUntilSunday, to: Date()) ?? Date()
+                        }
+                        QuickDateButton(title: "Week") {
+                            config.startDate = Date()
+                            config.endDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+                        }
+                        QuickDateButton(title: "2 Weeks") {
+                            config.startDate = Date()
+                            config.endDate = Calendar.current.date(byAdding: .day, value: 14, to: Date()) ?? Date()
+                        }
+                        QuickDateButton(title: "Month") {
+                            config.startDate = Date()
+                            config.endDate = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+                        }
                     }
+                    .padding(.vertical, 4)
                 } header: {
                     Text("Date Range")
+                } footer: {
+                    Text("Search for events between \(config.startDate.formatted(date: .abbreviated, time: .omitted)) and \(config.endDate.formatted(date: .abbreviated, time: .omitted))")
                 }
                 
                 // Age Range Section

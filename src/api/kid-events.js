@@ -196,7 +196,9 @@ function createKidEventsRouter(database, logger) {
       const {
         location,
         radiusMiles,
-        daysAhead,
+        startDate,
+        endDate,
+        daysAhead,  // Legacy support
         ageMin,
         ageMax,
         enableSerp = true,
@@ -206,10 +208,26 @@ function createKidEventsRouter(database, logger) {
         useCache = true  // Use URL content cache by default
       } = req.body;
 
+      // Calculate dates - support both new (startDate/endDate) and legacy (daysAhead) params
+      let effectiveStartDate = startDate;
+      let effectiveEndDate = endDate;
+      
+      if (!effectiveStartDate || !effectiveEndDate) {
+        // Fall back to daysAhead if specific dates not provided
+        const now = new Date();
+        const days = daysAhead || 14;
+        const futureDate = new Date(now);
+        futureDate.setDate(futureDate.getDate() + days);
+        
+        effectiveStartDate = now.toISOString().split('T')[0];
+        effectiveEndDate = futureDate.toISOString().split('T')[0];
+      }
+
       const config = {
         location: location || 'San Francisco, CA',
         radiusMiles: radiusMiles || 25,
-        daysAhead: daysAhead || 14,
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
         ageMin,
         ageMax,
         enableSerp,
