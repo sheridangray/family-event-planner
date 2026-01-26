@@ -38,7 +38,7 @@ class ProbabilisticFilter {
   async filter(events, options = {}) {
     try {
       // Load family settings
-      const familySettings = await this.familyConfig.loadConfig();
+      const familySettings = await this.familyConfig.getSettings();
       const preferences = await this.loadPreferences(options.userId);
       const weights = preferences?.filter_weights || this.defaultWeights;
       

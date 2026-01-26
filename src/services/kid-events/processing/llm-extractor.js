@@ -263,11 +263,80 @@ If no events found, return empty array: []`;
 
       return [this.formatEvent(data, source)];
     } catch (error) {
-      console.log(`   ❌ [LLM] JSON parse error: ${error.message}`);
-      console.log(`   ❌ [LLM] Raw response: ${response.substring(0, 200)}...`);
+      console.log(`   ⚠️  [LLM] JSON parse error: ${error.message}`);
+      
+      // Try to recover partial events from malformed JSON
+      const recovered = this.recoverPartialEvents(response, source);
+      if (recovered.length > 0) {
+        console.log(`   🔧 [LLM] Recovered ${recovered.length} events from malformed JSON`);
+        return recovered;
+      }
+      
+      console.log(`   ❌ [LLM] Could not recover events. Raw response: ${response.substring(0, 200)}...`);
       this.logger.warn('Failed to parse LLM response:', error.message);
       return [];
     }
+  }
+
+  /**
+   * Try to recover individual events from malformed JSON response
+   * Uses regex to find complete event objects
+   */
+  recoverPartialEvents(response, source) {
+    const events = [];
+    
+    try {
+      // Pattern to match individual event objects with "isEvent": true
+      // This finds complete {...} blocks that contain isEvent and title
+      const eventPattern = /\{\s*"isEvent"\s*:\s*true[^{}]*"title"\s*:\s*"[^"]+"/g;
+      const matches = response.match(eventPattern);
+      
+      if (!matches) {
+        return [];
+      }
+      
+      // For each match, try to extract a complete event object
+      for (const match of matches) {
+        // Find the starting position of this match in the response
+        const startIdx = response.indexOf(match);
+        if (startIdx === -1) continue;
+        
+        // Try to find the complete object by counting braces
+        let braceCount = 0;
+        let endIdx = startIdx;
+        let foundStart = false;
+        
+        for (let i = startIdx; i < response.length && i < startIdx + 2000; i++) {
+          if (response[i] === '{') {
+            braceCount++;
+            foundStart = true;
+          } else if (response[i] === '}') {
+            braceCount--;
+            if (foundStart && braceCount === 0) {
+              endIdx = i + 1;
+              break;
+            }
+          }
+        }
+        
+        if (endIdx > startIdx) {
+          const eventStr = response.substring(startIdx, endIdx);
+          try {
+            const eventData = JSON.parse(eventStr);
+            if (eventData.isEvent && eventData.title) {
+              events.push(this.formatEvent(eventData, source));
+            }
+          } catch (e) {
+            // Individual event parse failed, skip it
+          }
+        }
+      }
+    } catch (e) {
+      // Recovery failed entirely
+      console.log(`   ⚠️  [LLM] Recovery attempt failed: ${e.message}`);
+    }
+    
+    return events;
   }
   
   /**
