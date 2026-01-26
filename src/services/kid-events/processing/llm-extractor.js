@@ -36,14 +36,21 @@ class LLMExtractor {
 
     try {
       // Clean and truncate content
-      const cleanContent = this.cleanContent(source.htmlContent || source.snippet || '');
+      let cleanContent = this.cleanContent(source.htmlContent || source.snippet || '');
       
       if (cleanContent.length < 50) {
         console.log(`   ⚠️  [LLM] Content too short after cleaning: ${cleanContent.length} chars`);
         return [];
       }
       
-      console.log(`   📝 [LLM] Cleaned content: ${cleanContent.length} chars, sending to GPT...`);
+      // Truncate to avoid OpenAI timeouts on very large pages
+      const maxContentLength = this.config.maxContentLength || 15000;
+      const wasTruncated = cleanContent.length > maxContentLength;
+      if (wasTruncated) {
+        cleanContent = cleanContent.substring(0, maxContentLength);
+      }
+      
+      console.log(`   📝 [LLM] Cleaned content: ${cleanContent.length} chars${wasTruncated ? ' (truncated)' : ''}, sending to GPT...`);
 
       const prompt = this.buildExtractionPrompt(cleanContent, source);
       const response = await this.callOpenAI(prompt);
@@ -109,7 +116,7 @@ RULES:
 
 WEBPAGE URL: ${source.url || source.sourceUrl || 'Unknown'}
 CONTENT:
-${content.substring(0, 4000)}
+${content}
 
 For each event, use this structure:
 {
@@ -191,7 +198,7 @@ If no events found, return empty array: []`;
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 30000
+        timeout: this.config.timeout || 60000  // 60 second timeout for large pages
       });
 
       return response.data.choices[0]?.message?.content;
@@ -209,7 +216,7 @@ If no events found, return empty array: []`;
           console.log(`   ❌ [LLM] Message: ${error.response.data.error.message}`);
         }
       } else if (error.code === 'ECONNABORTED') {
-        console.log('   ⏱️  [LLM] OpenAI request timeout');
+        console.log(`   ⏱️  [LLM] OpenAI request timeout (${this.config.timeout || 60000}ms)`);
       }
       throw error;
     }

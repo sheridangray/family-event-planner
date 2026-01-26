@@ -11,7 +11,8 @@ class ProbabilisticFilter {
   constructor(logger, database, config = {}) {
     this.logger = logger;
     this.database = database;
-    this.familyConfig = new FamilyConfigService(logger, database);
+    // FamilyConfigService expects (database, logger) order
+    this.familyConfig = new FamilyConfigService(database, logger);
     
     // Default filter weights (can be learned)
     this.defaultWeights = {
@@ -62,7 +63,10 @@ class ProbabilisticFilter {
       this.logger.info(`Filter: ${events.length} events -> ${filtered.length} passed`);
       return filtered;
     } catch (error) {
+      console.log(`🎯 [Filter] Error: ${error.message}`);
+      console.log(`🎯 [Filter] Stack: ${error.stack}`);
       this.logger.error('Filter error:', error.message);
+      // Return events unfiltered so discovery can continue
       return events;
     }
   }

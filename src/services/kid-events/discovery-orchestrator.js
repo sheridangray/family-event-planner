@@ -418,27 +418,42 @@ class DiscoveryOrchestrator {
 
   /**
    * Generate deduplication key
+   * Uses normalized title and date only (not venue, as different sources describe venues differently)
    */
   generateDedupeKey(event) {
     const title = (event.title || '').toLowerCase().trim();
-    const date = event.eventDate || '';
-    const venue = (event.venueName || '').toLowerCase().trim();
+    const date = event.eventDate || 'nodate';
     
-    // Normalize title for comparison
+    // Aggressively normalize title for comparison
+    // Remove common words, punctuation, and extra spaces
     const normalizedTitle = title
-      .replace(/[^a-z0-9]/g, '')
-      .substring(0, 30);
+      .replace(/\b(the|a|an|at|in|on|for|of|and|with)\b/gi, '') // Remove common words
+      .replace(/[^a-z0-9]/g, '') // Remove non-alphanumeric
+      .substring(0, 40); // Keep more chars for better matching
     
-    return `${normalizedTitle}-${date}-${venue.substring(0, 10)}`;
+    return `${normalizedTitle}-${date}`;
+  }
+
+  /**
+   * Compute a hash for the event title (used for unique constraint)
+   */
+  computeTitleHash(title) {
+    const normalized = (title || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+    return crypto.createHash('md5').update(normalized).digest('hex');
   }
 
   /**
    * Save event to database
    */
   async saveEvent(event) {
+    const titleHash = this.computeTitleHash(event.title);
+    
     const query = `
       INSERT INTO kid_events (
-        source_type, source_url, source_id,
+        source_type, source_url, source_id, title_hash,
         title, description, event_date, start_time, end_time,
         venue_name, address, city, latitude, longitude, distance_miles,
         cost_adult, cost_child, is_free,
@@ -448,10 +463,10 @@ class DiscoveryOrchestrator {
         relevance_score, filter_scores,
         status
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
       )
-      ON CONFLICT (source_type, source_url) DO UPDATE SET
+      ON CONFLICT (source_type, source_url, title_hash) DO UPDATE SET
         title = EXCLUDED.title,
         description = EXCLUDED.description,
         event_date = EXCLUDED.event_date,
@@ -465,6 +480,7 @@ class DiscoveryOrchestrator {
       event.sourceType,
       event.sourceUrl,
       event.sourceId || null,
+      titleHash,
       event.title,
       event.description,
       event.eventDate || null,
