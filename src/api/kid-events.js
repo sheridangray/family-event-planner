@@ -431,7 +431,11 @@ function formatEvent(row) {
     sourceUrl: row.source_url,
     title: row.title,
     description: row.description,
-    date: row.event_date,
+    // Date fields - new structured format
+    date: row.event_date,  // Legacy field (start date)
+    dateEnd: row.date_end,
+    dateType: row.date_type || 'single',
+    recurrencePattern: row.recurrence_pattern,
     startTime: row.start_time,
     endTime: row.end_time,
     venue: row.venue_name,

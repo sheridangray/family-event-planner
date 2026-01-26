@@ -126,9 +126,27 @@ class LLMExtractor {
 
 IMPORTANT DATE FILTER:
 - Today's date is ${new Date().toISOString().split('T')[0]}
-- ONLY extract events happening between ${startDate} and ${endDate}
-- SKIP any events that have already passed (dates before today)
-- If an event has no clear date, still include it but set date to null
+- Search window: ${startDate} to ${endDate}
+- ONLY extract events with at least one date within the search window
+- SKIP any events that have completely passed (all dates before today)
+
+DATE HANDLING - Choose the appropriate dateType:
+1. SINGLE DAY events (e.g., "Saturday, January 25"):
+   - dateType: "single"
+   - dateStart: the event date
+   - dateEnd: null
+
+2. MULTI-DAY/RANGE events (e.g., "January 15 - January 29" or "Weekend Festival Jan 25-26"):
+   - dateType: "range"
+   - dateStart: first day of the event/range
+   - dateEnd: last day of the event/range
+   - If the range started before today, set dateStart to today's date
+
+3. RECURRING events (e.g., "Every Tuesday", "3rd Saturday of each month"):
+   - dateType: "recurring"
+   - dateStart: FIRST occurrence within the search window
+   - dateEnd: LAST occurrence within the search window (or end of search window)
+   - recurrencePattern: the pattern text (e.g., "Every Tuesday", "First Saturday of month")
 
 RULES:
 - If this page has NO relevant events in the date range, return: {"isEvent": false}
@@ -144,7 +162,10 @@ For each event, use this structure:
   "isEvent": true,
   "title": "Event title",
   "description": "Brief description (max 200 chars)",
-  "date": "YYYY-MM-DD or null",
+  "dateType": "single" | "range" | "recurring",
+  "dateStart": "YYYY-MM-DD",
+  "dateEnd": "YYYY-MM-DD or null",
+  "recurrencePattern": "pattern description or null",
   "startTime": "HH:MM (24hr) or null",
   "endTime": "HH:MM (24hr) or null",
   "venueName": "Venue name or null",
@@ -376,13 +397,27 @@ If no events found, return empty array: []`;
    * Format a single event object into the standard structure
    */
   formatEvent(data, source) {
+    // Support both old (date) and new (dateStart/dateEnd) schema for backwards compatibility
+    const dateStart = data.dateStart || data.date || null;
+    const dateEnd = data.dateEnd || null;
+    const dateType = data.dateType || (dateEnd ? 'range' : 'single');
+    
     return {
       sourceType: source.sourceType || 'brave',
       sourceUrl: source.url || source.sourceUrl,
       
       title: data.title,
       description: data.description,
-      eventDate: data.date,
+      
+      // New date fields
+      dateStart: dateStart,
+      dateEnd: dateEnd,
+      dateType: dateType,
+      recurrencePattern: data.recurrencePattern || null,
+      
+      // Legacy field for backwards compatibility (uses dateStart)
+      eventDate: dateStart,
+      
       startTime: data.startTime,
       endTime: data.endTime,
       
@@ -468,19 +503,27 @@ If no events found, return empty array: []`;
     today.setHours(0, 0, 0, 0);
     
     // Get start date from config if available
-    const startDate = this.config.startDate ? new Date(this.config.startDate + 'T00:00:00') : today;
+    const searchStart = this.config.startDate ? new Date(this.config.startDate + 'T00:00:00') : today;
     
     return events.filter(event => {
       // Keep events with no date (can't determine if past)
-      if (!event.eventDate) {
+      if (!event.dateStart && !event.eventDate) {
         return true;
       }
       
-      // Parse event date
-      const eventDate = new Date(event.eventDate + 'T00:00:00');
+      // For range/recurring events, use dateEnd if available
+      // An event is still relevant if its end date >= search start
+      const relevantDate = event.dateEnd || event.dateStart || event.eventDate;
       
-      // Keep if event date is on or after start date
-      return eventDate >= startDate;
+      if (!relevantDate) {
+        return true;
+      }
+      
+      // Parse the relevant date
+      const eventDate = new Date(relevantDate + 'T00:00:00');
+      
+      // Keep if relevant date is on or after search start
+      return eventDate >= searchStart;
     });
   }
 

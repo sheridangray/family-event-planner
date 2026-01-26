@@ -6,7 +6,10 @@ struct KidEvent: Identifiable, Codable {
     let id: String
     let title: String
     let description: String?
-    let date: String?
+    let date: String?           // Start date (legacy field)
+    let dateEnd: String?        // End date for ranges
+    let dateType: String?       // "single", "range", or "recurring"
+    let recurrencePattern: String?  // e.g., "Every Tuesday"
     let startTime: String?
     let venue: String?
     let address: String?
@@ -33,16 +36,68 @@ struct KidEvent: Identifiable, Codable {
         let registration: String?
     }
     
-    var formattedDate: String {
-        guard let dateStr = date else { return "TBD" }
+    // Helper to parse ISO date string
+    private func parseDate(_ dateStr: String?) -> Date? {
+        guard let dateStr = dateStr else { return nil }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
-        if let date = formatter.date(from: String(dateStr.prefix(10))) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateFormat = "EEE, MMM d"
-            return displayFormatter.string(from: date)
+        return formatter.date(from: String(dateStr.prefix(10)))
+    }
+    
+    // Helper to format a single date
+    private func formatSingleDate(_ date: Date) -> String {
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateFormat = "EEE, MMM d"
+        return displayFormatter.string(from: date)
+    }
+    
+    var formattedDate: String {
+        let startDate = parseDate(date)
+        let endDate = parseDate(dateEnd)
+        let type = dateType ?? "single"
+        
+        // Handle recurring events
+        if type == "recurring" {
+            if let pattern = recurrencePattern {
+                if let start = startDate {
+                    return "\(pattern) (from \(formatSingleDate(start)))"
+                }
+                return pattern
+            }
         }
-        return dateStr
+        
+        // Handle date ranges
+        if type == "range", let start = startDate, let end = endDate {
+            let displayFormatter = DateFormatter()
+            let calendar = Calendar.current
+            
+            // Same month: "Jan 15-29"
+            if calendar.component(.month, from: start) == calendar.component(.month, from: end) &&
+               calendar.component(.year, from: start) == calendar.component(.year, from: end) {
+                displayFormatter.dateFormat = "MMM d"
+                let startStr = displayFormatter.string(from: start)
+                displayFormatter.dateFormat = "d"
+                let endStr = displayFormatter.string(from: end)
+                return "\(startStr)-\(endStr)"
+            }
+            
+            // Different months: "Jan 28 - Feb 2"
+            displayFormatter.dateFormat = "MMM d"
+            return "\(displayFormatter.string(from: start)) - \(displayFormatter.string(from: end))"
+        }
+        
+        // Single day event
+        guard let start = startDate else { return "TBD" }
+        return formatSingleDate(start)
+    }
+    
+    // Badge for date type (shown in UI)
+    var dateTypeBadge: String? {
+        switch dateType {
+        case "range": return "Multi-day"
+        case "recurring": return "Recurring"
+        default: return nil
+        }
     }
     
     var formattedCost: String {
@@ -533,10 +588,21 @@ struct KidEventCard: View {
             }
             
             // Details Row
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 Label(event.formattedDate, systemImage: "calendar")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                
+                // Show badge for multi-day or recurring events
+                if let badge = event.dateTypeBadge {
+                    Text(badge)
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(4)
+                }
                 
                 Label(event.formattedCost, systemImage: "dollarsign.circle")
                     .font(.caption)

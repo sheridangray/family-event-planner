@@ -461,7 +461,8 @@ class DiscoveryOrchestrator {
     const query = `
       INSERT INTO kid_events (
         source_type, source_url, source_id, title_hash,
-        title, description, event_date, start_time, end_time,
+        title, description, event_date, date_end, date_type, recurrence_pattern,
+        start_time, end_time,
         venue_name, address, city, latitude, longitude, distance_miles,
         cost_adult, cost_child, is_free,
         age_min, age_max,
@@ -471,17 +472,23 @@ class DiscoveryOrchestrator {
         status
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
       )
       ON CONFLICT (source_type, source_url, title_hash) DO UPDATE SET
         title = EXCLUDED.title,
         description = EXCLUDED.description,
         event_date = EXCLUDED.event_date,
+        date_end = EXCLUDED.date_end,
+        date_type = EXCLUDED.date_type,
+        recurrence_pattern = EXCLUDED.recurrence_pattern,
         relevance_score = EXCLUDED.relevance_score,
         filter_scores = EXCLUDED.filter_scores,
         updated_at = NOW()
       RETURNING id
     `;
+
+    // Use dateStart for event_date (backwards compatible)
+    const eventDate = event.dateStart || event.eventDate || null;
 
     const values = [
       event.sourceType,
@@ -490,7 +497,10 @@ class DiscoveryOrchestrator {
       titleHash,
       event.title,
       event.description,
-      event.eventDate || null,
+      eventDate,
+      event.dateEnd || null,
+      event.dateType || 'single',
+      event.recurrencePattern || null,
       event.startTime || null,
       event.endTime || null,
       event.venueName,
